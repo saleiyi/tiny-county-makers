@@ -329,15 +329,6 @@ $("#toDesign").onclick = () => showStep(2); $("#toFinish").onclick = () => showS
 $("#downloadArt").onclick = () => state.cutoutBlob && downloadBlob(state.cutoutBlob, `${state.reference}-transparent.png`);
 $("#downloadMockup").onclick = async () => downloadBlob(await canvasBlob(), `${state.reference}-keychain-mockup.png`);
 
-const workshopEmail = window.TCM_CONFIG?.orderEmail?.trim() || "";
-$("#emailWorkshop").onclick = event => {
-  event.preventDefault();
-  if (!workshopEmail) { $("#emailWorkshopHelp").textContent = "Workshop email is not configured yet. Set orderEmail in web/config.js before publishing."; return; }
-  const subject = "Simple keychain design request";
-  const body = "Hello Tiny County Makers,\n\nI would like the workshop to prepare a simple keychain design.\n\nQuantity:\nPreferred finished size:\nCustom shape or rectangle:\nDestination country and postal code:\nNotes:\n\nI have attached one original photo for each keychain and confirm I have permission to use them.\n";
-  location.href = `mailto:${encodeURIComponent(workshopEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-};
-
 $("#assistedPhotos").onchange = () => {
   const existingQuantity = state.cart.reduce((sum, item) => sum + item.quantity, 0);
   const files = [...$("#assistedPhotos").files].filter(file => ["image/png", "image/jpeg", "image/webp"].includes(file.type) && file.size <= MAX_IMAGE_BYTES).slice(0, Math.max(0, 20 - existingQuantity));
