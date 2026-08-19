@@ -296,6 +296,15 @@ function usesStaticOrderFlow() {
   return mode === "inquiry" || (mode === "auto" && (location.hostname.endsWith("github.io") || new URLSearchParams(location.search).has("static-order")));
 }
 
+function marketingAttribution() {
+  const query = new URLSearchParams(location.search);
+  return {
+    utmSource: query.get("utm_source") || "", utmMedium: query.get("utm_medium") || "",
+    utmCampaign: query.get("utm_campaign") || "", utmTerm: query.get("utm_term") || "",
+    utmContent: query.get("utm_content") || "", referrer: document.referrer || "",
+  };
+}
+
 function renderCart() {
   const designCount = state.cart.length, count = state.cart.reduce((sum, item) => sum + item.quantity, 0), price = bundlePrice(count), cart = $("#cart"), checkout = $("#checkout");
   $(".workspace").classList.toggle("checkout-open", count > 0 && state.step === 3);
@@ -363,35 +372,28 @@ $("#order").onclick = async () => {
   const orderSummary = {
     localReference: state.reference || `TCM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
     createdAt: new Date().toISOString(), quantity: count, package: packageName,
-    estimatedPriceUsd: price === null ? "custom quote" : price.toFixed(2), items,
+    estimatedPriceUsd: price, items,
     customer: { name: $("#customerName").value, email: $("#customerEmail").value, phone: $("#customerPhone").value },
     shipping: { country: $("#shippingCountry").value, address1: $("#shippingAddress1").value, address2: $("#shippingAddress2").value, city: $("#shippingCity").value, region: $("#shippingRegion").value, postalCode: $("#shippingPostal").value },
     notes: $("#orderNotes").value,
+    source: "tiny-county-makers-keychain",
+    marketing: marketingAttribution(),
     confirmations: { imageRights: true, workshopReview: true },
   };
   const data = new FormData(); data.append("name", $("#customerName").value); data.append("email", $("#customerEmail").value); data.append("phone", $("#customerPhone").value); data.append("country", $("#shippingCountry").value); data.append("address1", $("#shippingAddress1").value); data.append("address2", $("#shippingAddress2").value); data.append("city", $("#shippingCity").value); data.append("region", $("#shippingRegion").value); data.append("postalCode", $("#shippingPostal").value); data.append("notes", $("#orderNotes").value); data.append("package", packageName); data.append("quantity", String(count)); data.append("estimatedPriceUsd", price === null ? "" : price.toFixed(2)); data.append("rightsConfirmed", "true"); data.append("reviewConfirmed", "true"); data.append("itemsJson", JSON.stringify(items));
   state.cart.forEach((item, index) => { data.append(`item${index}Source`, item.source || item.cutout, item.name); if (item.service === "diy") { data.append(`item${index}Cutout`, item.cutout, "artwork.png"); data.append(`item${index}Production`, item.production, "production.png"); data.append(`item${index}Preview`, item.preview, "preview.png"); data.append(`item${index}Cutline`, item.cutline, "cutline.png"); } });
   $("#order").disabled = true; $("#order").textContent = "Building production package…";
-  let browserPackage = null, browserPackageUrl = "";
+  let browserPackage = null;
   try {
     if (usesStaticOrderFlow()) {
-      browserPackage = await buildBrowserOrderPackage(orderSummary); browserPackageUrl = URL.createObjectURL(browserPackage);
-      const lines = [
-        `Keychain order ${orderSummary.localReference}`,
-        `Quantity: ${count}`,
-        `Estimated price: ${price === null ? "custom quote" : `$${price.toFixed(2)}`}`,
-        `Phone: ${orderSummary.customer.phone || "Not provided"}`,
-        `Ship to: ${[orderSummary.shipping.address1, orderSummary.shipping.address2, orderSummary.shipping.city, orderSummary.shipping.region, orderSummary.shipping.postalCode, orderSummary.shipping.country].filter(Boolean).join(", ")}`,
-        `Items: ${items.map((item, index) => `${index + 1}. ${item.name} × ${item.quantity} (${item.shape || item.service})`).join(" | ")}`,
-        `Notes: ${orderSummary.notes || "None"}`,
-        "The customer has downloaded the browser-generated order ZIP. Reply and ask them to attach it before production.",
-      ];
-      const endpoint = window.TCM_CONFIG?.inquiryEndpoint;
-      if (!endpoint) throw new Error("The workshop notification endpoint is not configured.");
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: orderSummary.customer.name, email: orderSummary.customer.email, company: "", service: "Custom acrylic keychain order", budget: price === null ? "Quantity quote" : `$${price.toFixed(2)}`, timeline: "Workshop confirmation required", message: lines.join("\n"), source: "tiny-county-makers-keychain", consent: true }) });
+      browserPackage = await buildBrowserOrderPackage(orderSummary);
+      const endpoint = window.TCM_CONFIG?.orderEndpoint;
+      if (!endpoint) throw new Error("The workshop order endpoint is not configured.");
+      const upload = new FormData(); upload.append("metadata", JSON.stringify(orderSummary)); upload.append("package", browserPackage, `${orderSummary.localReference}-order-package.zip`);
+      $("#order").textContent = "Uploading production files…";
+      const response = await fetch(endpoint, { method: "POST", body: upload });
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "The workshop notification could not be sent.");
-      downloadBlob(browserPackage, `${orderSummary.localReference}-order-package.zip`);
-      result.className = "result success"; result.innerHTML = `<strong>Request received: ${payload.reference || orderSummary.localReference}</strong><br>${count} keychain${count === 1 ? "" : "s"} · ${price === null ? "custom quote" : `$${price.toFixed(2)}`}<br><a href="${browserPackageUrl}" download="${orderSummary.localReference}-order-package.zip">Download the order ZIP again</a><br>Keep this ZIP. When the workshop replies, attach it so production can inspect every file.`;
+      result.className = "result success"; result.innerHTML = `<strong>Request received: ${payload.reference || orderSummary.localReference}</strong><br>${count} keychain${count === 1 ? "" : "s"} · ${price === null ? "custom quote" : `$${price.toFixed(2)}`}<br><a href="${payload.packageUrl}">Download your private production ZIP</a><br>Your production files were uploaded securely. The workshop can now review them directly and will reply by email.`;
     } else {
       const response = await fetch("/api/orders", { method: "POST", body: data }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "Order request failed"); result.className = "result success"; result.innerHTML = `<strong>Request saved: ${payload.reference}</strong><br>${payload.quantity} keychain${payload.quantity === 1 ? "" : "s"} · ${payload.estimatedPrice || "custom quote"}<br><a href="${payload.packageUrl}">Download the production ZIP</a><br>Workshop notification: ${payload.notification.replaceAll("_", " ")}.`;
     }
