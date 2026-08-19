@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Remove a photo background, design a custom-shaped keychain, and download it free. Physical production is optional.">
+  <title>Free DIY Keychain Maker · Tiny County Makers</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./create.css">
+  <link rel="stylesheet" href="./create-overrides.css">
+</head>
+<body>
+  <header class="top"><a href="#top" class="brand"><i>TC</i><span>Tiny County Makers</span></a><nav><a href="#create">Create</a><a href="#shared">Why free?</a><a href="#workshop">Workshop</a></nav><div class="top-actions"><button id="cartNav" type="button" hidden>Cart · 0</button><a href="#create" class="pill dark">Use it free</a></div></header>
+  <main id="top">
+    <section class="hero">
+      <div><p class="eyebrow">A creative tool shared from a small-town workshop in China</p><h1>Turn any photo into a <em>keychain design.</em></h1><p class="lede">Remove the background, preview the real acrylic shape, and download your files. No signup, no watermark, no purchase required.</p><a class="pill coral" href="#create">Upload a photo — it’s free</a><div class="checks"><span>✓ Free download</span><span>✓ Custom shape</span><span>✓ Buying is optional</span></div></div>
+      <div class="hero-demo"><img src="./assets/keychain-template-800.png" alt="Metal key ring and chain"><div class="demo-piece">YOUR<br>IDEA</div><small>Designed online. Made by human hands.</small></div>
+    </section>
+
+    <section class="creator" id="create">
+      <div class="creator-head"><p class="eyebrow">Free DIY Keychain Maker</p><h2>Create freely. Make it real if you wish.</h2><div class="steps"><button class="active" data-jump="1"><b>1</b>Prepare image</button><button data-jump="2"><b>2</b>Design keychain</button><button data-jump="3"><b>3</b>Keep it or make it</button></div></div>
+
+      <div class="workspace">
+        <aside class="controls">
+          <section class="flow active" data-step="1">
+            <h3>1 · Choose a photo</h3>
+            <label class="drop" id="drop" for="photo"><input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><strong>Upload JPG, PNG, or WEBP</strong><span>Up to 12 MB / 20 MP · pets, people, drawings, or art you may use</span></label>
+            <div class="busy" id="busy" hidden><i></i>Creating the cutout… usually 3–8 seconds</div>
+            <div class="shape-choice">
+              <button class="active" id="rectangleShape" type="button"><b>Rectangular · fastest</b><span>Keep the full image. No server processing.</span></button>
+              <button id="customShape" type="button"><b>Manual cutout</b><span>Erase the background yourself · no download</span></button>
+            </div>
+            <div class="notice"><strong>Rectangular is the default.</strong> It is instant and preserves the complete image. Choose Manual cutout to erase unwanted areas with a brush. Both options work without downloading an AI model.</div>
+            <div class="skip-card"><p class="eyebrow">Prefer us to handle it?</p><strong>Skip the editor and send your photos.</strong><p>Basic background cleanup and a simple layout are included. We email a proof before anything is produced.</p><div class="assist-options"><label>Preferred long side<select id="assistedSize"><option value="4">4 cm / 1.57 in</option><option value="5" selected>5 cm / 1.97 in</option><option value="6">6 cm / 2.36 in</option></select></label><label>Shape preference<select id="assistedShape"><option value="workshop-decides">Let the workshop decide</option><option value="custom-shaped">Custom-shaped</option><option value="rectangular">Rectangle</option></select></label></div><label class="pill coral full assisted-upload" for="assistedPhotos">Upload photos for workshop<input id="assistedPhotos" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><span class="or">or</span><a class="pill quiet full" id="emailWorkshop" href="#">Use my email app</a><small id="emailWorkshopHelp">Select one or more original photos. You can adjust copies in the cart.</small></div>
+            <details id="advanced"><summary>Manual cutout editor</summary><div id="automaticServerTools" hidden><label>OpenCV edge cleanup <output id="edgeShrinkOut">Balanced</output><input id="edgeShrink" type="range" min="0" max="4" value="2"></label><p>This optional automatic mode needs our server and is kept for a future upgrade.</p><button class="pill quiet full" id="rerun" type="button" disabled>Run automatic OpenCV cutout</button></div><div class="manual-editor" id="manualEditor" hidden><div class="manual-tools"><button class="active" id="eraseTool" type="button">− Erase background</button><button id="restoreTool" type="button">＋ Restore subject</button></div><label>Brush size <output id="brushOut">28 px</output><input id="brushSize" type="range" min="4" max="120" value="28"></label><div class="manual-canvas-wrap"><canvas id="manualCanvas"></canvas></div><div class="manual-actions"><button id="undoManual" type="button" disabled>Undo</button><button id="resetManual" type="button">Reset</button><button id="applyManual" type="button">Apply to keychain</button></div><p>Paint over the background with Erase. Use Restore if you remove part of the subject, then apply the result to the keychain preview.</p></div></details>
+            <button class="pill coral full" id="toDesign" type="button" disabled>Continue to keychain</button>
+          </section>
+
+          <section class="flow" data-step="2">
+            <h3>2 · Design the keychain</h3>
+            <label>Artwork size <output id="sizeOut">48%</output><input id="size" type="range" min="34" max="58" value="48"></label>
+            <label>Clear acrylic border <output id="edgeOut">14 px</output><input id="edge" type="range" min="8" max="24" value="14"></label>
+            <label>Finished long side<select id="physicalSize"><option value="4">4 cm / 1.57 in</option><option value="5" selected>5 cm / 1.97 in</option><option value="6">6 cm / 2.36 in</option></select></label>
+            <label>Product background<select id="background"><option value="white">Pure white</option><option value="lavender">Lavender</option><option value="sky">Sky blue</option><option value="peach">Peach</option><option value="mint">Mint</option></select></label>
+            <details><summary>More keychain options</summary><label>Hardware template<select id="template"><option value="800">800 production template</option><option value="standard">Standard template</option></select></label><label>Key ring size <output id="metalScaleOut">100%</output><input id="metalScale" type="range" min="85" max="105" value="100"></label><label>Key ring position <output id="metalYOut">5 px up</output><input id="metalY" type="range" min="-25" max="25" value="-5"></label></details>
+            <div class="button-row"><button class="pill quiet" data-back="1">Back</button><button class="pill coral" id="toFinish" type="button">Continue</button></div>
+          </section>
+
+          <section class="flow" data-step="3">
+            <h3>3 · Keep it or make it</h3>
+            <div class="size-card"><small>FINISHED ACRYLIC BODY</small><strong id="finishedSize">—</strong><span id="shapeLabel">Custom-shaped around your subject</span><p>Includes the clear border and hanging tab. Metal ring and chain are excluded.</p></div>
+            <label class="confirm"><input id="sizeConfirmed" type="checkbox"><span>I reviewed the finished shape and dimensions. I understand the screen preview is not physical size.</span></label>
+            <div class="download-grid"><button id="downloadArt" class="pill dark" type="button">Transparent PNG</button><button id="downloadMockup" class="pill quiet" type="button">Keychain mockup</button></div>
+            <div class="order-box">
+              <p class="eyebrow">Optional physical production</p>
+              <div class="bundle-prices"><div><span>1 keychain</span><b>$14.99</b></div><div class="best"><span>2 keychains</span><b>$24.99</b><small>Save $5</small></div><div><span>3 keychains</span><b>$32.99</b><small>Save $12</small></div></div>
+              <p class="shipping-note">Estimated standard tracked shipping is included. Remote destinations, unusual sizes, taxes, and duties are confirmed before invoicing. Four or more receive an individual quantity quote.</p>
+              <button class="pill coral full" id="addToCart" type="button">Add this design to cart</button>
+              <div class="cart" id="cart" hidden><div class="cart-head"><strong>Your designs</strong><span id="cartCount">0 items</span></div><div id="cartItems"></div><button class="pill quiet full" id="createAnother" type="button">＋ Create another design</button></div>
+              <section class="checkout" id="checkout" hidden>
+                <div class="checkout-head"><div><p class="eyebrow">Request checkout</p><h4>Contact & delivery</h4></div><strong id="checkoutTotal">$0.00</strong></div>
+                <p class="checkout-note">No payment is taken now. We inspect every design and email a PayPal invoice before production. On the free website, your browser also downloads an order ZIP; keep it and attach it when the workshop replies.</p>
+                <div class="field-grid"><label>Full name<input id="customerName" autocomplete="name" placeholder="Full name" required></label><label>Email<input id="customerEmail" type="email" autocomplete="email" placeholder="you@example.com" required></label><label>Phone <small>(optional)</small><input id="customerPhone" autocomplete="tel" placeholder="For delivery issues"></label><label>Country / region<input id="shippingCountry" autocomplete="country-name" placeholder="United States" required></label><label class="wide">Street address<input id="shippingAddress1" autocomplete="address-line1" placeholder="Street and house number" required></label><label class="wide">Apartment, suite, etc. <small>(optional)</small><input id="shippingAddress2" autocomplete="address-line2"></label><label>City<input id="shippingCity" autocomplete="address-level2" required></label><label>State / province<input id="shippingRegion" autocomplete="address-level1" required></label><label>Postal code<input id="shippingPostal" autocomplete="postal-code" required></label><label class="wide">Order notes <small>(optional)</small><textarea id="orderNotes" rows="3" placeholder="Names, dates, preferred crop, deadline, or instructions for each design"></textarea></label></div>
+                <div class="checkout-summary"><div><span>Items</span><b id="summaryItems">—</b></div><div><span>Estimated tracked shipping</span><b>Included*</b></div><div class="total"><span>Estimated total</span><b id="summaryTotal">—</b></div></div>
+                <div class="after-order"><strong>What happens next</strong><ol><li><b>Workshop review</b><span>We check every image, size, cut line, and address.</span></li><li><b>Proof & invoice</b><span>You receive the final proof and PayPal invoice by email.</span></li><li><b>Your approval</b><span>Nothing is produced until you approve the proof and pay.</span></li><li><b>Make & ship</b><span>The workshop produces, checks, packs, and sends tracking.</span></li></ol><p>Typical tracked delivery is estimated at 6–12 days after dispatch. Production time is confirmed with your proof.</p></div>
+                <label class="confirm"><input id="rightsConfirmed" type="checkbox"><span>I own all submitted images or have permission to use them.</span></label>
+                <label class="confirm"><input id="reviewConfirmed" type="checkbox"><span>I understand this is a request. The workshop will confirm files, final price, shipping, and timing before sending an invoice.</span></label>
+                <button class="pill dark full" id="order" type="button">Send order request</button><div class="result" id="orderResult" role="status"></div>
+              </section>
+            </div>
+            <button class="text-button" data-back="2">← Adjust the design</button>
+          </section>
+        </aside>
+
+        <section class="preview">
+          <div class="preview-top"><div><small>LIVE PRODUCT PREVIEW</small><strong id="status">Try the demo or upload your photo</strong></div><span id="shapeBadge">CUSTOM SHAPE</span></div>
+          <div class="canvas-wrap"><canvas id="canvas" width="1000" height="1400"></canvas></div>
+          <p id="previewNote">The dotted dimensions describe the acrylic body, not the metal hardware.</p>
+        </section>
+      </div>
+    </section>
+
+    <section class="shared" id="shared"><div><p class="eyebrow">Why the tool is free</p><h2>The tool is shared.<br>The craft is fairly paid.</h2></div><div><p>We believe a useful creative tool should give something before asking for anything in return. Create and download your design without giving us your email.</p><p>If you choose a physical keychain, you pay for real materials, careful production, quality checks, packing, and delivery. It is not a donation. It is a fair exchange.</p></div></section>
+    <section class="workshop" id="workshop"><div class="workshop-art">SMALL-TOWN<br>WORKSHOP</div><div><p class="eyebrow">From a small town to your pocket</p><h2>Technology starts it. People finish it.</h2><p>This project connects a free digital tool with a small maker workshop in a county town in China. The workshop prints, cuts, assembles, checks, and packs each physical piece.</p><ol><li>Download your free design.</li><li>Request physical production only if you want it.</li><li>We confirm the shape, exact size, price, and destination.</li><li>The workshop makes and ships the approved piece.</li></ol></div></section>
+  </main>
+  <footer><span>Tiny County Makers · Free DIY tool</span><span>Uploaded photos are processed only for the requested operation.</span></footer>
+  <script src="./config.js"></script>
+  <script src="./create.js" defer></script>
+</body>
+</html>
