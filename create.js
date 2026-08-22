@@ -4,6 +4,11 @@ const canvas = $("#canvas");
 const ctx = canvas.getContext("2d");
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const automaticCutoutEnabled = window.TCM_CONFIG?.automaticCutoutEnabled === true;
+const analyticsSessionId = sessionStorage.getItem("tcm-analytics-session") || crypto.randomUUID().replaceAll("-", "");
+sessionStorage.setItem("tcm-analytics-session", analyticsSessionId);
+let savedFunnelEvents = [];
+try { savedFunnelEvents = JSON.parse(sessionStorage.getItem("tcm-funnel-events") || "[]"); } catch {}
+const trackedFunnelEvents = new Set(Array.isArray(savedFunnelEvents) ? savedFunnelEvents : []);
 const templateImages = { 800: new Image(), standard: new Image() };
 // Relative paths preserve the original single-file workflow when create.html is
 // opened directly from disk, while also working on localhost and static hosts.
@@ -32,6 +37,27 @@ const manualCanvas = $("#manualCanvas");
 const manualCtx = manualCanvas.getContext("2d", { willReadFrequently: true });
 let manualDrawing = false;
 let manualLastPoint = null;
+
+function deviceType() {
+  if (/iPad|Tablet/i.test(navigator.userAgent)) return "tablet";
+  if (/Android|iPhone|Mobile/i.test(navigator.userAgent)) return "mobile";
+  return "desktop";
+}
+
+function analyticsAttribution() {
+  const query = new URLSearchParams(location.search);
+  let referrerHost = "";
+  try { referrerHost = document.referrer ? new URL(document.referrer).hostname : ""; } catch {}
+  return { referrerHost, utmSource: query.get("utm_source") || "", utmMedium: query.get("utm_medium") || "", utmCampaign: query.get("utm_campaign") || "", utmTerm: query.get("utm_term") || "", utmContent: query.get("utm_content") || "" };
+}
+
+function trackFunnel(event, metadata = {}) {
+  const endpoint = window.TCM_CONFIG?.analyticsEndpoint;
+  const disabled = !endpoint || !location.hostname.endsWith("github.io") || new URLSearchParams(location.search).has("qa") || navigator.doNotTrack === "1" || trackedFunnelEvents.has(event);
+  if (disabled) return;
+  trackedFunnelEvents.add(event); sessionStorage.setItem("tcm-funnel-events", JSON.stringify([...trackedFunnelEvents]));
+  fetch(endpoint, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, keepalive: true, body: JSON.stringify({ event, sessionId: analyticsSessionId, pagePath: location.pathname, deviceType: deviceType(), attribution: analyticsAttribution(), metadata }) }).catch(() => {});
+}
 const demoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="720" viewBox="0 0 600 720"><rect width="600" height="720" fill="#fff"/><path fill="#ef694c" d="M300 75c55 0 96 65 77 121 53-27 124 5 136 59 12 56-39 111-97 109 45 40 41 115-6 150-47 35-116 8-136-48-20 56-89 83-136 48-47-35-51-110-6-150-58 2-109-53-97-109 12-54 83-86 136-59-19-56 22-121 77-121Z"/><circle cx="300" cy="320" r="104" fill="#ffd35a"/><circle cx="266" cy="300" r="10" fill="#282c29"/><circle cx="334" cy="300" r="10" fill="#282c29"/><path d="M255 345q45 45 90 0" fill="none" stroke="#282c29" stroke-width="12" stroke-linecap="round"/><path d="M300 520v130" stroke="#4f9b68" stroke-width="35" stroke-linecap="round"/><path d="M300 585q-90-70-118 20 65 55 118 18M300 585q90-70 118 20-65 55-118 18" fill="#68b57f"/></svg>`;
 
 function loadImageFromBlob(blob, name = "design") {
@@ -215,6 +241,7 @@ async function processFile(file, { automatic = false } = {}) {
       if (!automatic) $("#status").textContent = "Manual editor ready · erase the background, then apply it to the keychain";
     }
     $("#toDesign").disabled = false; $("#rerun").disabled = !automaticCutoutEnabled || state.shape !== "custom-shaped";
+    trackFunnel("photo_uploaded", { shape: state.shape, automatic });
   } catch (error) {
     if (state.shape === "custom-shaped") {
       state.cutoutBlob = file; await loadImageFromBlob(file, file.name); await setupManualEditor(file, file); $("#toDesign").disabled = false;
@@ -301,7 +328,7 @@ function marketingAttribution() {
   return {
     utmSource: query.get("utm_source") || "", utmMedium: query.get("utm_medium") || "",
     utmCampaign: query.get("utm_campaign") || "", utmTerm: query.get("utm_term") || "",
-    utmContent: query.get("utm_content") || "", referrer: document.referrer || "",
+    utmContent: query.get("utm_content") || "", referrer: document.referrer || "", analyticsSessionId, deviceType: deviceType(),
   };
 }
 
@@ -333,7 +360,7 @@ $("#restoreTool").onclick = () => { state.manualTool = "restore"; $("#restoreToo
 $("#undoManual").onclick = () => { const previous = state.manualHistory.pop(); if (previous) manualCtx.putImageData(previous, 0, 0); $("#undoManual").disabled = state.manualHistory.length === 0; };
 $("#resetManual").onclick = () => { if (!state.manualBase) return; manualCtx.clearRect(0, 0, manualCanvas.width, manualCanvas.height); manualCtx.drawImage(state.manualBase, 0, 0); state.manualHistory = []; $("#undoManual").disabled = true; };
 $("#applyManual").onclick = async () => { state.cutoutBlob = await canvasBlob(manualCanvas); state.shape = "custom-shaped"; await loadImageFromBlob(state.cutoutBlob, state.sourceFile?.name || "manually-edited.png"); $("#customShape").classList.add("active"); $("#rectangleShape").classList.remove("active"); $("#status").textContent = "Manual cleanup applied · preview ready"; };
-$("#toDesign").onclick = () => showStep(2); $("#toFinish").onclick = () => showStep(3); $$('[data-back]').forEach(button => button.onclick = () => showStep(Number(button.dataset.back))); $$(".steps button").forEach(button => button.onclick = () => { if (state.art || Number(button.dataset.jump) === 1) showStep(Number(button.dataset.jump)); });
+$("#toDesign").onclick = () => { trackFunnel("design_started", { shape: state.shape }); showStep(2); }; $("#toFinish").onclick = () => showStep(3); $$('[data-back]').forEach(button => button.onclick = () => showStep(Number(button.dataset.back))); $$(".steps button").forEach(button => button.onclick = () => { if (state.art || Number(button.dataset.jump) === 1) showStep(Number(button.dataset.jump)); });
 [$("#size"), $("#edge"), $("#physicalSize"), $("#background"), $("#template"), $("#metalScale"), $("#metalY")].forEach(control => control.oninput = () => { $("#sizeConfirmed").checked = false; state.currentCartCopies = 0; $("#addToCart").textContent = "Add this updated design to cart"; render(); });
 $("#downloadArt").onclick = () => state.cutoutBlob && downloadBlob(state.cutoutBlob, `${state.reference}-transparent.png`);
 $("#downloadMockup").onclick = async () => downloadBlob(await canvasBlob(), `${state.reference}-keychain-mockup.png`);
@@ -345,7 +372,7 @@ $("#assistedPhotos").onchange = () => {
   const requestedLongSideCm = Number($("#assistedSize").value), shape = $("#assistedShape").value;
   files.forEach(file => state.cart.push({ id: crypto.randomUUID(), service: "assisted", quantity: 1, name: file.name, source: file, previewUrl: URL.createObjectURL(file), requestedLongSideCm, shape }));
   $("#emailWorkshopHelp").textContent = `${files.length} photo${files.length === 1 ? "" : "s"} added for workshop-assisted design.`;
-  $("#assistedPhotos").value = ""; showStep(3); renderCart(); $("#cart").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#assistedPhotos").value = ""; trackFunnel("photo_uploaded", { assisted: true }); trackFunnel("cart_added", { service: "assisted" }); trackFunnel("checkout_started", { service: "assisted" }); showStep(3); renderCart(); $("#cart").scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
 $("#addToCart").onclick = async () => {
@@ -354,7 +381,7 @@ $("#addToCart").onclick = async () => {
   if (!state.cutoutBlob || !state.productionCanvas || !state.cutlineCanvas || !state.metrics) return;
   const preview = await canvasBlob(), production = await canvasBlob(state.productionCanvas), cutline = await canvasBlob(state.cutlineCanvas);
   state.cart.push({ id: crypto.randomUUID(), service: "diy", quantity: 1, name: state.sourceFile?.name || `design-${state.cart.length + 1}.png`, source: state.sourceFile || state.cutoutBlob, cutout: state.cutoutBlob, production, preview, previewUrl: URL.createObjectURL(preview), cutline, shape: state.shape, widthCm: state.metrics.widthCm, heightCm: state.metrics.heightCm });
-  state.currentCartCopies += 1; $("#addToCart").textContent = state.currentCartCopies === 1 ? "Add another copy of this design" : `Add another copy · ${state.currentCartCopies} added`; $("#sizeConfirmed").checked = false; renderCart(); result.className = "result success"; result.textContent = "Design added. Use the +/− controls in your cart for extra copies.";
+  state.currentCartCopies += 1; trackFunnel("cart_added", { service: "diy", shape: state.shape }); trackFunnel("checkout_started", { service: "diy" }); $("#addToCart").textContent = state.currentCartCopies === 1 ? "Add another copy of this design" : `Add another copy · ${state.currentCartCopies} added`; $("#sizeConfirmed").checked = false; renderCart(); result.className = "result success"; result.textContent = "Design added. Use the +/− controls in your cart for extra copies.";
 };
 
 $("#createAnother").onclick = () => { state.currentCartCopies = 0; $("#addToCart").textContent = "Add this design to cart"; showStep(1); renderCart(); $("#photo").value = ""; $("#status").textContent = "Upload another photo for the next keychain"; };
@@ -406,3 +433,4 @@ Object.values(templateImages).forEach(image => image.onload = render);
 $("#automaticServerTools").hidden = !automaticCutoutEnabled;
 $("#advanced").hidden = true;
 const demoBlob = new Blob([demoSvg], { type: "image/svg+xml" }); state.sourceBlob = demoBlob; state.cutoutBlob = demoBlob; loadImageFromBlob(demoBlob, "Shared flower demo").then(async () => { state.cutoutBlob = await canvasBlob(state.art); $("#toDesign").disabled = false; });
+trackFunnel("page_view");
