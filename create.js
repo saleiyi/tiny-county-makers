@@ -434,3 +434,22 @@ $("#automaticServerTools").hidden = !automaticCutoutEnabled;
 $("#advanced").hidden = true;
 const demoBlob = new Blob([demoSvg], { type: "image/svg+xml" }); state.sourceBlob = demoBlob; state.cutoutBlob = demoBlob; loadImageFromBlob(demoBlob, "Shared flower demo").then(async () => { state.cutoutBlob = await canvasBlob(state.art); $("#toDesign").disabled = false; });
 trackFunnel("page_view");
+
+$("#shareMaker").onclick = async () => {
+  const button = $("#shareMaker");
+  const shareUrl = "https://saleiyi.github.io/tiny-county-makers/?utm_source=shared-link&utm_medium=referral&utm_campaign=free-keychain-maker";
+  const data = { title: "Free Custom Keychain Maker", text: "Turn any photo into a custom acrylic keychain design for free — no signup or watermark.", url: shareUrl };
+  try {
+    if (navigator.share) await navigator.share(data);
+    else {
+      await navigator.clipboard.writeText(shareUrl);
+      button.textContent = "Link copied";
+      setTimeout(() => { button.textContent = "Share the free maker"; }, 2200);
+    }
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      button.textContent = "Copy failed";
+      setTimeout(() => { button.textContent = "Share the free maker"; }, 2200);
+    }
+  }
+};

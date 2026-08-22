@@ -1,0 +1,27 @@
+name: Notify IndexNow
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: indexnow-production
+  cancel-in-progress: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait for GitHub Pages
+        run: sleep 60
+      - name: Notify participating search engines
+        run: |
+          curl --fail-with-body --retry 3 --request POST \
+            --header "Content-Type: application/json; charset=utf-8" \
+            --data '{"host":"saleiyi.github.io","key":"4f77c2d9a13b46a6bafe1185f47f938e","keyLocation":"https://saleiyi.github.io/tiny-county-makers/4f77c2d9a13b46a6bafe1185f47f938e.txt","urlList":["https://saleiyi.github.io/tiny-county-makers/","https://saleiyi.github.io/tiny-county-makers/custom-acrylic-keychains.html"]}' \
+            https://api.indexnow.org/IndexNow

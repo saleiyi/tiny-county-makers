@@ -161,3 +161,5 @@
 
 @media(max-width:850px){.workspace.checkout-open{grid-template-columns:1fr}.top-actions #cartNav{display:inline-flex}.after-order ol{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.field-grid{grid-template-columns:1fr}.field-grid .wide{grid-column:auto}.bundle-prices{grid-template-columns:1fr}.bundle-prices div{min-height:0}.top-actions .pill{display:none}.after-order ol{grid-template-columns:1fr}}
+
+.hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
