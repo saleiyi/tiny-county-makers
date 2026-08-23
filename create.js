@@ -453,3 +453,18 @@ $("#shareMaker").onclick = async () => {
     }
   }
 };
+
+let visibleActiveSeconds = 0;
+setInterval(() => {
+  if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+  visibleActiveSeconds += 1;
+  if (visibleActiveSeconds === 10) trackFunnel("engaged_10s");
+  if (visibleActiveSeconds === 30) trackFunnel("engaged_30s");
+}, 1000);
+
+document.addEventListener("scroll", () => {
+  const scrollable = document.documentElement.scrollHeight - innerHeight;
+  if (scrollable > 0 && scrollY / scrollable >= 0.5) trackFunnel("scroll_50");
+}, { passive: true });
+
+$("#drop").addEventListener("click", () => trackFunnel("upload_opened"));
