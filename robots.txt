@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://saleiyi.github.io/tiny-county-makers/sitemap.xml
+Sitemap: https://saleiyi.github.io/tiny-county-makers/sitemap.txt
