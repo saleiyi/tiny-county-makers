@@ -5,6 +5,7 @@ import {
   physicalPixels,
   workDpi,
   alphaToMask,
+  stripFlatBackground,
   traceContours,
   cleanContours,
   simplifyPath,
@@ -28,6 +29,7 @@ import {
 
 const CANVAS = 900;
 const WORK_LONG_SIDE = 620;
+const LIFT_LONG_SIDE = 2400;
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const DEFAULT_NAME_FONT = "'Playfair Display', Georgia, serif";
 const DEFAULT_TOPPER_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
@@ -64,6 +66,8 @@ let imageDataUrl = "";
 let namePhoto = null;
 let topperPhoto = null;
 let rawContours = null;
+let backgroundLifted = false;
+let liftedCanvas = null;
 let rawSource = { width: 0, height: 0 };
 let scene = null;
 let raf = 0;
@@ -349,11 +353,49 @@ async function adoptImage(dataUrl) {
     return false;
   }
   rawContours = null;
+  backgroundLifted = false;
+  liftedCanvas = null;
+  // Only the cutline tool traces the picture itself, so only it re-keys a flat backdrop.
+  if (profile.id === "sticker") liftFlatArtwork();
   if (profile.exportSvg) extractContours();
   setDownloadsEnabled(true);
   adoptSource("upload");
   render();
   return true;
+}
+
+/**
+ * A JPEG carries no transparency, so an opaque upload would trace back as one big rectangle.
+ * When the picture is fully opaque and framed by an even backdrop, that backdrop is lifted out
+ * first: the tracer then has a real silhouette to follow, and because the painter draws this
+ * lifted canvas the downloaded white border is not painted over by the photo's own background.
+ * A busy border is left alone, and the work is capped so a phone photo stays quick.
+ */
+function liftFlatArtwork() {
+  const longest = Math.max(image.naturalWidth, image.naturalHeight);
+  const ratio = Math.min(1, LIFT_LONG_SIDE / longest);
+  const lw = Math.max(2, Math.round(image.naturalWidth * ratio));
+  const lh = Math.max(2, Math.round(image.naturalHeight * ratio));
+  const work = document.createElement("canvas");
+  work.width = lw;
+  work.height = lh;
+  const wctx = work.getContext("2d", { willReadFrequently: true });
+  wctx.imageSmoothingQuality = "high";
+  wctx.drawImage(image, 0, 0, lw, lh);
+  const pixels = wctx.getImageData(0, 0, lw, lh).data;
+  let opaque = 0;
+  for (let i = 3; i < pixels.length; i += 4) if (pixels[i] > 18) opaque++;
+  if (opaque < lw * lh * 0.96) return;
+  const stripped = stripFlatBackground(pixels, lw, lh);
+  if (!stripped.applied) return;
+  wctx.putImageData(new ImageData(stripped.pixels, lw, lh), 0, 0);
+  liftedCanvas = work;
+  backgroundLifted = true;
+}
+
+/** The picture the tracer and the sticker painter should work from. */
+function artworkSource() {
+  return liftedCanvas || image;
 }
 
 /** Trace the artwork outline once per upload; parameter changes reuse this cache. */
@@ -370,7 +412,7 @@ function extractContours() {
   work.height = sh;
   const wctx = work.getContext("2d", { willReadFrequently: true });
   wctx.imageSmoothingQuality = "high";
-  wctx.drawImage(image, 0, 0, sw, sh);
+  wctx.drawImage(artworkSource(), 0, 0, sw, sh);
   const pixels = wctx.getImageData(0, 0, sw, sh).data;
   const mask = alphaToMask(pixels, sw, sh, 18);
   const minArea = Math.max(16, sw * sh * 0.000015);
@@ -480,7 +522,7 @@ function render() {
     const artDpi = baseBounds ? Math.max(baseBounds.width, baseBounds.height) / (L.longSideCm / 2.54) : L.dpi;
     const offsetPx = stickerOffsetPixels(Number(offsetInput.value), artDpi);
     const outline = offsetContours(base, offsetPx);
-    scene = { kind: "sticker", base, outline, rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image, offsetPx, dpi: artDpi, longSideCm: L.longSideCm };
+    scene = { kind: "sticker", base, outline, rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image: artworkSource(), offsetPx, dpi: artDpi, longSideCm: L.longSideCm };
     drawSticker(ctx, scene, true);
   } else if (profile.id === "photo-keychain") {
     const geometry = photoKeychainGeometry(L);
@@ -606,7 +648,10 @@ function readout(L) {
       : profile.id === "cake-topper"
         ? "transparent PNG at 300 DPI plus an SVG cut path; the cake stick in the preview is decoration only"
         : "transparent PNG, no watermark";
-  dimensions.textContent = `${round2(piece.width * cmPerWorkPx)} x ${round2(piece.height * cmPerWorkPx)} cm finished piece at ${PRINT_DPI} DPI (${exportLong} px long side) - ${suffix}.`;
+  const lifted = backgroundLifted && profile.id === "sticker"
+    ? " The flat background behind your picture was removed, so the cut line follows the subject."
+    : "";
+  dimensions.textContent = `${round2(piece.width * cmPerWorkPx)} x ${round2(piece.height * cmPerWorkPx)} cm finished piece at ${PRINT_DPI} DPI (${exportLong} px long side) - ${suffix}.${lifted}`;
 }
 
 function note(text) {

@@ -9,6 +9,7 @@ import {
   physicalPixels,
   workDpi,
   alphaToMask,
+  stripFlatBackground,
   traceContours,
   polygonArea,
   cleanContours,
@@ -363,4 +364,57 @@ test("cake topper sizes print at 300 DPI on the long side", () => {
   assert.equal(physicalPixels(10, PRINT_DPI), 1181);
   assert.equal(physicalPixels(12, PRINT_DPI), 1417);
   assert.equal(physicalPixels(15, PRINT_DPI), 1772);
+});
+
+function rgbaPicture(w, h, paint) {
+  const pixels = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const p = (y * w + x) * 4;
+    const [r, g, b, a] = paint(x, y);
+    pixels[p] = r; pixels[p + 1] = g; pixels[p + 2] = b; pixels[p + 3] = a;
+  }
+  return pixels;
+}
+
+test("a flat backdrop behind an opaque photo is lifted so the cut line follows the subject", () => {
+  // A JPEG has no alpha channel, so before this the mask covered the whole frame and the
+  // sticker tool traced the frame instead of the subject.
+  const w = 80, h = 60, cx = 40, cy = 30, radius = 16;
+  const picture = rgbaPicture(w, h, (x, y) => {
+    const inside = (x - cx) * (x - cx) + (y - cy) * (y - cy) <= radius * radius;
+    return inside ? [232, 90, 43, 255] : [255, 255, 255, 255];
+  });
+  const stripped = stripFlatBackground(picture, w, h);
+  assert.equal(stripped.applied, true);
+  assert.deepEqual(stripped.color, [255, 255, 255]);
+  assert.ok(stripped.removedRatio > 0.6 && stripped.removedRatio < 0.95, "removed " + stripped.removedRatio);
+  assert.equal(stripped.pixels[(2 * w + 2) * 4 + 3], 0, "a corner pixel becomes transparent");
+  assert.equal(stripped.pixels[(cy * w + cx) * 4 + 3], 255, "the subject stays opaque");
+  const contours = traceContours(alphaToMask(stripped.pixels, w, h, 18), w, h);
+  assert.equal(contours.length, 1);
+  const bounds = boundsOfContours(contours);
+  assert.ok(Math.abs(bounds.width - radius * 2) <= 2, "cut width " + bounds.width);
+  assert.ok(Math.abs(bounds.height - radius * 2) <= 2, "cut height " + bounds.height);
+});
+
+test("a busy border is left alone so a real scene still traces to its frame", () => {
+  const w = 40, h = 30;
+  const picture = rgbaPicture(w, h, (x, y) => ((x + y) % 2 === 0 ? [0, 0, 0, 255] : [255, 255, 255, 255]));
+  const stripped = stripFlatBackground(picture, w, h);
+  assert.equal(stripped.applied, false);
+  assert.equal(stripped.pixels, picture, "the original buffer is handed straight back");
+});
+
+test("a backdrop that would swallow the whole picture is refused", () => {
+  const picture = rgbaPicture(40, 30, () => [255, 255, 255, 255]);
+  const stripped = stripFlatBackground(picture, 40, 30);
+  assert.equal(stripped.applied, false, "a blank upload must not be erased into nothing");
+  assert.equal(stripped.pixels, picture);
+});
+
+test("a picture that already carries transparency is never re-keyed", () => {
+  const picture = rgbaPicture(40, 30, (x) => (x < 20 ? [20, 20, 20, 255] : [20, 20, 20, 0]));
+  const stripped = stripFlatBackground(picture, 40, 30);
+  assert.equal(stripped.applied, false);
+  assert.equal(stripped.pixels, picture);
 });

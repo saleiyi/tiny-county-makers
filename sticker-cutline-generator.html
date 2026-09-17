@@ -126,7 +126,7 @@
     <label class="upload">Choose sticker artwork
       <input id="photo" type="file" accept="image/png,image/jpeg,image/webp">
       <strong>Upload PNG, JPG or WEBP</strong>
-      <small>Up to 12 MB · transparent PNG recommended</small>
+      <small>Up to 12 MB · transparent PNG recommended, or a JPEG on a plain background</small>
     </label>
     <label>Finished long side <output id="sizeLabel">5 cm</output>
       <select id="size"></select>
@@ -143,7 +143,7 @@
       <button class="button" id="svgDownload" disabled>Download SVG</button>
     </div>
     <a class="button ghost wide" href="#quote">Get these printed and cut</a>
-    <p class="tip">PNG is the printable sticker with its white border. SVG contains the artwork plus a real cutline path named <code>Cutline</code> for cutting machines.</p>
+    <p class="tip">A flat backdrop behind an opaque photo is removed automatically so the cut line follows the subject. PNG is the printable sticker with its white border. SVG contains the artwork plus a real cutline path named <code>Cutline</code> for cutting machines.</p>
   </aside>
   <section class="preview">
     <div class="preview-top">

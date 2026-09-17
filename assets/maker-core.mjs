@@ -101,6 +101,107 @@ export function alphaToMask(pixels, width, height, alphaThreshold = 24) {
   return mask;
 }
 
+// ------------------------------------------------------------- flat background lift
+
+/** Largest per-channel difference between one pixel and a reference colour. */
+function channelSpread(pixels, p, color) {
+  return Math.max(
+    Math.abs(pixels[p] - color[0]),
+    Math.abs(pixels[p + 1] - color[1]),
+    Math.abs(pixels[p + 2] - color[2]),
+  );
+}
+
+function clampNumber(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+/** Median colour of the outer one-pixel frame, and how much of that frame agrees with it. */
+function backdropSample(pixels, w, h, tolerance) {
+  const ring = [];
+  for (let x = 0; x < w; x++) { ring.push(x); ring.push((h - 1) * w + x); }
+  for (let y = 1; y < h - 1; y++) { ring.push(y * w); ring.push(y * w + w - 1); }
+  const lists = [[], [], []];
+  let clear = 0;
+  for (const index of ring) {
+    const p = index * 4;
+    if (pixels[p + 3] <= 8) clear++;
+    lists[0].push(pixels[p]);
+    lists[1].push(pixels[p + 1]);
+    lists[2].push(pixels[p + 2]);
+  }
+  const color = lists.map((list) => {
+    list.sort((a, b) => a - b);
+    return list[list.length >> 1];
+  });
+  let matches = 0;
+  for (const index of ring) if (channelSpread(pixels, index * 4, color) <= tolerance) matches++;
+  return { color, share: matches / ring.length, clearShare: clear / ring.length };
+}
+
+/**
+ * Lifts a flat, evenly lit backdrop out of an otherwise opaque picture by writing zeros into the
+ * alpha channel. A photo saved as JPEG has no transparency at all, so without this its outline
+ * traces back as one big rectangle and the cut line never follows the subject. The untouched
+ * buffer comes back when the border is too busy to be a backdrop (a real scene runs to every
+ * edge), when the picture already carries transparency, or when the backdrop would swallow it.
+ */
+export function stripFlatBackground(pixels, width, height, options = {}) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  const untouched = { pixels, applied: false, removedRatio: 0, color: null };
+  if (!pixels || !(w > 7 && h > 7) || pixels.length < w * h * 4) return untouched;
+  const tolerance = clampNumber(options.tolerance, 8, 120, 30);
+  const uniformShare = clampNumber(options.uniformShare, 0.5, 1, 0.9);
+  const sample = backdropSample(pixels, w, h, tolerance);
+  if (sample.clearShare > 0.02 || sample.share < uniformShare) return untouched;
+
+  const total = w * h;
+  const isBackdrop = new Uint8Array(total);
+  const stack = new Int32Array(total);
+  let top = 0;
+  const seed = (index) => {
+    if (isBackdrop[index]) return;
+    if (channelSpread(pixels, index * 4, sample.color) > tolerance) return;
+    isBackdrop[index] = 1;
+    stack[top++] = index;
+  };
+  for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+  for (let y = 1; y < h - 1; y++) { seed(y * w); seed(y * w + w - 1); }
+  let removed = 0;
+  while (top > 0) {
+    const index = stack[--top];
+    removed++;
+    const x = index % w;
+    const y = (index - x) / w;
+    if (x > 0) seed(index - 1);
+    if (x < w - 1) seed(index + 1);
+    if (y > 0) seed(index - w);
+    if (y < h - 1) seed(index + w);
+  }
+  const removedRatio = removed / total;
+  // A backdrop that swallows the whole picture is a blank upload, not a subject to cut around.
+  if (removedRatio < 0.02 || removedRatio > 0.97) return untouched;
+
+  const out = new Uint8ClampedArray(pixels);
+  for (let index = 0; index < total; index++) if (isBackdrop[index]) out[index * 4 + 3] = 0;
+  // Soften the single ring of pixels touching the backdrop so the traced edge does not stair-step.
+  for (let index = 0; index < total; index++) {
+    if (isBackdrop[index]) continue;
+    const x = index % w;
+    const y = (index - x) / w;
+    const touches = (x > 0 && isBackdrop[index - 1]) || (x < w - 1 && isBackdrop[index + 1])
+      || (y > 0 && isBackdrop[index - w]) || (y < h - 1 && isBackdrop[index + w]);
+    if (!touches) continue;
+    const p = index * 4;
+    const spread = channelSpread(pixels, p, sample.color);
+    const graded = Math.max(0, Math.min(255, Math.round((255 * (spread - tolerance)) / (tolerance * 1.2))));
+    if (graded < out[p + 3]) out[p + 3] = graded;
+  }
+  return { pixels: out, applied: true, removedRatio, color: sample.color };
+}
+
 // ---------------------------------------------------------------- contour tracing
 
 /**
