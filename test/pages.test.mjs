@@ -99,6 +99,7 @@ test("structured data promises what the visible page actually shows", () => {
 
 test("every quote form is wired to the shared submitter and posts to the inquiry API", () => {
   const submitter = read("assets/quote-form.js");
+  const sources = [];
   assert.match(submitter, /https:\/\/leadpilot-ai-6db\.pages\.dev\/api\/inquiries/);
   for (const file of [...TOOL_PAGES.map((page) => page.file), "pet-keychain-maker.html"]) {
     const html = read(file);
@@ -109,7 +110,14 @@ test("every quote form is wired to the shared submitter and posts to the inquiry
     for (const field of ["name", "email", "service", "budget", "message", "website_url", "consent"]) {
       assert.match(forms[0][0] + html, new RegExp(`name="${field}"`), `${file} quote form is missing ${field}`);
     }
+    // Every enquiry must arrive with the page that produced it, or the owner cannot tell
+    // which tool earned the lead. A slug keeps the inbox and the analytics readable.
+    const source = forms[0][0].match(/data-source="([^"]+)"/);
+    assert.ok(source, `${file} quote form is missing data-source`);
+    assert.match(source[1], /^[a-z0-9][a-z0-9-]*$/, `${file} data-source "${source[1]}" should be a lowercase slug`);
+    sources.push(source[1]);
   }
+  assert.equal(new Set(sources).size, sources.length, "two pages share one data-source, so leads cannot be attributed: " + sources.join(", "));
 });
 
 test("no page ships a dead call to action", () => {
