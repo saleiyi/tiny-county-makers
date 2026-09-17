@@ -16,6 +16,8 @@ import {
   ornamentShapePoints,
   ornamentHole,
   widthAtY,
+  photoBlockSize,
+  sizeOptionLabel,
   PRINT_DPI,
 } from "./assets/maker-core.mjs";
 
@@ -58,7 +60,7 @@ boot();
 function boot() {
   document.querySelector("#productName").textContent = profile.product;
   sizeSelect.innerHTML = profile.sizes
-    .map((cm) => `<option value="${cm}">${cm} cm long side</option>`)
+    .map((cm) => '<option value="' + cm + '">' + sizeOptionLabel(profile, cm) + "</option>")
     .join("");
   if (!profile.exportSvg) {
     if (svgButton) svgButton.hidden = true;
@@ -292,6 +294,18 @@ function layout() {
     return { x, y, w, h, longSideCm, dpi: workDpi(Math.max(w, h), longSideCm), shape };
   }
 
+  if (profile.id === "block") {
+    // A photo block is sold by its face size, so the product size decides the box and the
+    // photo is cover-fitted into the front face instead of setting the shape itself.
+    const spec = photoBlockSize(longSideCm);
+    const h = WORK_LONG_SIDE;
+    const w = Math.round(h * (spec.widthCm / spec.heightCm));
+    const depth = Math.round(Math.min(w, h) * 0.075);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 12;
+    return { x, y, w, h, longSideCm, dpi: workDpi(h, longSideCm), spec, depth };
+  }
+
   const baseRoom = profile.hasBase ? 76 : 0;
   const x = (CANVAS - w) / 2;
   const y = (CANVAS - h - baseRoom) / 2;
@@ -350,6 +364,17 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawOrnament(ctx, scene, true);
+  } else if (profile.id === "block") {
+    scene = {
+      kind: "block",
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      spec: L.spec,
+      depth: L.depth,
+      image,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawBlock(ctx, scene, true);
   } else if (profile.id === "magnet") {
     scene = { kind: "magnet", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image, dpi: L.dpi, longSideCm: L.longSideCm };
     drawMagnet(ctx, scene);
@@ -374,9 +399,22 @@ function buildStickerContours(L) {
 }
 
 function readout(L) {
-  sizeLabel.textContent = `${L.longSideCm} cm`;
+  sizeLabel.textContent = profile.id === "block" && scene.spec
+    ? scene.spec.id.split("x").join(" x ") + " in"
+    : L.longSideCm + " cm";
   if (offsetLabel) offsetLabel.textContent = `${Number(offsetInput.value)} mm`;
   if (smoothingLabel) smoothingLabel.textContent = String(normalizeCutlineSmoothing(smoothingInput?.value));
+  if (profile.id === "block") {
+    // Photo blocks are bought in inches, so the readout leads with inches and keeps 300 DPI honest.
+    const spec = scene.spec;
+    const inches = (cm) => round2(cm / 2.54);
+    dimensions.textContent = inches(spec.widthCm) + " x " + inches(spec.heightCm)
+      + " in acrylic photo block at " + PRINT_DPI + " DPI ("
+      + physicalPixels(L.longSideCm, PRINT_DPI) + " px long side) - transparent PNG, no watermark;"
+      + " the block edge and drop shadow are a 3D preview only.";
+    return;
+  }
+
   const piece = pieceBox();
   const cmPerWorkPx = (exportScale() * 2.54) / PRINT_DPI;
   const exportLong = physicalPixels(L.longSideCm, PRINT_DPI);
@@ -436,6 +474,69 @@ function drawMagnet(c, s) {
   roundRect(c, r.x, r.y, r.w, r.h, radius * 0.7);
   c.clip();
   c.drawImage(s.image, r.x, r.y, r.w, r.h);
+  c.restore();
+}
+
+/** A solid acrylic block: the photo sits on the front face, with the depth showing right and bottom. */
+function drawBlock(c, s, guides) {
+  const r = s.rect;
+  const d = s.depth;
+  const face = { x: r.x, y: r.y, w: r.w - d, h: r.h - d };
+  const radius = Math.min(face.w, face.h) * 0.045;
+
+  if (guides) {
+    // The contact shadow sells the depth on screen but would only add stray pixels to an export.
+    c.save();
+    c.shadowColor = "rgba(29,36,32,.3)";
+    c.shadowBlur = d * 1.1;
+    c.shadowOffsetX = d * 0.16;
+    c.shadowOffsetY = d * 0.72;
+    c.fillStyle = "#eef3f1";
+    roundRect(c, r.x, r.y, r.w, r.h, radius);
+    c.fill();
+    c.restore();
+  }
+
+  // The acrylic body: the exposed strip along the right and bottom is the block's thickness.
+  const body = c.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
+  body.addColorStop(0, "#fdfefd");
+  body.addColorStop(0.42, "#e9f0ed");
+  body.addColorStop(1, "#c8d7d2");
+  c.save();
+  roundRect(c, r.x, r.y, r.w, r.h, radius);
+  c.fillStyle = body;
+  c.fill();
+  c.strokeStyle = "rgba(255,255,255,.95)";
+  c.lineWidth = Math.max(1, d * 0.08);
+  c.stroke();
+  c.restore();
+
+  // The printed face, inset by the depth so the thickness reads as real material.
+  c.save();
+  roundRect(c, face.x, face.y, face.w, face.h, radius * 0.8);
+  c.clip();
+  drawCover(c, s.image, face.x, face.y, face.w, face.h);
+  c.restore();
+
+  // A glass sheen across the face, then the inner bevel that frames the photo.
+  c.save();
+  roundRect(c, face.x, face.y, face.w, face.h, radius * 0.8);
+  c.clip();
+  const sheen = c.createLinearGradient(face.x, face.y + face.h, face.x + face.w, face.y);
+  sheen.addColorStop(0, "rgba(255,255,255,0)");
+  sheen.addColorStop(0.36, "rgba(255,255,255,0)");
+  sheen.addColorStop(0.46, "rgba(255,255,255,.22)");
+  sheen.addColorStop(0.56, "rgba(255,255,255,0)");
+  sheen.addColorStop(1, "rgba(255,255,255,0)");
+  c.fillStyle = sheen;
+  c.fillRect(face.x, face.y, face.w, face.h);
+  c.restore();
+
+  c.save();
+  roundRect(c, face.x, face.y, face.w, face.h, radius * 0.8);
+  c.strokeStyle = "rgba(255,255,255,.7)";
+  c.lineWidth = Math.max(1, Math.min(face.w, face.h) * 0.009);
+  c.stroke();
   c.restore();
 }
 
@@ -734,6 +835,11 @@ function sceneBox() {
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
   }
+  if (scene.kind === "block") {
+    // The export is exactly the finished block: no preview shadow, no hidden padding.
+    const r = scene.rect;
+    return { x: r.x, y: r.y, width: r.w, height: r.h };
+  }
   const r = scene.rect;
   if (scene.kind === "magnet") {
     const pad = Math.max(10, Math.min(r.w, r.h) * 0.055) + 2;
@@ -759,6 +865,7 @@ function renderScene(scale) {
   else if (scene.kind === "name-keychain") drawNameKeychain(c, scene, false);
   else if (scene.kind === "magnet") drawMagnet(c, scene);
   else if (scene.kind === "ornament") drawOrnament(c, scene, false);
+  else if (scene.kind === "block") drawBlock(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -784,6 +891,10 @@ function pieceBox() {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
+  if (scene.kind === "block") {
+    const r = scene.rect;
+    return { width: r.w, height: r.h, x: r.x, y: r.y };
+  }
   const r = scene.rect;
   if (scene.kind === "magnet") {
     const pad = Math.max(10, Math.min(r.w, r.h) * 0.055);
@@ -798,10 +909,18 @@ function exportScale() {
   return physicalPixels(scene.longSideCm, PRINT_DPI) / Math.max(piece.width, piece.height);
 }
 
+/** Download name: photo blocks read as inches, everything else as a long side in cm. */
+function exportName(extension) {
+  const stem = scene.kind === "block"
+    ? scene.spec.id + "in-" + profile.id
+    : profile.id + "-" + scene.longSideCm + "cm";
+  return stem + "-" + PRINT_DPI + "dpi." + extension;
+}
+
 function exportPng() {
   const rendered = renderScene(exportScale());
   if (!rendered) return note("Upload an image with visible artwork first.");
-  const name = `${profile.id}-${scene.longSideCm}cm-${PRINT_DPI}dpi.png`;
+  const name = exportName("png");
   download(rendered.canvas.toDataURL("image/png"), name);
   track("design_downloaded", { format: "png", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
 }
@@ -873,7 +992,7 @@ function exportOrnamentSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block") return photoSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
   const c = document.createElement("canvas");

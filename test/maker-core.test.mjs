@@ -21,6 +21,9 @@ import {
   boundsOfContours,
   ORNAMENT_SHAPES,
   ornamentShapePoints,
+  PHOTO_BLOCK_SIZES,
+  photoBlockSize,
+  sizeOptionLabel,
   ornamentHole,
   widthAtY,
   circleInsidePolygon,
@@ -28,14 +31,35 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the seven distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament"]);
+test("the shared engine exposes the eight distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
   assert.equal(getProductProfile("name-keychain").hasHardware, true);
   assert.equal(getProductProfile("ornament").hasHardware, true);
   assert.equal(getProductProfile("ornament").exportSvg, true);
+  assert.equal(getProductProfile("block").exportSvg, false);
+  assert.equal(getProductProfile("block").sizes.length, 4);
+});
+
+test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
+  assert.equal(PHOTO_BLOCK_SIZES.length, 4);
+  assert.equal(photoBlockSize("17.78").id, "5x7");
+  assert.equal(photoBlockSize(17.78).label, "5 x 7 in (13 x 18 cm)");
+  assert.equal(photoBlockSize("25.4").id, "8x10");
+  assert.equal(photoBlockSize("999").id, "2x2", "an unknown long side should fall back to the first size");
+  assert.equal(physicalPixels(photoBlockSize("17.78").heightCm, PRINT_DPI), 2100);
+  assert.equal(physicalPixels(photoBlockSize("25.4").heightCm, PRINT_DPI), 3000);
+  assert.equal(physicalPixels(photoBlockSize("5.08").heightCm, PRINT_DPI), 600);
+  assert.equal(physicalPixels(photoBlockSize("10.16").heightCm, PRINT_DPI), 1200);
+});
+
+test("size dropdowns read in inches for photo blocks and centimetres everywhere else", () => {
+  const block = getProductProfile("block");
+  assert.equal(sizeOptionLabel(block, 17.78), "5 x 7 in (13 x 18 cm)");
+  assert.equal(sizeOptionLabel(block, 25.4), "8 x 10 in (20 x 25 cm)");
+  assert.equal(sizeOptionLabel(getProductProfile("keychain"), 5), "5 cm long side");
 });
 
 test("physical dimensions preserve aspect ratio on the selected long side", () => {
@@ -62,7 +86,7 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
 });

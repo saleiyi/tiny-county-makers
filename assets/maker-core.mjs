@@ -1,6 +1,14 @@
 // Tiny County Makers - shared maker engine.
 // Pure product config + cutline geometry. Imported by the browser app and by Node tests.
 
+// The acrylic photo block is sold in imperial sizes, so the engine keeps the centimetre
+// value it needs for print maths next to the inch label shoppers actually search for.
+export const PHOTO_BLOCK_SIZES = Object.freeze([
+  { id: "2x2", widthCm: 5.08, heightCm: 5.08, label: "2 x 2 in (5 x 5 cm)" },
+  { id: "4x4", widthCm: 10.16, heightCm: 10.16, label: "4 x 4 in (10 x 10 cm)" },
+  { id: "5x7", widthCm: 12.7, heightCm: 17.78, label: "5 x 7 in (13 x 18 cm)" },
+  { id: "8x10", widthCm: 20.32, heightCm: 25.4, label: "8 x 10 in (20 x 25 cm)" },
+]);
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -9,6 +17,7 @@ const PROFILES = Object.freeze([
   { id: "photo-keychain", name: "Photo Keychain Maker", product: "Acrylic photo keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "name-keychain", name: "Name Keychain Maker", product: "Acrylic name keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [5, 7, 9] },
   { id: "ornament", name: "Photo Ornament Maker", product: "Photo ornament", hasHardware: true, hasBase: false, exportSvg: true, sizes: [6, 8, 10] },
+  { id: "block", name: "Acrylic Photo Block Maker", product: "Acrylic photo block", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_BLOCK_SIZES.map((size) => size.heightCm), sizeLabels: PHOTO_BLOCK_SIZES.map((size) => size.label) },
 ]);
 
 export const PRINT_DPI = 300;
@@ -25,6 +34,19 @@ export function getProductProfile(id) {
   return profile;
 }
 
+/** The photo block product sizes, looked up by the long side the size picker stores. */
+export function photoBlockSize(value) {
+  const cm = Number(value);
+  return PHOTO_BLOCK_SIZES.find((size) => Math.abs(size.heightCm - cm) < 0.02) || PHOTO_BLOCK_SIZES[0];
+}
+
+/** Size dropdown label: photo blocks read in inches, every other product reads in cm. */
+export function sizeOptionLabel(profile, longSideCm) {
+  const index = profile.sizes.indexOf(Number(longSideCm));
+  const labels = profile.sizeLabels;
+  if (index >= 0 && labels && labels[index]) return labels[index];
+  return longSideCm + " cm long side";
+}
 export function physicalDimensions(width, height, longSideCm) {
   const safeWidth = Number(width), safeHeight = Number(height), longSide = Number(longSideCm);
   if (!(safeWidth > 0 && safeHeight > 0 && longSide > 0)) throw new Error("Image dimensions and long side must be positive.");

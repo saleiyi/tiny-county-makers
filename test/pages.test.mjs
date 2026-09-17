@@ -13,6 +13,7 @@ const TOOL_PAGES = [
   { file: "acrylic-standee-maker.html", maker: "standee", title: "Acrylic Standee Maker" },
   { file: "fridge-magnet-maker.html", maker: "magnet", title: "Fridge Magnet Maker" },
   { file: "ornament-maker.html", maker: "ornament", title: "Photo Ornament Maker" },
+  { file: "acrylic-photo-block-maker.html", maker: "block", title: "Acrylic Photo Block Maker" },
 ];
 
 const SHARED_IDS = ["photo", "size", "sizeLabel", "pngDownload", "preview", "dimensions", "productName"];
@@ -141,6 +142,7 @@ test("the sitemap lists every published page with the current lastmod", () => {
     "sticker-cutline-generator.html",
     "fridge-magnet-maker.html",
     "ornament-maker.html",
+    "acrylic-photo-block-maker.html",
   ];
   for (const entry of paths) {
     assert.ok(xml.includes(entry), `sitemap.xml is missing ${entry}`);
@@ -194,7 +196,7 @@ test("the keychain FAQ and how-to markup match what visitors can read", () => {
 
 test("the homepage advertises the other free tools with real descriptions", () => {
   const html = read("index.html");
-  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
+  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html"]) {
     assert.ok(html.includes(`href="./${tool}"`), `index.html does not link ${tool}`);
   }
   assert.match(html, /<section class="tools-band" id="more-tools">/, "the related-tools band disappeared");
