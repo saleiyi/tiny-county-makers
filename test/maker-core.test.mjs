@@ -33,6 +33,10 @@ import {
   bookmarkShapePoints,
   bookmarkHole,
   isBookmarkShape,
+  COASTER_SIZES,
+  COASTER_SHAPES,
+  coasterShapePoints,
+  isCoasterShape,
   CAKE_TOPPER_SIZES,
   CAKE_TOPPER_STYLES,
   cakeTopperBarRect,
@@ -46,8 +50,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the eleven distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark"]);
+test("the shared engine exposes the twelve distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -65,6 +69,10 @@ test("the shared engine exposes the eleven distinct maker profiles", () => {
   assert.equal(getProductProfile("cake-topper").hasHardware, false);
   assert.equal(getProductProfile("cake-topper").hasBase, false);
   assert.equal(getProductProfile("cake-topper").sizes.length, 3);
+  assert.equal(getProductProfile("coaster").exportSvg, true);
+  assert.equal(getProductProfile("coaster").hasHardware, false);
+  assert.equal(getProductProfile("coaster").hasBase, false);
+  assert.equal(getProductProfile("coaster").sizes.length, 3);
 });
 
 test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
@@ -456,4 +464,35 @@ test("bookmark sizes map to the documented print pixels", () => {
   assert.equal(physicalPixels(15, PRINT_DPI), 1772);
   assert.equal(physicalPixels(18, PRINT_DPI), 2126);
   assert.equal(physicalPixels(20, PRINT_DPI), 2362);
+});
+
+test("every coaster blank fills its box and keeps its points on the blank", () => {
+  const size = 600;
+  for (const shape of COASTER_SHAPES) {
+    const points = coasterShapePoints(shape, size, size);
+    const bounds = boundsOfContours([points]);
+    assert.ok(Math.abs(bounds.minX) <= 0.6, shape + " left edge " + bounds.minX);
+    assert.ok(Math.abs(bounds.maxX - size) <= 0.6, shape + " right edge " + bounds.maxX);
+    assert.ok(Math.abs(bounds.minY) <= 0.6, shape + " top edge " + bounds.minY);
+    assert.ok(Math.abs(bounds.maxY - size) <= 0.6, shape + " bottom edge " + bounds.maxY);
+  }
+  const round = coasterShapePoints("round", size, size, 64);
+  assert.equal(round.length, 64, "the round blank keeps the requested sample count");
+  for (const point of round) {
+    const dx = point[0] - size / 2, dy = point[1] - size / 2;
+    assert.ok(Math.abs(Math.hypot(dx, dy) - size / 2) <= 0.8, "a round blank point drifts off the circle");
+  }
+});
+
+test("an unknown coaster shape falls back to the square blank", () => {
+  assert.equal(isCoasterShape("hexagon"), false);
+  assert.equal(isCoasterShape("round"), true);
+  assert.deepEqual(coasterShapePoints("hexagon", 200, 200), coasterShapePoints("square", 200, 200));
+});
+
+test("coaster sizes print at 300 DPI on the square blank", () => {
+  assert.deepEqual([...COASTER_SIZES], [9, 10, 11]);
+  assert.equal(physicalPixels(9, PRINT_DPI), 1063);
+  assert.equal(physicalPixels(10, PRINT_DPI), 1181);
+  assert.equal(physicalPixels(11, PRINT_DPI), 1299);
 });

@@ -20,6 +20,7 @@ import {
   luggageTagHole,
   bookmarkShapePoints,
   bookmarkHole,
+  coasterShapePoints,
   widthAtY,
   cakeTopperBarRect,
   cakeTopperPlaque,
@@ -440,6 +441,8 @@ function layout() {
         ? (shapeSelect?.value || "rounded")
       : profile.id === "bookmark"
         ? (shapeSelect?.value || "classic")
+      : profile.id === "coaster"
+        ? (shapeSelect?.value || "square")
         : "";
   let topBand = 0;
   let pad = 0;
@@ -509,6 +512,15 @@ function layout() {
     const x = (CANVAS - w) / 2;
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm, dpi: workDpi(h, longSideCm), shape };
+  }
+
+  if (profile.id === "coaster") {
+    // A coaster is a fixed 1:1 blank, so the photo is cover-fitted into the footprint
+    // instead of setting the silhouette the way a keychain upload does.
+    const side = WORK_LONG_SIDE;
+    const x = (CANVAS - side) / 2;
+    const y = (CANVAS - side) / 2 + 26;
+    return { x, y, w: side, h: side, longSideCm, dpi: workDpi(side, longSideCm), shape };
   }
 
   const baseRoom = profile.hasBase ? 76 : 0;
@@ -621,6 +633,17 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawBlock(ctx, scene, true);
+  } else if (profile.id === "coaster") {
+    scene = {
+      kind: "coaster",
+      shape: L.shape,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      outline: coasterShapePoints(L.shape, L.w, L.h).map(([px, py]) => [px + L.x, py + L.y]),
+      image,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawCoaster(ctx, scene, true);
   } else if (profile.id === "magnet") {
     scene = { kind: "magnet", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image, dpi: L.dpi, longSideCm: L.longSideCm };
     drawMagnet(ctx, scene);
@@ -672,6 +695,8 @@ function readout(L) {
       ? "transparent PNG at 300 DPI plus an SVG cut path with the strap hole; the strap is a preview only"
       : profile.id === "bookmark"
         ? "transparent PNG at 300 DPI plus an SVG cut path with the tassel hole; the tassel is a preview only"
+      : profile.id === "coaster"
+        ? "transparent PNG at 300 DPI plus an SVG cut path; the coaster rim in the preview is decoration only"
       : profile.id === "photo-keychain"
       ? "transparent PNG at 300 DPI; the keyring is a preview only"
       : profile.id === "name-keychain"
@@ -729,6 +754,42 @@ function drawMagnet(c, s) {
   roundRect(c, r.x, r.y, r.w, r.h, radius * 0.7);
   c.clip();
   c.drawImage(s.image, r.x, r.y, r.w, r.h);
+  c.restore();
+}
+
+/** A coaster blank: square or round acrylic with the photo cover-fitted and a clear rim. */
+function drawCoaster(c, s, guides) {
+  const r = s.rect;
+  const round = s.shape === "round";
+  const rim = Math.max(6, Math.min(r.w, r.h) * 0.035);
+  const trace = (x, y, w, h) => {
+    c.beginPath();
+    if (round) c.arc(x + w / 2, y + h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+    else roundRect(c, x, y, w, h, Math.min(w, h) * 0.08);
+  };
+  if (guides) {
+    // The drop shadow sells the acrylic thickness on screen and stays out of the export.
+    c.save();
+    c.shadowColor = "rgba(29,36,32,.22)";
+    c.shadowBlur = rim * 1.5;
+    c.shadowOffsetY = rim * 0.7;
+    trace(r.x + rim * 0.5, r.y + rim * 0.5, r.w - rim, r.h - rim);
+    c.fillStyle = "#f7f5ef";
+    c.fill();
+    c.restore();
+  }
+  trace(r.x, r.y, r.w, r.h);
+  c.save();
+  c.fillStyle = "#fffdf8";
+  c.fill();
+  c.strokeStyle = "rgba(29,36,32,.18)";
+  c.lineWidth = 1.5;
+  c.stroke();
+  c.restore();
+  c.save();
+  trace(r.x + rim, r.y + rim, r.w - rim * 2, r.h - rim * 2);
+  c.clip();
+  drawCover(c, s.image, r.x + rim, r.y + rim, r.w - rim * 2, r.h - rim * 2);
   c.restore();
 }
 
@@ -1380,7 +1441,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
+  if (scene.kind === "coaster" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -1413,6 +1474,7 @@ function renderScene(scale) {
   if (scene.kind === "sticker") drawSticker(c, scene, false);
   else if (scene.kind === "photo-keychain") drawPhotoKeychain(c, scene, false);
   else if (scene.kind === "name-keychain") drawNameKeychain(c, scene, false);
+  else if (scene.kind === "coaster") drawCoaster(c, scene, false);
   else if (scene.kind === "magnet") drawMagnet(c, scene);
   else if (scene.kind === "ornament") drawOrnament(c, scene, false);
   else if (scene.kind === "luggage-tag") drawLuggageTag(c, scene, false);
@@ -1444,7 +1506,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
+  if (scene.kind === "coaster" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -1484,6 +1546,7 @@ function exportPng() {
 
 function exportSvg() {
   if (scene.kind === "cake-topper") return exportTopperSvg();
+  if (scene.kind === "coaster") return exportCoasterSvg();
   if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") return exportOrnamentSvg();
   if (scene.kind !== "sticker") return;
   const scale = exportScale();
@@ -1549,6 +1612,39 @@ function exportOrnamentSvg() {
   track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
 }
 
+/** Cut path plus a printable artwork layer for the square and round coaster blanks. */
+function exportCoasterSvg() {
+  const scale = exportScale();
+  const box = sceneBox();
+  const r = scene.rect;
+  if (!box) return note("Add a photo before exporting.");
+  const tx = ([x, y]) => [(x - box.x) * scale, (y - box.y) * scale];
+  const width = Math.round(box.width * scale);
+  const height = Math.round(box.height * scale);
+  const shape = contoursToPathD([scene.outline.map(tx)], 2);
+  const art = document.createElement("canvas");
+  art.width = Math.max(1, Math.round(r.w * scale));
+  art.height = Math.max(1, Math.round(r.h * scale));
+  const ax = art.getContext("2d");
+  ax.fillStyle = "#ffffff";
+  ax.fillRect(0, 0, art.width, art.height);
+  drawCover(ax, scene.image, 0, 0, art.width, art.height);
+  const lines = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">`,
+    `<title>${profile.product} cutline - ${scene.longSideCm} cm wide, ${PRINT_DPI} DPI</title>`,
+    `<defs><clipPath id="CoasterShape"><path d="${shape}"/></clipPath></defs>`,
+    `<g id="Artwork" clip-path="url(#CoasterShape)">`,
+    `<image x="0" y="0" width="${width}" height="${height}" href="${art.toDataURL("image/png")}"/>`,
+    `</g>`,
+    `<g id="Cutline" fill="none" stroke="#ff00ff" stroke-width="1">`,
+    `<path d="${shape}"/>`,
+    `</g>`,
+    `</svg>`,
+  ];
+  downloadBlob(lines.join("\n"), `${profile.id}-${scene.longSideCm}cm-${PRINT_DPI}dpi.svg`, "image/svg+xml;charset=utf-8");
+  track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
+}
+
 /** Cut path plus a printable artwork layer, the same split the sticker and ornament tools ship. */
 function exportTopperSvg() {
   const scale = exportScale();
@@ -1585,7 +1681,7 @@ function exportTopperSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "bookmark") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "bookmark" || profile.id === "coaster") return photoSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
   if (profile.id === "cake-topper") return topperArtworkCanvas(topperTextValue() || "Happy Birthday", topperFont?.value || DEFAULT_TOPPER_FONT, topperStyleName());

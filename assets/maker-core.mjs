@@ -23,6 +23,12 @@ export const BOOKMARK_SIZES = Object.freeze([15, 18, 20]);
 
 /** Every silhouette the acrylic bookmark tool can draw, in the order the UI offers them. */
 export const BOOKMARK_SHAPES = Object.freeze(["classic", "arch", "notch", "pointed"]);
+/** Footprint an acrylic coaster is sold in, in centimetres. */
+export const COASTER_SIZES = Object.freeze([9, 10, 11]);
+
+/** Every silhouette the acrylic coaster tool can draw, in the order the UI offers them. */
+export const COASTER_SHAPES = Object.freeze(["square", "round"]);
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -35,6 +41,7 @@ const PROFILES = Object.freeze([
   { id: "luggage-tag", name: "Luggage Tag Maker", product: "Acrylic luggage tag", hasHardware: false, hasBase: false, exportSvg: true, sizes: LUGGAGE_TAG_SIZES },
   { id: "cake-topper", name: "Cake Topper Maker", product: "Acrylic cake topper", hasHardware: false, hasBase: false, exportSvg: true, sizes: CAKE_TOPPER_SIZES },
   { id: "bookmark", name: "Bookmark Maker", product: "Acrylic bookmark", hasHardware: false, hasBase: false, exportSvg: true, sizes: BOOKMARK_SIZES },
+  { id: "coaster", name: "Acrylic Coaster Maker", product: "Acrylic coaster", hasHardware: false, hasBase: false, exportSvg: true, sizes: COASTER_SIZES },
 ]);
 
 export const PRINT_DPI = 300;
@@ -836,6 +843,53 @@ export function bookmarkHole(shape, width, height) {
     }
   }
   return { cx, cy: top + nominal * 1.7, r: Math.round(Math.max(2.5, nominal * 0.4) * 100) / 100 };
+}
+
+// ---------------------------------------------------------------- coaster geometry
+
+export function isCoasterShape(shape) {
+  return COASTER_SHAPES.includes(shape);
+}
+
+/**
+ * Closed polygon for an acrylic coaster inside a square box. A coaster is sold as a square
+ * blank or a round one, so the footprint is always 1:1 and the uploaded photo is
+ * cover-fitted into it instead of setting the silhouette.
+ */
+export function coasterShapePoints(shape, width, height, samples = 160) {
+  const w = Number(width), h = Number(height);
+  if (!(w > 0 && h > 0)) throw new Error("Coaster width and height must be positive.");
+  const count = Math.max(24, Math.floor(Number(samples) || 160));
+  const id = isCoasterShape(shape) ? shape : "square";
+  return fitPolygonToBox(rawCoasterPolygon(id, count), w, h);
+}
+
+function rawCoasterPolygon(shape, samples) {
+  if (shape === "round") {
+    const pts = [];
+    for (let i = 0; i < samples; i++) {
+      const a = (i / samples) * Math.PI * 2;
+      pts.push([0.5 + 0.5 * Math.cos(a), 0.5 + 0.5 * Math.sin(a)]);
+    }
+    return pts;
+  }
+  // Square: a rounded square blank, the shape a laser-cut coaster ships in.
+  const r = 0.07;
+  const pts = [];
+  const steps = Math.max(3, Math.floor(samples / 4) - 1);
+  const corners = [
+    [1 - r, r, -Math.PI / 2, 0],
+    [1 - r, 1 - r, 0, Math.PI / 2],
+    [r, 1 - r, Math.PI / 2, Math.PI],
+    [r, r, Math.PI, Math.PI * 1.5],
+  ];
+  for (const [cx, cy, a0, a1] of corners) {
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+  }
+  return pts;
 }
 
 // ---------------------------------------------------------------- SVG output
