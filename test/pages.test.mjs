@@ -308,3 +308,9 @@ test("the create hero keeps its call to action above the fold on a phone", () =>
   assert.ok(!css.includes("font-size: 54px") && !css.includes("font-size:54px"), "create.css regressed to the oversized hero headline");
   assert.ok(css.includes("flex-wrap: wrap") && css.includes("gap: 10px 22px"), "create.css lost the desktop header wrapping rules");
 });
+
+test("the analytics helpers stay quiet when a page is opened with ?qa", () => {
+  for (const file of ["maker-app.js", "assets/quote-form.js", "create.js"]) {
+    assert.ok(read(file).includes('has("qa")'), file + " would record analytics for a ?qa testing page");
+  }
+});

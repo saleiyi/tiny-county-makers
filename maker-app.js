@@ -2741,7 +2741,7 @@ function downloadBlob(text, name, type) {
 
 function track(event, metadata = {}) {
   const endpoint = window.TCM_CONFIG?.analyticsEndpoint;
-  if (!endpoint || !location.hostname.endsWith("github.io") || navigator.doNotTrack === "1") return;
+  if (!endpoint || !location.hostname.endsWith("github.io") || new URLSearchParams(location.search).has("qa") || navigator.doNotTrack === "1") return;
   const sessionId = sessionStorage.getItem("tcm-analytics-session") || crypto.randomUUID().replaceAll("-", "");
   sessionStorage.setItem("tcm-analytics-session", sessionId);
   fetch(endpoint, {
