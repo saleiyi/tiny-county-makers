@@ -74,6 +74,27 @@ export const STICKER_BORDER_PRESETS = Object.freeze([
   { id: "grey", label: "grey", hex: "#a8b0b3" },
 ]);
 
+/**
+ * A photo booth strip is cut from a 2 in wide column of photos, so the printed width is the
+ * product size here: 5.08 cm is one strip and 10.16 cm is the 4 x 6 in sheet that carries two
+ * of them, which is the print every pharmacy and photo lab actually sells.
+ */
+export const PHOTO_STRIP_SIZES = Object.freeze([
+  { id: "2x6", widthCm: 5.08, heightCm: 15.24, cols: 1, label: "2 x 6 in - one strip (5 x 15 cm)" },
+  { id: "4x6", widthCm: 10.16, heightCm: 15.24, cols: 2, label: "4 x 6 in - two strips on one print (10 x 15 cm)" },
+]);
+
+/** How many photos one strip is divided into. Four is the classic booth layout. */
+export const PHOTO_STRIP_COUNTS = Object.freeze([3, 4]);
+
+/** The paper colours a photo strip is normally printed on, in the order the tool lists them. */
+export const PHOTO_STRIP_PAPERS = Object.freeze([
+  { id: "white", label: "white", hex: "#ffffff" },
+  { id: "black", label: "black", hex: "#14181a" },
+  { id: "cream", label: "cream", hex: "#f7efe1" },
+  { id: "blush", label: "blush", hex: "#f4dede" },
+]);
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -90,6 +111,7 @@ const PROFILES = Object.freeze([
   { id: "name-plate", name: "Desk Name Plate Maker", product: "Acrylic desk name plate", hasHardware: false, hasBase: false, exportSvg: true, sizes: DESK_NAME_PLATE_SIZES.map((size) => size.widthCm), sizeLabels: DESK_NAME_PLATE_SIZES.map((size) => size.label) },
   { id: "jigsaw", name: "Photo Jigsaw Puzzle Maker", product: "Photo jigsaw puzzle", hasHardware: false, hasBase: false, exportSvg: true, sizes: JIGSAW_PUZZLE_SIZES },
   { id: "sticker-outline", name: "Sticker Outline Maker", product: "Sticker with a printed border", hasHardware: false, hasBase: false, exportSvg: true, sizes: STICKER_OUTLINE_SIZES },
+  { id: "photo-strip", name: "Photo Strip Maker", product: "Photo booth strip", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_STRIP_SIZES.map((size) => size.widthCm), sizeLabels: PHOTO_STRIP_SIZES.map((size) => size.label) },
 ]);
 
 export const PRINT_DPI = 300;
@@ -110,6 +132,17 @@ export function getProductProfile(id) {
 export function photoBlockSize(value) {
   const cm = Number(value);
   return PHOTO_BLOCK_SIZES.find((size) => Math.abs(size.heightCm - cm) < 0.02) || PHOTO_BLOCK_SIZES[0];
+}
+
+/** The photo strip format, looked up by the printed width the size picker stores. */
+export function photoStripSize(value) {
+  const cm = Number(value);
+  return PHOTO_STRIP_SIZES.find((size) => Math.abs(size.widthCm - cm) < 0.02) || PHOTO_STRIP_SIZES[0];
+}
+
+/** How many photos one strip is split into, clamped to the two layouts the tool offers. */
+export function photoStripCount(value) {
+  return Number(value) === PHOTO_STRIP_COUNTS[0] ? PHOTO_STRIP_COUNTS[0] : PHOTO_STRIP_COUNTS[1];
 }
 
 /** The desk name plate sizes, looked up by the long side the size picker stores. */
@@ -154,11 +187,34 @@ export function stickerBorderWidth(millimetres) {
 
 /** A usable hex colour for the border, falling back to white on anything unrecognised. */
 export function stickerBorderHex(value) {
+  return readHexColour(value, STICKER_BORDER_PRESETS, "#ffffff");
+}
+
+/** A usable hex colour for the printed strip paper, falling back to white. */
+export function photoStripPaperHex(value) {
+  return readHexColour(value, PHOTO_STRIP_PAPERS, "#ffffff");
+}
+
+/**
+ * Black or white type, whichever stays readable on the given background. The strip caption
+ * changes colour with the paper, so a black strip never ships with black type on it.
+ */
+export function readableInk(value) {
+  const hex = photoStripPaperHex(value);
+  const red = parseInt(hex.slice(1, 3), 16);
+  const green = parseInt(hex.slice(3, 5), 16);
+  const blue = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+  return luminance < 0.55 ? "#ffffff" : "#1d2420";
+}
+
+/** A hex value, a short hex value or a preset name resolved against a preset list. */
+function readHexColour(value, presets, fallback) {
   const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
   if (/^#[0-9a-f]{6}$/.test(raw)) return raw;
   if (/^#[0-9a-f]{3}$/.test(raw)) return "#" + raw.slice(1).split("").map((ch) => ch + ch).join("");
-  const preset = STICKER_BORDER_PRESETS.find((entry) => entry.id === raw);
-  return preset ? preset.hex : "#ffffff";
+  const preset = presets.find((entry) => entry.id === raw);
+  return preset ? preset.hex : fallback;
 }
 
 /** Physical longest side in centimetres -> whole pixels at a print DPI. */

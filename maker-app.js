@@ -25,6 +25,10 @@ import {
   stickerBorderWidth,
   stickerBorderHex,
   STICKER_BORDER_PRESETS,
+  photoStripSize,
+  photoStripCount,
+  photoStripPaperHex,
+  readableInk,
   jigsawGrid,
   polylineToPathD,
   deskNamePlatePoints,
@@ -47,6 +51,8 @@ const DEFAULT_NAME_FONT = "'Playfair Display', Georgia, serif";
 const DEFAULT_TOPPER_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
 const TOPPER_MAX_CHARS = 24;
 const TOPPER_INK = "#1d2420";
+const DEFAULT_STRIP_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
+const STRIP_MAX_PHOTOS = 4;
 
 const root = document.querySelector("[data-maker]");
 const profile = getProductProfile(root.dataset.maker);
@@ -77,12 +83,18 @@ const plateTitle = document.querySelector("#plaqueTitle");
 const plateCompany = document.querySelector("#plaqueCompany");
 const finishSelect = document.querySelector("#finish");
 const borderColorInput = document.querySelector("#borderColor");
+const stripCountSelect = document.querySelector("#stripCount");
+const stripCaptionInput = document.querySelector("#stripCaption");
+const stripFontSelect = document.querySelector("#stripFont");
+const stripPaperInput = document.querySelector("#stripPaper");
+const stripClearButton = document.querySelector("#stripClear");
 
 let image = null;
 let imageDataUrl = "";
 let namePhoto = null;
 let topperPhoto = null;
 let plateLogo = null;
+let stripPhotos = [];
 let rawContours = null;
 let backgroundLifted = false;
 let liftedCanvas = null;
@@ -127,26 +139,24 @@ function boot() {
     render();
     document.fonts?.ready?.then?.(() => schedule());
   }
+  if (profile.id === "photo-strip") {
+    stripCountSelect?.addEventListener("change", schedule);
+    stripCaptionInput?.addEventListener("input", schedule);
+    stripFontSelect?.addEventListener("change", schedule);
+    stripPaperInput?.addEventListener("input", schedule);
+    stripClearButton?.addEventListener("click", clearStripPhotos);
+    // A strip is laid out from the product size rather than from an upload, so a blank canvas
+    // stands in for the artwork and the shared preview and download plumbing keeps working.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
   offsetInput?.addEventListener("input", schedule);
   borderColorInput?.addEventListener("input", schedule);
-  const borderPresetButtons = document.querySelectorAll("#borderPresets button[data-border]");
-  function syncBorderPresets() {
-    if (!borderPresetButtons.length) return;
-    const current = String((borderColorInput && borderColorInput.value) || "").toLowerCase();
-    borderPresetButtons.forEach((button) => {
-      button.setAttribute("aria-pressed", button.getAttribute("data-border").toLowerCase() === current ? "true" : "false");
-    });
-  }
-  borderPresetButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      if (!borderColorInput) return;
-      borderColorInput.value = button.getAttribute("data-border");
-      syncBorderPresets();
-      schedule();
-    });
-  });
-  borderColorInput?.addEventListener("input", syncBorderPresets);
-  syncBorderPresets();
+  wireHexPresets(borderColorInput, "#borderPresets", "data-border", schedule);
+  wireHexPresets(stripPaperInput, "#stripPaperPresets", "data-paper", schedule);
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
   contactInput?.addEventListener("input", schedule);
@@ -155,6 +165,31 @@ function boot() {
   svgButton?.addEventListener("click", () => { if (image) exportSvg(); });
   track("page_view", { product: profile.id });
   if (new URLSearchParams(location.search).get("sample") === "1") loadSample();
+}
+
+/**
+ * The one-shot colour buttons shared by the sticker border and the strip paper. A click fills
+ * the real colour input, so the swatch and the picker can never disagree about the value.
+ */
+function wireHexPresets(input, containerSelector, attribute, onChange) {
+  const buttons = document.querySelectorAll(containerSelector + " button[" + attribute + "]");
+  if (!buttons.length) return;
+  const sync = () => {
+    const current = String((input && input.value) || "").toLowerCase();
+    buttons.forEach((button) => {
+      button.setAttribute("aria-pressed", button.getAttribute(attribute).toLowerCase() === current ? "true" : "false");
+    });
+  };
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!input) return;
+      input.value = button.getAttribute(attribute);
+      sync();
+      onChange();
+    });
+  });
+  input?.addEventListener("input", sync);
+  sync();
 }
 
 function setDownloadsEnabled(enabled) {
@@ -395,6 +430,29 @@ async function onUpload() {
     return;
   }
 
+  if (profile.id === "photo-strip") {
+    // A strip takes a small set of photos instead of one, so every file is read and the first
+    // four become the frames. Uploading again adds to the strip rather than replacing it.
+    const files = Array.from(upload.files || []).filter((entry) => /^image\/(png|jpeg|webp)$/.test(entry.type));
+    if (!files.length) return note("Use PNG, JPG or WebP photos.");
+    note("Loading your photos...");
+    for (const entry of files) {
+      if (stripPhotos.length >= STRIP_MAX_PHOTOS) break;
+      if (entry.size > MAX_UPLOAD_BYTES) continue;
+      try {
+        stripPhotos.push(await loadImage(await fileToDataUrl(entry)));
+      } catch (error) {
+        // One unreadable file must not throw away the photos that did load.
+      }
+    }
+    if (!stripPhotos.length) return note("We could not read those photos. Please try another set.");
+    setDownloadsEnabled(true);
+    adoptSource("upload");
+    render();
+    track("photo_uploaded", { tool: "photo-strip", photos: stripPhotos.length });
+    return;
+  }
+
   note("Loading your image...");
   const dataUrl = await fileToDataUrl(file);
   const ok = await adoptImage(dataUrl);
@@ -487,6 +545,16 @@ function extractContours() {
 // ------------------------------------------------------------------ layout + render
 
 function layout() {
+  if (profile.id === "photo-strip") {
+    // A strip is a fixed 2 in wide column of photos, so the product size decides the box
+    // instead of the uploads. The scene carries the strip height as its print long side.
+    const spec = photoStripSize(sizeSelect.value);
+    const h = WORK_LONG_SIDE;
+    const w = Math.round(h * (spec.widthCm / spec.heightCm));
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: spec.heightCm, dpi: workDpi(h, spec.heightCm), spec };
+  }
   const longest = Math.max(image.naturalWidth, image.naturalHeight);
   const ratio = WORK_LONG_SIDE / longest;
   let w = image.naturalWidth * ratio;
@@ -645,6 +713,21 @@ function render() {
     };
     if (kind === "sticker") drawSticker(ctx, scene, true);
     else drawStickerOutline(ctx, scene, true);
+  } else if (profile.id === "photo-strip") {
+    const stripCount = photoStripCount(stripCountSelect?.value);
+    scene = {
+      kind: "photo-strip",
+      spec: L.spec,
+      count: stripCount,
+      photos: stripPhotos.slice(0, stripCount),
+      paper: photoStripPaperHex(stripPaperInput?.value),
+      caption: (stripCaptionInput?.value || "").trim().replace(/\s+/g, " ").slice(0, 40),
+      font: stripFontSelect?.value || DEFAULT_STRIP_FONT,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawPhotoStrip(ctx, scene, true);
   } else if (profile.id === "photo-keychain") {
     const geometry = photoKeychainGeometry(L);
     scene = {
@@ -819,6 +902,24 @@ function readout(L) {
     return;
   }
 
+  if (profile.id === "photo-strip") {
+    // The printed width is what a strip is sold as and the frame count is what makes it a booth
+    // strip rather than a plain print, so the readout leads with both.
+    const spec = scene.spec;
+    const sheet = (spec.cols || 1) > 1
+      ? " Two identical strips share the sheet, so one 4 x 6 in photo print gives you two - cut straight down the middle."
+      : "";
+    const missing = scene.count - scene.photos.length;
+    dimensions.textContent = spec.id.split("x").join(" x ") + " in photo strip with " + scene.count
+      + " photos at " + PRINT_DPI + " DPI (" + physicalPixels(spec.heightCm, PRINT_DPI) + " px long side)." + sheet
+      + (scene.caption ? " Your caption prints under the frames." : "")
+      + (missing > 0
+        ? " Add " + missing + " more photo" + (missing === 1 ? "" : "s") + " to fill every frame."
+        : " Every frame is filled, so the download is ready to print.")
+      + " No watermark, and the photos never leave your device.";
+    return;
+  }
+
   if (profile.id === "jigsaw") {
     // The puzzle is the only tool whose readout is about the piece count as much as the size.
     const grid = scene.grid;
@@ -972,6 +1073,98 @@ function drawStickerOutline(c, s, guides) {
     c.strokeStyle = "rgba(239,105,76,.55)";
     c.beginPath();
     for (const pts of s.base) addPolygon(c, pts);
+    c.stroke();
+    c.restore();
+  }
+}
+
+function clearStripPhotos() {
+  stripPhotos = [];
+  if (upload) upload.value = "";
+  setDownloadsEnabled(false);
+  adoptSource("upload");
+  render();
+}
+
+/**
+ * A printed photo booth strip. The paper, the frame gutters and the caption band all move with
+ * the product size, so the same painter draws a single 2 x 6 in strip and the 4 x 6 in sheet
+ * that carries two of them. The preview adds a drop shadow; the export never does.
+ */
+function drawPhotoStrip(c, s, guides) {
+  const r = s.rect;
+  const cols = Math.max(1, Number(s.spec.cols) || 1);
+  const colW = r.w / cols;
+  const radius = Math.min(colW * 0.1, r.h * 0.022);
+  const ink = readableInk(s.paper);
+  const quiet = ink === "#ffffff" ? "rgba(255,255,255," : "rgba(29,36,32,";
+  const padX = colW * 0.085;
+  const padY = colW * 0.075;
+  const gutter = colW * 0.045;
+  const captionH = s.caption ? colW * 0.3 : 0;
+  const frameW = Math.max(8, colW - padX * 2);
+  const framesH = Math.max(8, r.h - padY * 2 - captionH);
+  const cellH = Math.max(8, (framesH - gutter * (s.count - 1)) / s.count);
+
+  c.save();
+  if (guides) {
+    c.shadowColor = "rgba(29,36,32,.2)";
+    c.shadowBlur = 26;
+    c.shadowOffsetY = 12;
+  }
+  c.fillStyle = s.paper;
+  roundRect(c, r.x, r.y, r.w, r.h, radius);
+  c.fill();
+  c.restore();
+
+  for (let col = 0; col < cols; col += 1) {
+    const cx = r.x + colW * col + padX;
+    for (let i = 0; i < s.count; i += 1) {
+      const cy = r.y + padY + i * (cellH + gutter);
+      const photo = s.photos[i];
+      c.save();
+      roundRect(c, cx, cy, frameW, cellH, Math.min(frameW, cellH) * 0.045);
+      c.clip();
+      if (photo) {
+        drawCover(c, photo, cx, cy, frameW, cellH);
+      } else {
+        c.fillStyle = quiet + ".07)";
+        c.fillRect(cx, cy, frameW, cellH);
+        c.fillStyle = quiet + ".5)";
+        c.font = "600 " + Math.max(9, Math.round(cellH * 0.17)) + "px " + DEFAULT_STRIP_FONT;
+        c.textAlign = "center";
+        c.textBaseline = "middle";
+        c.fillText("Photo " + (i + 1), cx + frameW / 2, cy + cellH / 2);
+      }
+      c.restore();
+    }
+
+    if (s.caption) {
+      const maxW = frameW * 0.98;
+      let size = Math.max(9, Math.round(captionH * 0.46));
+      c.save();
+      c.fillStyle = ink;
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.font = "600 " + size + "px " + s.font;
+      while (size > 8 && c.measureText(s.caption).width > maxW) {
+        size -= 1;
+        c.font = "600 " + size + "px " + s.font;
+      }
+      c.fillText(s.caption, cx + frameW / 2, r.y + r.h - padY - captionH / 2, maxW);
+      c.restore();
+    }
+  }
+
+  if (guides && cols > 1) {
+    // Preview only: where the two strips are cut apart. The printed sheet stays clean.
+    c.save();
+    c.strokeStyle = "rgba(29,36,32,.35)";
+    c.setLineDash([9, 7]);
+    c.lineWidth = Math.max(1, colW * 0.008);
+    c.beginPath();
+    c.moveTo(r.x + colW, r.y + r.h * 0.012);
+    c.lineTo(r.x + colW, r.y + r.h * 0.988);
     c.stroke();
     c.restore();
   }
@@ -1876,7 +2069,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -1919,6 +2112,7 @@ function renderScene(scale) {
   else if (scene.kind === "cake-topper") drawCakeTopper(c, scene, false);
   else if (scene.kind === "block") drawBlock(c, scene, false);
   else if (scene.kind === "jigsaw") drawJigsaw(c, scene, false);
+  else if (scene.kind === "photo-strip") drawPhotoStrip(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -1944,7 +2138,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -2418,7 +2612,65 @@ function photoSampleArtwork() {
   return c;
 }
 
+/** Four simple stand-in frames so the strip tool is worth trying before any upload. */
+function photoStripSamplePhotos() {
+  const scenes = [
+    ["#f8dcbd", "#e39a63", "#1d2420"],
+    ["#d3e6f1", "#84aecb", "#1d2420"],
+    ["#e5ead4", "#a3b98a", "#1d2420"],
+    ["#f1d8e2", "#c287a6", "#1d2420"],
+  ];
+  return scenes.map((entry, index) => {
+    const c = document.createElement("canvas");
+    c.width = 900;
+    c.height = 900;
+    const x = c.getContext("2d");
+    const sky = x.createLinearGradient(0, 0, 0, 900);
+    sky.addColorStop(0, entry[0]);
+    sky.addColorStop(1, entry[1]);
+    x.fillStyle = sky;
+    x.fillRect(0, 0, 900, 900);
+    x.fillStyle = "rgba(255,255,255,.72)";
+    x.beginPath();
+    x.arc(300 + index * 90, 240 + index * 46, 104 + index * 14, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = "rgba(29,36,32,.18)";
+    x.beginPath();
+    x.moveTo(0, 640);
+    x.quadraticCurveTo(450, 545 + index * 26, 900, 660);
+    x.lineTo(900, 900);
+    x.lineTo(0, 900);
+    x.closePath();
+    x.fill();
+    x.fillStyle = "rgba(29,36,32,.5)";
+    x.textAlign = "center";
+    x.font = "600 44px 'Trebuchet MS', 'Segoe UI', sans-serif";
+    x.fillText("SAMPLE " + (index + 1), 450, 830);
+    return c;
+  });
+}
+
 async function loadSample() {
+  if (profile.id === "photo-strip") {
+    // The strip sample is four frames plus a caption, which is what a finished strip looks like.
+    note("Loading a sample strip so you can try the tool...");
+    const frames = photoStripSamplePhotos();
+    stripPhotos = [];
+    for (const frame of frames) {
+      try {
+        stripPhotos.push(await loadImage(frame.toDataURL("image/png")));
+      } catch (error) {
+        // Skip a frame that will not decode rather than dropping the whole sample.
+      }
+    }
+    if (!stripPhotos.length) return note("The sample could not load. Please upload photos instead.");
+    if (stripCaptionInput && !stripCaptionInput.value.trim()) stripCaptionInput.value = "Tiny County Makers";
+    setDownloadsEnabled(true);
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
   if (profile.id === "name-plate") {
     // The plate sample is typed copy plus a logo mark, so the shared sample canvas stands in
     // for the logo and the fields are filled the way a real visitor would fill them.

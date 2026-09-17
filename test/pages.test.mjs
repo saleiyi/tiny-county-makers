@@ -21,6 +21,7 @@ const TOOL_PAGES = [
   { file: "desk-name-plate-maker.html", maker: "name-plate", title: "Desk Name Plate Maker" },
   { file: "photo-jigsaw-puzzle-maker.html", maker: "jigsaw", title: "Photo Jigsaw Puzzle Maker" },
   { file: "sticker-outline-maker.html", maker: "sticker-outline", title: "Sticker Outline Maker" },
+  { file: "photo-strip-maker.html", maker: "photo-strip", title: "Photo Strip Maker" },
 ];
 
 const SHARED_IDS = ["photo", "size", "sizeLabel", "pngDownload", "preview", "dimensions", "productName"];
@@ -165,6 +166,7 @@ test("the sitemap lists every published page with the current lastmod", () => {
     "desk-name-plate-maker.html",
     "photo-jigsaw-puzzle-maker.html",
     "sticker-outline-maker.html",
+    "photo-strip-maker.html",
   ];
   for (const entry of paths) {
     assert.ok(xml.includes(entry), `sitemap.xml is missing ${entry}`);
@@ -218,7 +220,7 @@ test("the keychain FAQ and how-to markup match what visitors can read", () => {
 
 test("the homepage advertises the other free tools with real descriptions", () => {
   const html = read("index.html");
-  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "cake-topper-maker.html", "bookmark-maker.html", "acrylic-coaster-maker.html", "desk-name-plate-maker.html", "photo-jigsaw-puzzle-maker.html", "sticker-outline-maker.html"]) {
+  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "cake-topper-maker.html", "bookmark-maker.html", "acrylic-coaster-maker.html", "desk-name-plate-maker.html", "photo-jigsaw-puzzle-maker.html", "sticker-outline-maker.html", "photo-strip-maker.html"]) {
     assert.ok(html.includes(`href="./${tool}"`), `index.html does not link ${tool}`);
   }
   assert.match(html, /<section class="tools-band" id="more-tools">/, "the related-tools band disappeared");

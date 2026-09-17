@@ -63,11 +63,17 @@ import {
   STICKER_BORDER_PRESETS,
   stickerBorderWidth,
   stickerBorderHex,
+  PHOTO_STRIP_SIZES,
+  PHOTO_STRIP_COUNTS,
+  photoStripSize,
+  photoStripCount,
+  photoStripPaperHex,
+  readableInk,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the fifteen distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline"]);
+test("the shared engine exposes the sixteen distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -101,6 +107,11 @@ test("the shared engine exposes the fifteen distinct maker profiles", () => {
   assert.equal(getProductProfile("sticker-outline").hasHardware, false);
   assert.equal(getProductProfile("sticker-outline").hasBase, false);
   assert.equal(getProductProfile("sticker-outline").sizes.length, 4);
+  assert.equal(getProductProfile("photo-strip").exportSvg, false);
+  assert.equal(getProductProfile("photo-strip").hasHardware, false);
+  assert.equal(getProductProfile("photo-strip").hasBase, false);
+  assert.equal(getProductProfile("photo-strip").sizes.length, 2);
+  assert.equal(getProductProfile("photo-strip").sizeLabels.length, 2);
 });
 
 test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
@@ -619,4 +630,42 @@ test("sticker border colours accept a hex value, a short hex value or a preset n
   assert.equal(stickerBorderHex(undefined), "#ffffff");
   assert.equal(STICKER_BORDER_PRESETS.length, 4);
   assert.equal(STICKER_OUTLINE_SIZES.length, 4);
+});
+
+test("photo strip layouts keep the single 2 x 6 in strip apart from the 4 x 6 in sheet", () => {
+  assert.equal(PHOTO_STRIP_SIZES.length, 2);
+  assert.equal(photoStripSize("5.08").id, "2x6");
+  assert.equal(photoStripSize("5.08").cols, 1);
+  assert.equal(photoStripSize("10.16").id, "4x6");
+  assert.equal(photoStripSize("10.16").cols, 2);
+  assert.equal(photoStripSize("999").id, "2x6", "an unknown width should fall back to the single strip");
+  assert.equal(physicalPixels(photoStripSize("5.08").heightCm, PRINT_DPI), 1800);
+  assert.equal(physicalPixels(photoStripSize("10.16").heightCm, PRINT_DPI), 1800);
+});
+
+test("a photo strip holds three or four frames and settles on four for anything else", () => {
+  assert.deepEqual([...PHOTO_STRIP_COUNTS], [3, 4]);
+  assert.equal(photoStripCount("3"), 3);
+  assert.equal(photoStripCount(3), 3);
+  assert.equal(photoStripCount("4"), 4);
+  assert.equal(photoStripCount(5), 4);
+  assert.equal(photoStripCount(undefined), 4);
+});
+
+test("photo strip paper colours take a hex value, a short hex value or a preset name", () => {
+  assert.equal(photoStripPaperHex("#ABC"), "#aabbcc");
+  assert.equal(photoStripPaperHex("#14181a"), "#14181a");
+  assert.equal(photoStripPaperHex("cream"), "#f7efe1");
+  assert.equal(photoStripPaperHex("blush"), "#f4dede");
+  assert.equal(photoStripPaperHex("no-such-paper"), "#ffffff");
+  assert.equal(photoStripPaperHex(undefined), "#ffffff");
+});
+
+test("the caption ink flips to white on dark paper and stays dark on light paper", () => {
+  assert.equal(readableInk("#ffffff"), "#1d2420");
+  assert.equal(readableInk("cream"), "#1d2420");
+  assert.equal(readableInk("blush"), "#1d2420");
+  assert.equal(readableInk("#14181a"), "#ffffff");
+  assert.equal(readableInk("#000000"), "#ffffff");
+  assert.equal(readableInk(undefined), "#1d2420");
 });

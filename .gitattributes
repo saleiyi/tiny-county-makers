@@ -1,0 +1,8 @@
+# Keep every text file stored with LF in Git so diffs stay small on Windows.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
