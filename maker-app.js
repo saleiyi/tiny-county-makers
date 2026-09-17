@@ -18,6 +18,9 @@ import {
   luggageTagShapePoints,
   luggageTagHole,
   widthAtY,
+  cakeTopperBarRect,
+  cakeTopperPlaque,
+  isCakeTopperStyle,
   photoBlockSize,
   sizeOptionLabel,
   PRINT_DPI,
@@ -27,6 +30,9 @@ const CANVAS = 900;
 const WORK_LONG_SIDE = 620;
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const DEFAULT_NAME_FONT = "'Playfair Display', Georgia, serif";
+const DEFAULT_TOPPER_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
+const TOPPER_MAX_CHARS = 24;
+const TOPPER_INK = "#1d2420";
 
 const root = document.querySelector("[data-maker]");
 const profile = getProductProfile(root.dataset.maker);
@@ -49,10 +55,14 @@ const pngButton = document.querySelector("#pngDownload");
 const svgButton = document.querySelector("#svgDownload");
 const engravingInput = document.querySelector("#engraving");
 const contactInput = document.querySelector("#contact");
+const topperText = document.querySelector("#topperText");
+const topperFont = document.querySelector("#topperFont");
+const topperStyle = document.querySelector("#topperStyle");
 
 let image = null;
 let imageDataUrl = "";
 let namePhoto = null;
+let topperPhoto = null;
 let rawContours = null;
 let rawSource = { width: 0, height: 0 };
 let scene = null;
@@ -78,6 +88,12 @@ function boot() {
     nameInput?.addEventListener("input", onNameInput);
     nameFont?.addEventListener("change", onNameInput);
     generateNameArtwork();
+  }
+  if (profile.id === "cake-topper") {
+    topperText?.addEventListener("input", onTopperInput);
+    topperFont?.addEventListener("change", onTopperInput);
+    topperStyle?.addEventListener("change", onTopperInput);
+    generateTopperArtwork();
   }
   offsetInput?.addEventListener("input", schedule);
   smoothingInput?.addEventListener("input", schedule);
@@ -182,6 +198,100 @@ function nameArtworkCanvas(text, family, photo) {
   return c;
 }
 
+// ------------------------------------------------------------------ cake topper artwork
+
+let topperTimer = 0;
+
+/** The selected lettering style, falling back to the safest cut shape. */
+function topperStyleName() {
+  const value = topperStyle?.value;
+  return isCakeTopperStyle(value) ? value : "cutout";
+}
+
+function topperTextValue() {
+  return (topperText?.value || "").trim().slice(0, TOPPER_MAX_CHARS);
+}
+
+function onTopperInput() {
+  clearTimeout(topperTimer);
+  topperTimer = setTimeout(generateTopperArtwork, 180);
+}
+
+async function generateTopperArtwork() {
+  const text = topperTextValue();
+  if (!text) {
+    image = null;
+    setDownloadsEnabled(false);
+    return note("Type a name or a short message to see the acrylic cake topper shape.");
+  }
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (error) { /* fall back to the installed face */ }
+  const ok = await adoptImage(topperArtworkCanvas(text, topperFont?.value || DEFAULT_TOPPER_FONT, topperStyleName()).toDataURL("image/png"));
+  if (ok) track("topper_rendered", { characters: text.length, style: topperStyleName() });
+}
+
+/**
+ * The ink the cut path is traced from. Three shapes are sold:
+ *   cutout - bare letters, best for a single word in a connected face;
+ *   bar    - letters welded onto one horizontal band, so "Happy Birthday" ships as one piece;
+ *   plaque - a solid disc with the wording cut through it as a stencil.
+ * The offered faces deliberately avoid very heavy display fonts such as Arial Black or
+ * Impact, whose tight counters trace into unreadable slivers at cutting size.
+ */
+function topperArtworkCanvas(text, family, style) {
+  const SIZE = 340;
+  const WEIGHT = 700;
+  const probe = document.createElement("canvas").getContext("2d");
+  probe.font = WEIGHT + " " + SIZE + "px " + family;
+  const metrics = probe.measureText(text);
+  const ascent = Math.max(1, metrics.actualBoundingBoxAscent || SIZE * 0.74);
+  const descent = Math.max(0, metrics.actualBoundingBoxDescent || SIZE * 0.2);
+  const textW = Math.max(60, Math.ceil(metrics.width));
+
+  if (style === "plaque") {
+    // A round plaque is sized from the wording so a short name and a long message both keep
+    // a readable margin between the letters and the outside edge.
+    const size = Math.round(Math.max(textW * 1.75, (ascent + descent) * 2.6, 720));
+    const disc = document.createElement("canvas");
+    disc.width = size;
+    disc.height = size;
+    const d = disc.getContext("2d");
+    const plaque = cakeTopperPlaque(size, size);
+    d.fillStyle = TOPPER_INK;
+    d.beginPath();
+    d.arc(plaque.cx, plaque.cy, plaque.r, 0, Math.PI * 2);
+    d.fill();
+    // Punching the wording out of the disc leaves a stencil that still cuts as one piece.
+    d.globalCompositeOperation = "destination-out";
+    d.textAlign = "center";
+    d.textBaseline = "middle";
+    const inner = fitFont(d, text, plaque.r * 1.3, plaque.r * 0.6, family, WEIGHT);
+    d.font = WEIGHT + " " + inner + "px " + family;
+    d.fillText(text, plaque.cx, plaque.cy);
+    d.globalCompositeOperation = "source-over";
+    return disc;
+  }
+
+  const padX = Math.max(28, Math.round(textW * 0.06));
+  const padTop = Math.round((ascent + descent) * 0.12);
+  const baseline = padTop + ascent;
+  const width = textW + padX * 2;
+  const bar = style === "bar" ? cakeTopperBarRect(width, baseline, ascent, descent) : null;
+  const inkBottom = bar ? bar.y + bar.h : baseline + descent;
+  const height = Math.ceil(inkBottom + Math.round((ascent + descent) * 0.08));
+
+  const c = document.createElement("canvas");
+  c.width = width;
+  c.height = height;
+  const g = c.getContext("2d");
+  g.fillStyle = TOPPER_INK;
+  g.textAlign = "center";
+  g.textBaseline = "alphabetic";
+  g.font = WEIGHT + " " + SIZE + "px " + family;
+  if (bar) g.fillRect(bar.x, bar.y, bar.w, bar.h);
+  g.fillText(text, width / 2, baseline);
+  return c;
+}
+
 // ------------------------------------------------------------------ upload
 
 async function onUpload() {
@@ -202,6 +312,21 @@ async function onUpload() {
     }
     track("photo_uploaded", { tool: "name-keychain", width: namePhoto.naturalWidth, height: namePhoto.naturalHeight });
     await generateNameArtwork();
+    return;
+  }
+
+  if (profile.id === "cake-topper") {
+    // A photo is optional ink: it fills the letters, the welding bar or the round plaque.
+    note("Loading your photo...");
+    const topperDataUrl = await fileToDataUrl(file);
+    try {
+      topperPhoto = await loadImage(topperDataUrl);
+    } catch (error) {
+      topperPhoto = null;
+      return note("We could not read that photo. Please try another file.");
+    }
+    track("photo_uploaded", { tool: "cake-topper", width: topperPhoto.naturalWidth, height: topperPhoto.naturalHeight });
+    await generateTopperArtwork();
     return;
   }
 
@@ -233,8 +358,11 @@ async function adoptImage(dataUrl) {
 
 /** Trace the artwork outline once per upload; parameter changes reuse this cache. */
 function extractContours() {
+  // Lettering traces into a cleaner cut line than a photo outline does, so the topper tool
+  // works at a finer resolution and scales the finished path back down for the preview.
+  const traceLongSide = profile.id === "cake-topper" ? 1400 : WORK_LONG_SIDE;
   const longest = Math.max(image.naturalWidth, image.naturalHeight);
-  const ratio = Math.min(1, WORK_LONG_SIDE / longest);
+  const ratio = Math.min(1, traceLongSide / longest);
   const sw = Math.max(2, Math.round(image.naturalWidth * ratio));
   const sh = Math.max(2, Math.round(image.naturalHeight * ratio));
   const work = document.createElement("canvas");
@@ -246,7 +374,8 @@ function extractContours() {
   const pixels = wctx.getImageData(0, 0, sw, sh).data;
   const mask = alphaToMask(pixels, sw, sh, 18);
   const minArea = Math.max(16, sw * sh * 0.000015);
-  rawContours = cleanContours(traceContours(mask, sw, sh), minArea, 24);
+  const maxContours = profile.id === "cake-topper" ? 80 : 24;
+  rawContours = cleanContours(traceContours(mask, sw, sh), minArea, maxContours);
   rawSource = { width: sw, height: sh };
   if (!rawContours.length) note("This image is fully transparent, so there is nothing to trace. Try a PNG with visible artwork.");
 }
@@ -369,6 +498,17 @@ function render() {
   } else if (profile.id === "name-keychain") {
     scene = { kind: "name-keychain", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, hole: nameHole(L), image, dpi: L.dpi, longSideCm: L.longSideCm };
     drawNameKeychain(ctx, scene, true);
+  } else if (profile.id === "cake-topper") {
+    scene = {
+      kind: "cake-topper",
+      style: topperStyleName(),
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      outline: topperOutline(L),
+      image: topperPhoto,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawCakeTopper(ctx, scene, true);
   } else if (profile.id === "ornament") {
     const outline = ornamentShapePoints(L.shape, L.w, L.h).map(([px, py]) => [px + L.x, py + L.y]);
     const local = ornamentHole(L.shape, L.w, L.h);
@@ -463,6 +603,8 @@ function readout(L) {
       ? "transparent PNG at 300 DPI; the keyring is a preview only"
       : profile.id === "name-keychain"
         ? "transparent PNG at 300 DPI; the hanging hole and ring are preview only"
+      : profile.id === "cake-topper"
+        ? "transparent PNG at 300 DPI plus an SVG cut path; the cake stick in the preview is decoration only"
         : "transparent PNG, no watermark";
   dimensions.textContent = `${round2(piece.width * cmPerWorkPx)} x ${round2(piece.height * cmPerWorkPx)} cm finished piece at ${PRINT_DPI} DPI (${exportLong} px long side) - ${suffix}.`;
 }
@@ -890,6 +1032,76 @@ function drawHanger(c, hole) {
   c.restore();
 }
 
+// ------------------------------------------------------------------ cake topper
+
+/** The traced letters, scaled from the traced source into the live preview box. */
+function topperOutline(L) {
+  if (!rawContours || !rawContours.length) return [];
+  const sx = L.w / rawSource.width;
+  const sy = L.h / rawSource.height;
+  const tolerance = Math.max(0.4, Math.min(L.w, L.h) / 520);
+  return rawContours.map((contour) => {
+    const simplified = simplifyPath(contour, tolerance);
+    return scalePath(simplified, sx, sy).map(([x, y]) => [x + L.x, y + L.y]);
+  });
+}
+
+function drawCakeTopper(c, s, guides) {
+  const r = s.rect;
+  if (!s.outline.length) return;
+  const depth = Math.max(3, Math.min(r.w, r.h) * 0.014);
+
+  if (guides) {
+    // The dowel is decoration: it sits behind the acrylic and never reaches the export.
+    drawTopperStick(c, r);
+    c.save();
+    c.globalAlpha = 0.16;
+    c.translate(depth * 1.4, depth * 2.2);
+    c.fillStyle = "#1d2420";
+    c.beginPath();
+    for (const pts of s.outline) addPolygon(c, pts);
+    c.fill("evenodd");
+    c.restore();
+  }
+
+  // Acrylic face: a white sheet with the optional photo floated inside the cut shape.
+  c.save();
+  c.beginPath();
+  for (const pts of s.outline) addPolygon(c, pts);
+  c.clip("evenodd");
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  if (s.image && s.image.naturalWidth) drawCover(c, s.image, r.x, r.y, r.w, r.h);
+  c.restore();
+
+  if (guides) {
+    c.save();
+    c.setLineDash([7, 6]);
+    c.lineWidth = 1.6;
+    c.strokeStyle = "rgba(239,105,76,.9)";
+    c.beginPath();
+    for (const pts of s.outline) addPolygon(c, pts);
+    c.stroke();
+    c.restore();
+  }
+}
+
+/** Preview-only dowel, so the mockup reads as a topper standing in a cake. */
+function drawTopperStick(c, r) {
+  const width = Math.max(7, Math.min(r.w, r.h) * 0.055);
+  const cx = r.x + r.w / 2;
+  const top = r.y + r.h * 0.6;
+  const bottom = r.y + r.h + Math.max(90, r.h * 0.8);
+  c.save();
+  c.fillStyle = "#f1e7d4";
+  c.strokeStyle = "rgba(122,104,76,.45)";
+  c.lineWidth = 1.2;
+  roundRect(c, cx - width / 2, top, width, bottom - top, width * 0.4);
+  c.fill();
+  c.stroke();
+  c.restore();
+}
+
 function pathForKeychain(c, x, y, w, h, shape, radius) {
   if (shape === "circle") {
     c.beginPath();
@@ -971,6 +1183,13 @@ function sceneBox() {
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
   }
+  if (scene.kind === "cake-topper") {
+    // The traced letters decide the export box, so the empty artboard around them is dropped.
+    const b = boundsOfContours(scene.outline);
+    if (!b) return null;
+    const pad = 2;
+    return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
+  }
   if (scene.kind === "ornament" || scene.kind === "luggage-tag") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
@@ -1007,6 +1226,7 @@ function renderScene(scale) {
   else if (scene.kind === "magnet") drawMagnet(c, scene);
   else if (scene.kind === "ornament") drawOrnament(c, scene, false);
   else if (scene.kind === "luggage-tag") drawLuggageTag(c, scene, false);
+  else if (scene.kind === "cake-topper") drawCakeTopper(c, scene, false);
   else if (scene.kind === "block") drawBlock(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
@@ -1028,6 +1248,10 @@ function pieceBox() {
   if (scene.kind === "name-keychain") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
+  }
+  if (scene.kind === "cake-topper") {
+    const b = boundsOfContours(scene.outline);
+    return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
   if (scene.kind === "ornament" || scene.kind === "luggage-tag") {
     const r = scene.rect;
@@ -1068,6 +1292,7 @@ function exportPng() {
 }
 
 function exportSvg() {
+  if (scene.kind === "cake-topper") return exportTopperSvg();
   if (scene.kind === "ornament" || scene.kind === "luggage-tag") return exportOrnamentSvg();
   if (scene.kind !== "sticker") return;
   const scale = exportScale();
@@ -1132,12 +1357,46 @@ function exportOrnamentSvg() {
   track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
 }
 
+/** Cut path plus a printable artwork layer, the same split the sticker and ornament tools ship. */
+function exportTopperSvg() {
+  const scale = exportScale();
+  const box = sceneBox();
+  const r = scene.rect;
+  if (!box || !scene.outline.length) return note("Type a name or a short message before exporting.");
+  const tx = (points) => points.map(([x, y]) => [(x - box.x) * scale, (y - box.y) * scale]);
+  const shape = contoursToPathD(scene.outline.map(tx), 2);
+  const width = Math.round(box.width * scale);
+  const height = Math.round(box.height * scale);
+  const art = document.createElement("canvas");
+  art.width = Math.max(1, Math.round(r.w * scale));
+  art.height = Math.max(1, Math.round(r.h * scale));
+  const ax = art.getContext("2d");
+  ax.fillStyle = "#ffffff";
+  ax.fillRect(0, 0, art.width, art.height);
+  if (scene.image) drawCover(ax, scene.image, 0, 0, art.width, art.height);
+  const lines = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">`,
+    `<title>${profile.product} cutline - ${scene.longSideCm} cm wide, ${PRINT_DPI} DPI</title>`,
+    `<defs><clipPath id="TopperShape"><path d="${shape}" clip-rule="evenodd"/></clipPath></defs>`,
+    `<g id="Artwork" clip-path="url(#TopperShape)">`,
+    `<image x="${round2((r.x - box.x) * scale)}" y="${round2((r.y - box.y) * scale)}" width="${art.width}" height="${art.height}" href="${art.toDataURL("image/png")}"/>`,
+    `</g>`,
+    `<g id="Cutline" fill="none" stroke="#ff00ff" stroke-width="1">`,
+    `<path d="${shape}" fill-rule="evenodd"/>`,
+    `</g>`,
+    `</svg>`,
+  ];
+  downloadBlob(lines.join("\n"), `${profile.id}-${scene.longSideCm}cm-${PRINT_DPI}dpi.svg`, "image/svg+xml;charset=utf-8");
+  track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
+}
+
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
   if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag") return photoSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
+  if (profile.id === "cake-topper") return topperArtworkCanvas(topperTextValue() || "Happy Birthday", topperFont?.value || DEFAULT_TOPPER_FONT, topperStyleName());
   const c = document.createElement("canvas");
   c.width = 600;
   c.height = 600;

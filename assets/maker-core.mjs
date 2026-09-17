@@ -11,6 +11,12 @@ export const PHOTO_BLOCK_SIZES = Object.freeze([
 ]);
 /** Long sides an acrylic luggage tag is sold in, in centimetres. */
 export const LUGGAGE_TAG_SIZES = Object.freeze([7, 9, 11]);
+
+/** Long sides an acrylic cake topper is sold in, in centimetres. */
+export const CAKE_TOPPER_SIZES = Object.freeze([10, 12, 15]);
+
+/** How a cake topper is built: bare letters, letters welded to a bar, or a drilled plaque. */
+export const CAKE_TOPPER_STYLES = Object.freeze(["cutout", "bar", "plaque"]);
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -21,6 +27,7 @@ const PROFILES = Object.freeze([
   { id: "ornament", name: "Photo Ornament Maker", product: "Photo ornament", hasHardware: true, hasBase: false, exportSvg: true, sizes: [6, 8, 10] },
   { id: "block", name: "Acrylic Photo Block Maker", product: "Acrylic photo block", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_BLOCK_SIZES.map((size) => size.heightCm), sizeLabels: PHOTO_BLOCK_SIZES.map((size) => size.label) },
   { id: "luggage-tag", name: "Luggage Tag Maker", product: "Acrylic luggage tag", hasHardware: false, hasBase: false, exportSvg: true, sizes: LUGGAGE_TAG_SIZES },
+  { id: "cake-topper", name: "Cake Topper Maker", product: "Acrylic cake topper", hasHardware: false, hasBase: false, exportSvg: true, sizes: CAKE_TOPPER_SIZES },
 ]);
 
 export const PRINT_DPI = 300;
@@ -106,7 +113,12 @@ export function alphaToMask(pixels, width, height, alphaThreshold = 24) {
 export function traceContours(mask, width, height) {
   const w = Math.floor(Number(width)), h = Math.floor(Number(height));
   if (!(w > 1 && h > 1) || !mask) return [];
-  const stride = 2 * w + 1;
+  // One transparent pixel of padding, so a shape that runs right up to the edge of the mask
+  // still has a boundary to follow there. Without it the outer loop is left open at the edge
+  // and the trace breaks into slivers. The frame shifts every coordinate by one, which is
+  // undone again as the loops are read out below.
+  const pw = w + 2, ph = h + 2;
+  const stride = 2 * pw + 1;
   const key = (px, py) => py * stride + px;
   const edges = new Map();
   const link = (ax, ay, bx, by) => {
@@ -115,10 +127,10 @@ export function traceContours(mask, width, height) {
     let lb = edges.get(kb); if (!lb) { lb = []; edges.set(kb, lb); }
     la.push(kb); lb.push(ka);
   };
-  const on = (x, y) => (x >= 0 && y >= 0 && x < w && y < h && mask[y * w + x]) ? 1 : 0;
+  const on = (x, y) => (x >= 1 && y >= 1 && x <= w && y <= h && mask[(y - 1) * w + (x - 1)]) ? 1 : 0;
 
-  for (let y = 0; y < h - 1; y++) {
-    for (let x = 0; x < w - 1; x++) {
+  for (let y = 0; y < ph - 1; y++) {
+    for (let x = 0; x < pw - 1; x++) {
       const idx = (on(x, y) << 3) | (on(x + 1, y) << 2) | (on(x + 1, y + 1) << 1) | on(x, y + 1);
       if (idx === 0 || idx === 15) continue;
       const tx = 2 * x + 1, ty = 2 * y;       // top edge midpoint
@@ -152,7 +164,7 @@ export function traceContours(mask, width, height) {
         if (used.has(segId)) break;
         used.add(segId);
         const nx = nxt % stride, ny = (nxt - nx) / stride;
-        loop.push([nx / 2, ny / 2]);
+        loop.push([nx / 2 - 1, ny / 2 - 1]);
         const around = edges.get(nxt);
         let follow = -1;
         for (let i = 0; i < around.length; i++) {
@@ -603,6 +615,40 @@ export function luggageTagHole(shape, width, height) {
     }
   }
   return { cx, cy: top + nominal * 1.55, r: Math.round(Math.max(3, nominal * 0.4) * 100) / 100 };
+}
+
+// ---------------------------------------------------------------- cake topper geometry
+
+export function isCakeTopperStyle(style) {
+  return CAKE_TOPPER_STYLES.includes(style);
+}
+
+/**
+ * The welding bar that keeps a two-word topper in one piece. It is measured from the type
+ * itself rather than from a fixed fraction of the box, because it has to overlap the lowest
+ * ink: a word with descenders such as "Happy Birthday" needs a taller band than an all-caps
+ * word, and a bar that missed the letters would ship as loose acrylic.
+ *
+ * @param {number} width    canvas width the bar spans
+ * @param {number} baseline y of the text baseline in the same coordinate space
+ * @param {number} ascent   distance from the baseline up to the tallest ink
+ * @param {number} descent  distance from the baseline down to the lowest ink
+ */
+export function cakeTopperBarRect(width, baseline, ascent, descent) {
+  const safeW = Math.max(1, Number(width));
+  const cap = Math.max(1, Number(ascent));
+  const drop = Math.max(0, Number(descent));
+  const top = Number(baseline) - cap * 0.16;
+  const bottom = Number(baseline) + Math.max(drop, cap * 0.06) + cap * 0.08;
+  return { x: 0, y: top, w: safeW, h: bottom - top };
+}
+
+/** The circle a plaque-style topper is cut from, inset so the text always has a margin. */
+export function cakeTopperPlaque(width, height) {
+  const safeW = Math.max(1, Number(width));
+  const safeH = Math.max(1, Number(height));
+  const size = Math.min(safeW, safeH);
+  return { cx: safeW / 2, cy: safeH / 2, r: size * 0.5 };
 }
 
 // ---------------------------------------------------------------- SVG output

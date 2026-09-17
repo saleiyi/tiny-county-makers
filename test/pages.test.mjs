@@ -15,6 +15,7 @@ const TOOL_PAGES = [
   { file: "ornament-maker.html", maker: "ornament", title: "Photo Ornament Maker" },
   { file: "acrylic-photo-block-maker.html", maker: "block", title: "Acrylic Photo Block Maker" },
   { file: "luggage-tag-maker.html", maker: "luggage-tag", title: "Luggage Tag Maker" },
+  { file: "cake-topper-maker.html", maker: "cake-topper", title: "Cake Topper Maker" },
 ];
 
 const SHARED_IDS = ["photo", "size", "sizeLabel", "pngDownload", "preview", "dimensions", "productName"];
@@ -46,7 +47,7 @@ test("only the cutline tool offers cutline controls, and every offset control it
     assert.match(sticker, new RegExp(`id="${id}"`), `the cutline tool is missing #${id}`);
   }
   // The cutline tool and the ornament tool both export SVG, so they legitimately carry the control.
-  const SVG_EXPORTERS = new Set(["sticker", "ornament", "luggage-tag"]);
+  const SVG_EXPORTERS = new Set(["sticker", "ornament", "luggage-tag", "cake-topper"]);
   for (const page of TOOL_PAGES.filter((entry) => !SVG_EXPORTERS.has(entry.maker))) {
     const html = read(page.file);
     assert.ok(!html.includes('id="offsetControl"'), `${page.file} shows a cutline control it cannot use`);
@@ -145,6 +146,7 @@ test("the sitemap lists every published page with the current lastmod", () => {
     "ornament-maker.html",
     "acrylic-photo-block-maker.html",
     "luggage-tag-maker.html",
+    "cake-topper-maker.html",
   ];
   for (const entry of paths) {
     assert.ok(xml.includes(entry), `sitemap.xml is missing ${entry}`);
@@ -198,7 +200,7 @@ test("the keychain FAQ and how-to markup match what visitors can read", () => {
 
 test("the homepage advertises the other free tools with real descriptions", () => {
   const html = read("index.html");
-  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html"]) {
+  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "cake-topper-maker.html"]) {
     assert.ok(html.includes(`href="./${tool}"`), `index.html does not link ${tool}`);
   }
   assert.match(html, /<section class="tools-band" id="more-tools">/, "the related-tools band disappeared");

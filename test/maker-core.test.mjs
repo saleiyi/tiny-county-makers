@@ -27,6 +27,11 @@ import {
   LUGGAGE_TAG_SHAPES,
   luggageTagShapePoints,
   luggageTagHole,
+  CAKE_TOPPER_SIZES,
+  CAKE_TOPPER_STYLES,
+  cakeTopperBarRect,
+  cakeTopperPlaque,
+  isCakeTopperStyle,
   sizeOptionLabel,
   ornamentHole,
   widthAtY,
@@ -35,8 +40,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the nine distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag"]);
+test("the shared engine exposes the ten distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -47,6 +52,10 @@ test("the shared engine exposes the nine distinct maker profiles", () => {
   assert.equal(getProductProfile("block").sizes.length, 4);
   assert.equal(getProductProfile("luggage-tag").exportSvg, true);
   assert.equal(getProductProfile("luggage-tag").sizes.length, 3);
+  assert.equal(getProductProfile("cake-topper").exportSvg, true);
+  assert.equal(getProductProfile("cake-topper").hasHardware, false);
+  assert.equal(getProductProfile("cake-topper").hasBase, false);
+  assert.equal(getProductProfile("cake-topper").sizes.length, 3);
 });
 
 test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
@@ -92,7 +101,7 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "cake-topper-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
 });
@@ -126,6 +135,19 @@ test("a solid ring is traced as an outer contour plus a hole", () => {
   assert.equal(contours.length, 2);
   const areas = contours.map(polygonArea).sort((a, b) => b - a);
   assert.ok(areas[0] > areas[1], "outer loop should be larger than the hole");
+});
+
+test("ink that runs to the edge of the mask still traces as one closed loop", () => {
+  // A cake topper bar spans the full artwork width and a round plaque fills its canvas, so the
+  // outline touches the image border on every side. Tracing used to leave that boundary open
+  // and split the cut path into slivers; the padding inside traceContours keeps it closed.
+  const size = 32;
+  const contours = traceContours(blockMask(size, 0, 0, size, size), size, size);
+  assert.equal(contours.length, 1);
+  const bounds = boundsOfContours(contours);
+  assert.equal(bounds.width, size);
+  assert.equal(bounds.height, size);
+  assert.ok(Math.abs(polygonArea(contours[0]) - size * size) < size, "a full mask traces to its own area");
 });
 
 test("cleanContours drops specks and keeps the biggest loops first", () => {
@@ -300,4 +322,45 @@ test("luggage tag sizes print at 300 DPI on the long side", () => {
   assert.equal(physicalPixels(9, PRINT_DPI), 1063);
   assert.equal(physicalPixels(7, PRINT_DPI), 827);
   assert.equal(physicalPixels(11, PRINT_DPI), 1299);
+});
+
+// ---------------------------------------------------------------- cake topper geometry
+
+test("the cake topper styles stay limited to the three modelled acrylic shapes", () => {
+  assert.deepEqual([...CAKE_TOPPER_STYLES], ["cutout", "bar", "plaque"]);
+  assert.equal(isCakeTopperStyle("bar"), true);
+  assert.equal(isCakeTopperStyle("cutout"), true);
+  assert.equal(isCakeTopperStyle("plaque"), true);
+  assert.equal(isCakeTopperStyle("sparkle"), false);
+  assert.equal(isCakeTopperStyle(""), false);
+});
+
+test("the welded bar straddles the text baseline so the letters stay attached", () => {
+  // Bar style welds the letters onto a strip of acrylic. The strip has to cross the
+  // baseline, otherwise the glyphs float above it and the cut file falls apart.
+  const rect = cakeTopperBarRect(1200, 400, 200, 50);
+  assert.ok(rect.y < 400, 'the bar starts above the baseline, got y=' + rect.y);
+  assert.ok(rect.y + rect.h > 400, 'the bar reaches below the baseline, got bottom=' + (rect.y + rect.h));
+  assert.equal(rect.x, 0);
+  assert.equal(rect.w, 1200);
+  assert.ok(rect.h > 0 && rect.h < 200, 'the bar stays slimmer than the cap height, got h=' + rect.h);
+  const tall = cakeTopperBarRect(1200, 400, 200, 200);
+  assert.ok(tall.h > rect.h, 'a deeper descender pushes the bar lower');
+});
+
+test("the round plaque keeps a circle inside its bounding box", () => {
+  const disc = cakeTopperPlaque(1200, 600);
+  assert.equal(disc.r, 300);
+  assert.equal(disc.cx, 600);
+  assert.equal(disc.cy, 300);
+  const tall = cakeTopperPlaque(400, 900);
+  assert.equal(tall.r, 200, 'the radius follows the shorter side');
+  assert.equal(tall.cy, 450);
+});
+
+test("cake topper sizes print at 300 DPI on the long side", () => {
+  assert.deepEqual([...CAKE_TOPPER_SIZES], [10, 12, 15]);
+  assert.equal(physicalPixels(10, PRINT_DPI), 1181);
+  assert.equal(physicalPixels(12, PRINT_DPI), 1417);
+  assert.equal(physicalPixels(15, PRINT_DPI), 1772);
 });
