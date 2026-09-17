@@ -40,7 +40,7 @@ test("only the cutline tool offers cutline controls, and every offset control it
 });
 
 test("each indexable page carries a canonical URL, OG tags, a Twitter card and parseable JSON-LD", () => {
-  const files = [...TOOL_PAGES.map((page) => page.file), "pet-keychain-maker.html"];
+  const files = [...TOOL_PAGES.map((page) => page.file), "pet-keychain-maker.html", "custom-acrylic-keychains.html"];
   for (const file of files) {
     const html = read(file);
     assert.match(html, /<link rel="canonical" href="https:\/\/saleiyi\.github\.io\/tiny-county-makers\//, `${file} needs a canonical URL`);
@@ -65,6 +65,12 @@ test("structured data promises what the visible page actually shows", () => {
     assert.equal(faq.mainEntity.length, 5, `${file} FAQ count changed; update the accepted answer text too`);
     for (const question of faq.mainEntity) {
       assert.ok(html.includes(question.name), `${file} FAQ "${question.name}" is not visible on the page`);
+    }
+    for (const question of faq.mainEntity) {
+      assert.ok(
+        html.includes(question.acceptedAnswer.text),
+        `${file} FAQ answer for "${question.name}" is not the text visitors read`,
+      );
     }
     assert.ok(howTo.step.length >= 3, `${file} how-to needs at least three steps`);
   }
@@ -181,4 +187,18 @@ test("the homepage advertises the other free tools with real descriptions", () =
 
 test("index.html and create.html never drift apart", () => {
   assert.equal(read("index.html"), read("create.html"), "the two entry files are byte-identical by design: edit index.html then copy it over create.html");
+});
+
+test("the keychain guide keeps an article, a breadcrumb and a matching FAQ", () => {
+  const html = read("custom-acrylic-keychains.html");
+  assert.match(html, /<link rel="canonical" href="https:\/\/saleiyi\.github\.io\/tiny-county-makers\/custom-acrylic-keychains\.html">/, "the guide must be self-canonical");
+  assert.match(html, /name="twitter:card"/, "the guide needs a Twitter card");
+  const graph = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])["@graph"];
+  for (const type of ["Article", "BreadcrumbList", "FAQPage"]) {
+    assert.ok(graph.some((node) => node["@type"] === type), `the guide JSON-LD is missing ${type}`);
+  }
+  const crumb = graph.find((node) => node["@type"] === "BreadcrumbList");
+  assert.equal(crumb.itemListElement.length, 2, "breadcrumbs changed shape; keep them two levels deep");
+  assert.ok(crumb.itemListElement[0].item, "the first breadcrumb must point at the free maker");
+  assert.ok(!html.includes("aggregateRating"), "the guide must not invent ratings");
 });
