@@ -23,6 +23,10 @@ import {
   ornamentShapePoints,
   PHOTO_BLOCK_SIZES,
   photoBlockSize,
+  LUGGAGE_TAG_SIZES,
+  LUGGAGE_TAG_SHAPES,
+  luggageTagShapePoints,
+  luggageTagHole,
   sizeOptionLabel,
   ornamentHole,
   widthAtY,
@@ -31,8 +35,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the eight distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block"]);
+test("the shared engine exposes the nine distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -41,6 +45,8 @@ test("the shared engine exposes the eight distinct maker profiles", () => {
   assert.equal(getProductProfile("ornament").exportSvg, true);
   assert.equal(getProductProfile("block").exportSvg, false);
   assert.equal(getProductProfile("block").sizes.length, 4);
+  assert.equal(getProductProfile("luggage-tag").exportSvg, true);
+  assert.equal(getProductProfile("luggage-tag").sizes.length, 3);
 });
 
 test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
@@ -86,7 +92,7 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
 });
@@ -256,4 +262,42 @@ test("the silhouette width report gives engraving text a safe band to sit in", (
   const round = widthAtY(ornamentShapePoints("round", 620, 620), 620 * 0.5);
   assert.ok(Math.abs(round.width - 620) < 1, "a disc is at its full width through the middle");
   assert.equal(widthAtY(heart, -40), null, "heights outside the shape report nothing");
+});
+
+// ---------------------------------------------------------------- luggage tag silhouette geometry
+
+test("every luggage tag silhouette fills its box exactly", () => {
+  assert.deepEqual([...LUGGAGE_TAG_SHAPES], ["rounded", "tag", "circle", "oval"]);
+  const boxes = { rounded: [0.66, 1], tag: [0.6, 1], circle: [1, 1], oval: [1, 0.72] };
+  for (const shape of LUGGAGE_TAG_SHAPES) {
+    const base = 620;
+    const w = base * boxes[shape][0];
+    const h = base * boxes[shape][1];
+    const box = polygonBounds(luggageTagShapePoints(shape, w, h));
+    assert.ok(Math.abs(box.width - w) < 0.5, shape + " width should fill the box, got " + box.width);
+    assert.ok(Math.abs(box.height - h) < 0.5, shape + " height should fill the box, got " + box.height);
+    assert.ok(Math.abs(box.minX) < 0.5 && Math.abs(box.minY) < 0.5, shape + " should anchor at the top-left of its box");
+  }
+});
+
+test("an unknown luggage tag shape falls back to the rounded silhouette", () => {
+  const box = polygonBounds(luggageTagShapePoints("square-ish", 620, 620));
+  const rounded = polygonBounds(luggageTagShapePoints("rounded", 620, 620));
+  assert.ok(Math.abs(box.width - rounded.width) < 0.5 && Math.abs(box.height - rounded.height) < 0.5);
+});
+
+test("the strap hole always sits on solid material for every luggage tag silhouette", () => {
+  for (const shape of LUGGAGE_TAG_SHAPES) {
+    const points = luggageTagShapePoints(shape, 620, 620);
+    const hole = luggageTagHole(shape, 620, 620);
+    assert.ok(hole.r >= 3, shape + " hole should keep a usable radius");
+    assert.equal(circleInsidePolygon(hole.cx, hole.cy, hole.r, points), true, shape + " hole must not cut through the outline");
+  }
+});
+
+test("luggage tag sizes print at 300 DPI on the long side", () => {
+  assert.deepEqual([...LUGGAGE_TAG_SIZES], [7, 9, 11]);
+  assert.equal(physicalPixels(9, PRINT_DPI), 1063);
+  assert.equal(physicalPixels(7, PRINT_DPI), 827);
+  assert.equal(physicalPixels(11, PRINT_DPI), 1299);
 });

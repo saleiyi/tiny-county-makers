@@ -15,6 +15,8 @@ import {
   contoursToPathD,
   ornamentShapePoints,
   ornamentHole,
+  luggageTagShapePoints,
+  luggageTagHole,
   widthAtY,
   photoBlockSize,
   sizeOptionLabel,
@@ -46,6 +48,7 @@ const dimensions = document.querySelector("#dimensions");
 const pngButton = document.querySelector("#pngDownload");
 const svgButton = document.querySelector("#svgDownload");
 const engravingInput = document.querySelector("#engraving");
+const contactInput = document.querySelector("#contact");
 
 let image = null;
 let imageDataUrl = "";
@@ -79,6 +82,7 @@ function boot() {
   offsetInput?.addEventListener("input", schedule);
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
+  contactInput?.addEventListener("input", schedule);
   document.querySelector("#sampleArtwork")?.addEventListener("click", loadSample);
   pngButton.addEventListener("click", () => { if (image) exportPng(); });
   svgButton?.addEventListener("click", () => { if (image) exportSvg(); });
@@ -259,7 +263,9 @@ function layout() {
     ? (shapeSelect?.value || "rounded")
     : profile.id === "ornament"
       ? (shapeSelect?.value || "round")
-      : "";
+      : profile.id === "luggage-tag"
+        ? (shapeSelect?.value || "rounded")
+        : "";
   let topBand = 0;
   let pad = 0;
 
@@ -304,6 +310,20 @@ function layout() {
     const x = (CANVAS - w) / 2;
     const y = (CANVAS - h) / 2 + 12;
     return { x, y, w, h, longSideCm, dpi: workDpi(h, longSideCm), spec, depth };
+  }
+
+  if (profile.id === "luggage-tag") {
+    // A tag is a portrait slab, so the silhouette aspect is fixed here instead of by the
+    // uploaded photo. That keeps a 7/9/11 cm tag looking like a tag for every upload.
+    const box = shape === "circle" ? [1, 1]
+      : shape === "oval" ? [1, 0.72]
+      : shape === "tag" ? [0.6, 1]
+      : [0.66, 1];
+    const w = Math.round(WORK_LONG_SIDE * box[0]);
+    const h = Math.round(WORK_LONG_SIDE * box[1]);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm, dpi: workDpi(Math.max(w, h), longSideCm), shape };
   }
 
   const baseRoom = profile.hasBase ? 76 : 0;
@@ -364,6 +384,21 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawOrnament(ctx, scene, true);
+  } else if (profile.id === "luggage-tag") {
+    const outline = luggageTagShapePoints(L.shape, L.w, L.h).map(([px, py]) => [px + L.x, py + L.y]);
+    const local = luggageTagHole(L.shape, L.w, L.h);
+    scene = {
+      kind: "luggage-tag",
+      shape: L.shape,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      outline,
+      hole: { cx: local.cx + L.x, cy: local.cy + L.y, r: local.r },
+      lines: luggageTagLines(),
+      image,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawLuggageTag(ctx, scene, true);
   } else if (profile.id === "block") {
     scene = {
       kind: "block",
@@ -422,6 +457,8 @@ function readout(L) {
     ? "the download is the cut shape, offset included"
     : profile.id === "ornament"
       ? "transparent PNG at 300 DPI plus an SVG cut path; the hanging loop is a preview only"
+    : profile.id === "luggage-tag"
+      ? "transparent PNG at 300 DPI plus an SVG cut path with the strap hole; the strap is a preview only"
       : profile.id === "photo-keychain"
       ? "transparent PNG at 300 DPI; the keyring is a preview only"
       : profile.id === "name-keychain"
@@ -635,6 +672,110 @@ function drawNameKeychain(c, s, guides) {
   }
 }
 
+// ------------------------------------------------------------------ luggage tag
+
+/** Up to two engraved lines: a name on top and one contact line under it. */
+function luggageTagLines() {
+  const name = (engravingInput?.value || "").trim().slice(0, 24);
+  const contact = (contactInput?.value || "").trim().slice(0, 30);
+  return [name, contact].filter(Boolean);
+}
+
+/**
+ * Etched contact block. The lines climb from the base of the tag, shrinking to fit the
+ * width at each band, with a soft dark halo so the text survives a busy photo and a print.
+ */
+function drawTagText(c, lines, x, y, w, h) {
+  if (!lines || !lines.length) return;
+  const family = "Inter, 'Segoe UI', system-ui, sans-serif";
+  const base = Math.min(w, h);
+  const maxWidth = w * 0.78;
+  let cursor = y + h * 0.9;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const text = lines[i];
+    const startSize = base * (i === 0 ? 0.12 : 0.085);
+    const size = fitFont(c, text, maxWidth, startSize, family, 700);
+    cursor -= size * 0.72;
+    c.save();
+    c.font = "700 " + size + "px " + family;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.lineJoin = "round";
+    c.lineWidth = Math.max(3, size * 0.17);
+    c.strokeStyle = "rgba(29,36,32,.5)";
+    c.strokeText(text, x + w / 2, cursor);
+    c.fillStyle = "#ffffff";
+    c.fillText(text, x + w / 2, cursor);
+    c.restore();
+    cursor -= size * 0.6;
+  }
+}
+
+function drawLuggageTag(c, s, guides) {
+  const r = s.rect;
+  const hole = s.hole;
+
+  if (guides) {
+    c.save();
+    c.globalAlpha = 0.18;
+    c.filter = "blur(8px)";
+    c.fillStyle = "#1d2420";
+    c.beginPath();
+    addPolygon(c, s.outline.map(([x, y]) => [x + 4, y + 10]));
+    c.fill();
+    c.restore();
+  }
+
+  // Clear acrylic tag face with the photo behind it and the contact block etched on top.
+  c.save();
+  c.beginPath();
+  addPolygon(c, s.outline);
+  c.clip();
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  drawCover(c, s.image, r.x, r.y, r.w, r.h);
+  drawTagText(c, s.lines, r.x, r.y, r.w, r.h);
+  c.restore();
+
+  // The strap hole is punched out, so the exported file can be printed and cut as-is.
+  c.save();
+  c.globalCompositeOperation = "destination-out";
+  c.beginPath();
+  c.arc(hole.cx, hole.cy, hole.r, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+
+  if (guides) {
+    c.save();
+    c.beginPath();
+    addPolygon(c, s.outline);
+    c.strokeStyle = "rgba(255,255,255,.8)";
+    c.lineWidth = 6;
+    c.stroke();
+    c.strokeStyle = "rgba(29,36,32,.18)";
+    c.lineWidth = 1.6;
+    c.stroke();
+    c.restore();
+    drawTagStrap(c, hole);
+  }
+}
+
+/** Preview-only strap loop, so the mockup reads as a tag tied to a bag handle. */
+function drawTagStrap(c, hole) {
+  const r = hole.r;
+  c.save();
+  c.lineCap = "round";
+  c.lineWidth = Math.max(4, r * 0.42);
+  c.strokeStyle = "#8a6a45";
+  c.beginPath();
+  c.arc(hole.cx, hole.cy - r * 1.7, r * 1.6, Math.PI * 1.15, Math.PI * 1.85);
+  c.stroke();
+  c.strokeStyle = "rgba(255,255,255,.35)";
+  c.lineWidth = Math.max(1, r * 0.1);
+  c.stroke();
+  c.restore();
+}
+
 // ------------------------------------------------------------------ ornament
 
 function ornamentText() {
@@ -830,7 +971,7 @@ function sceneBox() {
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
   }
-  if (scene.kind === "ornament") {
+  if (scene.kind === "ornament" || scene.kind === "luggage-tag") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -865,6 +1006,7 @@ function renderScene(scale) {
   else if (scene.kind === "name-keychain") drawNameKeychain(c, scene, false);
   else if (scene.kind === "magnet") drawMagnet(c, scene);
   else if (scene.kind === "ornament") drawOrnament(c, scene, false);
+  else if (scene.kind === "luggage-tag") drawLuggageTag(c, scene, false);
   else if (scene.kind === "block") drawBlock(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
@@ -887,7 +1029,7 @@ function pieceBox() {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
-  if (scene.kind === "ornament") {
+  if (scene.kind === "ornament" || scene.kind === "luggage-tag") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -926,7 +1068,7 @@ function exportPng() {
 }
 
 function exportSvg() {
-  if (scene.kind === "ornament") return exportOrnamentSvg();
+  if (scene.kind === "ornament" || scene.kind === "luggage-tag") return exportOrnamentSvg();
   if (scene.kind !== "sticker") return;
   const scale = exportScale();
   const box = sceneBox();
@@ -971,7 +1113,8 @@ function exportOrnamentSvg() {
   ax.fillRect(0, 0, art.width, art.height);
   drawCover(ax, scene.image, 0, 0, art.width, art.height);
   const localOutline = scene.outline.map(([px, py]) => [(px - box.x) * scale, (py - box.y) * scale]);
-  drawOrnamentEngraving(ax, scene.text, 0, 0, art.width, art.height, localOutline);
+  if (scene.kind === "luggage-tag") drawTagText(ax, scene.lines, 0, 0, art.width, art.height);
+  else drawOrnamentEngraving(ax, scene.text, 0, 0, art.width, art.height, localOutline);
   const lines = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">`,
     `<title>${profile.product} cutline - ${scene.longSideCm} cm long side, ${PRINT_DPI} DPI</title>`,
@@ -992,7 +1135,7 @@ function exportOrnamentSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag") return photoSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
   const c = document.createElement("canvas");

@@ -9,6 +9,8 @@ export const PHOTO_BLOCK_SIZES = Object.freeze([
   { id: "5x7", widthCm: 12.7, heightCm: 17.78, label: "5 x 7 in (13 x 18 cm)" },
   { id: "8x10", widthCm: 20.32, heightCm: 25.4, label: "8 x 10 in (20 x 25 cm)" },
 ]);
+/** Long sides an acrylic luggage tag is sold in, in centimetres. */
+export const LUGGAGE_TAG_SIZES = Object.freeze([7, 9, 11]);
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -18,6 +20,7 @@ const PROFILES = Object.freeze([
   { id: "name-keychain", name: "Name Keychain Maker", product: "Acrylic name keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [5, 7, 9] },
   { id: "ornament", name: "Photo Ornament Maker", product: "Photo ornament", hasHardware: true, hasBase: false, exportSvg: true, sizes: [6, 8, 10] },
   { id: "block", name: "Acrylic Photo Block Maker", product: "Acrylic photo block", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_BLOCK_SIZES.map((size) => size.heightCm), sizeLabels: PHOTO_BLOCK_SIZES.map((size) => size.label) },
+  { id: "luggage-tag", name: "Luggage Tag Maker", product: "Acrylic luggage tag", hasHardware: false, hasBase: false, exportSvg: true, sizes: LUGGAGE_TAG_SIZES },
 ]);
 
 export const PRINT_DPI = 300;
@@ -522,6 +525,84 @@ export function ornamentHole(shape, width, height) {
     }
   }
   return { cx, cy: top + nominal * 1.7, r: Math.round(Math.max(3, nominal * 0.4) * 100) / 100 };
+}
+
+// ---------------------------------------------------------------- luggage tag geometry
+
+/** Every silhouette the luggage tag tool can draw, in the order the UI offers them. */
+export const LUGGAGE_TAG_SHAPES = Object.freeze(["rounded", "tag", "circle", "oval"]);
+
+
+export function isLuggageTagShape(shape) {
+  return LUGGAGE_TAG_SHAPES.includes(shape);
+}
+
+/**
+ * Closed polygon for a travel tag, in a local box of width x height.
+ * Every silhouette is flat-bottomed so the printed name and contact line sit on a straight
+ * edge, and every one is fitted to the box so "longest side" means the same thing.
+ */
+export function luggageTagShapePoints(shape, width, height, samples = 160) {
+  const w = Number(width), h = Number(height);
+  if (!(w > 0 && h > 0)) throw new Error("Luggage tag width and height must be positive.");
+  const count = Math.max(24, Math.floor(Number(samples) || 160));
+  const id = isLuggageTagShape(shape) ? shape : "rounded";
+  return fitPolygonToBox(rawLuggageTagPolygon(id, count), w, h);
+}
+
+function rawLuggageTagPolygon(shape, samples) {
+  if (shape === "tag") {
+    // Flat strap point, chamfered shoulders, straight sides: the classic shipping tag.
+    const top = 0.56;
+    const shoulder = 0.19;
+    const left = (1 - top) / 2;
+    return [[left, 0], [left + top, 0], [1, shoulder], [1, 1], [0, 1], [0, shoulder]];
+  }
+  if (shape === "circle" || shape === "oval") {
+    const pts = [];
+    for (let i = 0; i < samples; i++) {
+      const angle = -Math.PI / 2 + (i / samples) * Math.PI * 2;
+      pts.push([Math.cos(angle), Math.sin(angle)]);
+    }
+    return pts;
+  }
+  // Rounded rectangle: the default shop-bought acrylic tag.
+  const r = 0.15;
+  const pts = [];
+  const steps = Math.max(3, Math.floor(samples / 4) - 1);
+  const corners = [
+    [1 - r, r, -Math.PI / 2, 0],
+    [1 - r, 1 - r, 0, Math.PI / 2],
+    [r, 1 - r, Math.PI / 2, Math.PI],
+    [r, r, Math.PI, Math.PI * 1.5],
+  ];
+  for (const [cx, cy, a0, a1] of corners) {
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+  }
+  return pts;
+}
+
+/**
+ * Drill hole for the bag strap. Same search the ornament hole uses: start near the top of
+ * the outline and slide down, shrinking if needed, until the whole circle is on material.
+ * A fused strap point therefore keeps its hole safely inside the flat top.
+ */
+export function luggageTagHole(shape, width, height) {
+  const w = Number(width), h = Number(height);
+  const points = luggageTagShapePoints(shape, w, h);
+  const cx = w / 2;
+  const top = topEdgeAtX(points, cx);
+  const nominal = Math.max(6, Math.min(w, h) * 0.055);
+  for (let r = nominal; r >= 4; r -= nominal / 24) {
+    for (let step = 0; step <= 48; step++) {
+      const cy = top + r * 1.55 + (step / 48) * r * 3.4;
+      if (circleInsidePolygon(cx, cy, r, points)) return { cx, cy, r: Math.round(r * 100) / 100 };
+    }
+  }
+  return { cx, cy: top + nominal * 1.55, r: Math.round(Math.max(3, nominal * 0.4) * 100) / 100 };
 }
 
 // ---------------------------------------------------------------- SVG output
