@@ -21,6 +21,9 @@ import {
   bookmarkShapePoints,
   bookmarkHole,
   coasterShapePoints,
+  jigsawCutPaths,
+  jigsawGrid,
+  polylineToPathD,
   deskNamePlatePoints,
   deskNamePlateSize,
   isNamePlateFinish,
@@ -392,7 +395,8 @@ async function adoptImage(dataUrl) {
   liftedCanvas = null;
   // Only the cutline tool traces the picture itself, so only it re-keys a flat backdrop.
   if (profile.id === "sticker") liftFlatArtwork();
-  if (profile.exportSvg && profile.id !== "name-plate") extractContours();
+  // Only the two tools whose cut line follows the picture itself trace contours.
+  if (profile.id === "sticker" || profile.id === "cake-topper") extractContours();
   setDownloadsEnabled(true);
   adoptSource("upload");
   render();
@@ -555,6 +559,17 @@ function layout() {
     return { x, y, w: side, h: side, longSideCm, dpi: workDpi(side, longSideCm), shape };
   }
 
+  if (profile.id === "jigsaw") {
+    // The board follows the photo so the pieces stay close to square whatever the crop is.
+    // The aspect is clamped so a panorama does not collapse into a letterbox strip.
+    const w = WORK_LONG_SIDE;
+    const ratio = Math.min(1.5, Math.max(0.66, image.naturalHeight / image.naturalWidth));
+    const h = Math.round(w * ratio);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2;
+    return { x, y, w, h, longSideCm, dpi: workDpi(w, longSideCm), shape: shapeSelect?.value || "4x4" };
+  }
+
   if (profile.id === "name-plate") {
     // A desk plate is a fixed long slab, so the inch size decides the box instead of the
     // uploaded file. The 4:1 preview keeps the real proportions of a 2 inch tall plate.
@@ -687,6 +702,21 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawCoaster(ctx, scene, true);
+  } else if (profile.id === "jigsaw") {
+    const grid = jigsawGrid(shapeSelect?.value);
+    const paths = jigsawCutPaths(L.w, L.h, grid.cols, grid.rows);
+    const shift = (points) => points.map(([px, py]) => [px + L.x, py + L.y]);
+    scene = {
+      kind: "jigsaw",
+      grid,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      outline: shift(paths.outline),
+      cuts: paths.cuts.map(shift),
+      image,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawJigsaw(ctx, scene, true);
   } else if (profile.id === "name-plate") {
     scene = {
       kind: "name-plate",
@@ -752,6 +782,15 @@ function readout(L) {
     return;
   }
 
+  if (profile.id === "jigsaw") {
+    // The puzzle is the only tool whose readout is about the piece count as much as the size.
+    const grid = scene.grid;
+    dimensions.textContent = scene.longSideCm + " cm long side, " + grid.pieces + " pieces (" + grid.cols + " x " + grid.rows
+      + ") at " + PRINT_DPI + " DPI (" + physicalPixels(scene.longSideCm, PRINT_DPI) + " px long side) - the PNG is ready to print and already shows the cut lines;"
+      + " the SVG is a separate cut file with the outline and every interior cut. Ask us for a quote when you want it made in acrylic.";
+    return;
+  }
+
   const piece = pieceBox();
   const cmPerWorkPx = (exportScale() * 2.54) / PRINT_DPI;
   const exportLong = physicalPixels(L.longSideCm, PRINT_DPI);
@@ -783,6 +822,56 @@ function note(text) {
 }
 
 // ------------------------------------------------------------------ painters
+
+/**
+ * A photo jigsaw board. The picture is cover-fitted into the board and the cut lines are
+ * painted on top, because for this product the cut lines are the thing the visitor came for:
+ * they have to be in the printed PNG as well as in the preview. The preview adds a drop
+ * shadow and a sheen so the board reads as a real object; neither is in the export.
+ */
+function drawJigsaw(c, s, guides) {
+  const r = s.rect;
+  if (guides) {
+    c.save();
+    c.shadowColor = "rgba(29,36,32,.22)";
+    c.shadowBlur = 26;
+    c.shadowOffsetY = 12;
+    c.fillStyle = "#ffffff";
+    c.fillRect(r.x, r.y, r.w, r.h);
+    c.restore();
+  }
+  c.save();
+  c.beginPath();
+  c.rect(r.x, r.y, r.w, r.h);
+  c.clip();
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  drawCover(c, s.image, r.x, r.y, r.w, r.h);
+  if (guides) {
+    const sheen = c.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
+    sheen.addColorStop(0, "rgba(255,255,255,.18)");
+    sheen.addColorStop(0.45, "rgba(255,255,255,0)");
+    sheen.addColorStop(1, "rgba(29,36,32,.10)");
+    c.fillStyle = sheen;
+    c.fillRect(r.x, r.y, r.w, r.h);
+  }
+  c.restore();
+  c.save();
+  c.lineJoin = "round";
+  c.lineCap = "round";
+  c.strokeStyle = "rgba(29,36,32,.60)";
+  c.lineWidth = 2.2;
+  c.beginPath();
+  c.moveTo(s.outline[0][0], s.outline[0][1]);
+  for (let i = 1; i < s.outline.length; i++) c.lineTo(s.outline[i][0], s.outline[i][1]);
+  c.closePath();
+  for (const cut of s.cuts) {
+    c.moveTo(cut[0][0], cut[0][1]);
+    for (let i = 1; i < cut.length; i++) c.lineTo(cut[i][0], cut[i][1]);
+  }
+  c.stroke();
+  c.restore();
+}
 
 function drawSticker(c, s, guides) {
   if (!s.outline.length) return;
@@ -1704,7 +1793,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -1745,6 +1834,7 @@ function renderScene(scale) {
   else if (scene.kind === "bookmark") drawBookmark(c, scene, false);
   else if (scene.kind === "cake-topper") drawCakeTopper(c, scene, false);
   else if (scene.kind === "block") drawBlock(c, scene, false);
+  else if (scene.kind === "jigsaw") drawJigsaw(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -1770,7 +1860,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -1794,7 +1884,11 @@ function exportScale() {
 
 /** Download name: photo blocks read as inches, everything else as a long side in cm. */
 function exportName(extension) {
-  const stem = scene.spec ? scene.spec.id + "in-" + profile.id : profile.id + "-" + scene.longSideCm + "cm";
+  const stem = scene.spec
+    ? scene.spec.id + "in-" + profile.id
+    : scene.kind === "jigsaw" && scene.grid
+      ? profile.id + "-" + scene.grid.id + "-" + scene.longSideCm + "cm"
+      : profile.id + "-" + scene.longSideCm + "cm";
   return stem + "-" + PRINT_DPI + "dpi." + extension;
 }
 
@@ -1810,6 +1904,7 @@ function exportSvg() {
   if (scene.kind === "cake-topper") return exportTopperSvg();
   if (scene.kind === "coaster") return exportCoasterSvg();
   if (scene.kind === "name-plate") return exportNamePlateSvg();
+  if (scene.kind === "jigsaw") return exportJigsawSvg();
   if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") return exportOrnamentSvg();
   if (scene.kind !== "sticker") return;
   const scale = exportScale();
@@ -1940,6 +2035,44 @@ function exportNamePlateSvg() {
   track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
 }
 
+/**
+ * The puzzle export is deliberately two layers: a printable artwork layer and one magenta
+ * cut layer. The outline is closed and every interior cut is open, so a laser cutter reads
+ * the grid as one shared cut per edge instead of two cuts that drift apart at the knobs.
+ */
+function exportJigsawSvg() {
+  const scale = exportScale();
+  const box = sceneBox();
+  const r = scene.rect;
+  if (!box) return note("Upload a photo before exporting the puzzle.");
+  const tx = ([x, y]) => [(x - box.x) * scale, (y - box.y) * scale];
+  const width = Math.round(box.width * scale);
+  const height = Math.round(box.height * scale);
+  const art = document.createElement("canvas");
+  art.width = Math.max(1, Math.round(r.w * scale));
+  art.height = Math.max(1, Math.round(r.h * scale));
+  const ax = art.getContext("2d");
+  ax.fillStyle = "#ffffff";
+  ax.fillRect(0, 0, art.width, art.height);
+  drawCover(ax, scene.image, 0, 0, art.width, art.height);
+  const outline = contoursToPathD([scene.outline.map(tx)], 2);
+  const cuts = scene.cuts.map((cut) => '<path d="' + polylineToPathD(cut.map(tx), 2) + '"/>');
+  const lines = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + " " + height + '" role="img">',
+    '<title>Photo jigsaw puzzle cut file - ' + scene.grid.pieces + ' pieces, ' + scene.longSideCm + ' cm long side, ' + PRINT_DPI + " DPI</title>",
+    '<g id="Artwork">',
+    '<image x="0" y="0" width="' + art.width + '" height="' + art.height + '" href="' + art.toDataURL("image/png") + '"/>',
+    "</g>",
+    '<g id="Cutline" fill="none" stroke="#ff00ff" stroke-width="1">',
+    '<path d="' + outline + '"/>',
+    ...cuts,
+    "</g>",
+    "</svg>",
+  ];
+  downloadBlob(lines.join("\n"), exportName("svg"), "image/svg+xml;charset=utf-8");
+  track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm, pieces: scene.grid.pieces });
+}
+
 /** Cut path plus a printable artwork layer, the same split the sticker and ornament tools ship. */
 function exportTopperSvg() {
   const scale = exportScale();
@@ -1976,7 +2109,7 @@ function exportTopperSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "bookmark" || profile.id === "coaster") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw") return photoSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
   if (profile.id === "cake-topper") return topperArtworkCanvas(topperTextValue() || "Happy Birthday", topperFont?.value || DEFAULT_TOPPER_FONT, topperStyleName());

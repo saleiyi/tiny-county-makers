@@ -43,6 +43,20 @@ export const DESK_NAME_PLATE_SIZES = Object.freeze([
 /** Every acrylic finish the desk name plate tool offers, in the order the UI lists them. */
 export const NAME_PLATE_FINISHES = Object.freeze(["black", "clear", "frosted"]);
 
+/** Long sides a photo jigsaw puzzle is made in, in centimetres. */
+export const JIGSAW_PUZZLE_SIZES = Object.freeze([15, 20, 25, 30]);
+
+/**
+ * The piece grids the puzzle tool offers, easiest first. A square grid keeps the cut pattern
+ * even, and every step maps to a piece count shoppers already know from shop-bought puzzles.
+ */
+export const JIGSAW_GRIDS = Object.freeze([
+  { id: "3x3", cols: 3, rows: 3, pieces: 9, label: "3 x 3 - 9 pieces" },
+  { id: "4x4", cols: 4, rows: 4, pieces: 16, label: "4 x 4 - 16 pieces" },
+  { id: "5x5", cols: 5, rows: 5, pieces: 25, label: "5 x 5 - 25 pieces" },
+  { id: "6x6", cols: 6, rows: 6, pieces: 36, label: "6 x 6 - 36 pieces" },
+]);
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -57,6 +71,7 @@ const PROFILES = Object.freeze([
   { id: "bookmark", name: "Bookmark Maker", product: "Acrylic bookmark", hasHardware: false, hasBase: false, exportSvg: true, sizes: BOOKMARK_SIZES },
   { id: "coaster", name: "Acrylic Coaster Maker", product: "Acrylic coaster", hasHardware: false, hasBase: false, exportSvg: true, sizes: COASTER_SIZES },
   { id: "name-plate", name: "Desk Name Plate Maker", product: "Acrylic desk name plate", hasHardware: false, hasBase: false, exportSvg: true, sizes: DESK_NAME_PLATE_SIZES.map((size) => size.widthCm), sizeLabels: DESK_NAME_PLATE_SIZES.map((size) => size.label) },
+  { id: "jigsaw", name: "Photo Jigsaw Puzzle Maker", product: "Photo jigsaw puzzle", hasHardware: false, hasBase: false, exportSvg: true, sizes: JIGSAW_PUZZLE_SIZES },
 ]);
 
 export const PRINT_DPI = 300;
@@ -945,6 +960,106 @@ export function deskNamePlatePoints(width, height, samples = 96) {
   return pts;
 }
 
+// ---------------------------------------------------------------- jigsaw geometry
+
+/** The grid behind a difficulty choice, with the first grid as the fallback. */
+export function jigsawGrid(value) {
+  return JIGSAW_GRIDS.find((grid) => grid.id === value) || JIGSAW_GRIDS[0];
+}
+
+export function isJigsawGrid(value) {
+  return JIGSAW_GRIDS.some((grid) => grid.id === value);
+}
+
+/**
+ * The classic jigsaw knob drawn in a unit frame: x runs 0 -> 1 along the edge and y is how
+ * far the tab bulges out, also as a fraction of the edge length. The neck is narrower than
+ * the head, so two neighbouring pieces lock together instead of sliding apart, and the head
+ * tops out near 0.29 of the edge, which is the depth a die-cut puzzle knob really has.
+ * Every row is one cubic Bezier segment: [start, control, control, end].
+ */
+const JIGSAW_TAB = Object.freeze([
+  [[0, 0], [0.34, 0], [0.34, 0], [0.34, 0]],
+  [[0.34, 0], [0.44, 0], [0.28, 0.05], [0.35, 0.13]],
+  [[0.35, 0.13], [0.28, 0.37], [0.72, 0.37], [0.65, 0.13]],
+  [[0.65, 0.13], [0.72, 0.05], [0.56, 0], [0.66, 0]],
+  [[0.66, 0], [0.82, 0], [0.92, 0], [1, 0]],
+]);
+
+/** One point on a cubic Bezier segment, the shape every jigsaw knob is built from. */
+function cubicPoint(segment, t) {
+  const [p0, c1, c2, p3] = segment;
+  const mt = 1 - t;
+  const a = mt * mt * mt, b = 3 * mt * mt * t, c = 3 * mt * t * t, d = t * t * t;
+  return [
+    a * p0[0] + b * c1[0] + c * c2[0] + d * p3[0],
+    a * p0[1] + b * c1[1] + c * c2[1] + d * p3[1],
+  ];
+}
+
+/**
+ * One jigsaw cut between two lattice points. "bulge" picks which side of the edge the knob
+ * grows into, so the caller can hand the same edge to both neighbours and still get a tab
+ * on one piece and the matching notch on the other.
+ */
+export function jigsawEdgePoints(x0, y0, x1, y1, bulge, samples = 20) {
+  const ox = Number(x0), oy = Number(y0), tx = Number(x1), ty = Number(y1);
+  const dx = tx - ox, dy = ty - oy;
+  const length = Math.hypot(dx, dy);
+  if (!(length > 0)) throw new Error("A jigsaw edge needs two distinct points.");
+  const ux = dx / length, uy = dy / length;
+  const side = Number(bulge) < 0 ? -1 : 1;
+  const px = -uy * side, py = ux * side;
+  const count = Math.max(4, Math.floor(Number(samples) || 20));
+  const points = [];
+  for (const segment of JIGSAW_TAB) {
+    for (let i = 0; i < count; i++) {
+      const [u, v] = cubicPoint(segment, i / count);
+      points.push([ox + ux * length * u + px * length * v, oy + uy * length * u + py * length * v]);
+    }
+  }
+  points.push([tx, ty]);
+  return points;
+}
+
+/** Deterministic +/-1 per grid slot: a mixed hash so the knobs scatter instead of striping. */
+function jigsawBulge(a, b, seed) {
+  let n = Math.imul(a, 2654435761) ^ Math.imul(b, 40503) ^ Math.imul(seed, 69069);
+  n = Math.imul(n ^ (n >>> 15), 2246822519);
+  n ^= n >>> 13;
+  return (n & 1) ? 1 : -1;
+}
+
+/**
+ * The cut file for a puzzle: one closed rectangle round the outside plus one open path per
+ * interior edge. Each interior edge is drawn once and shared by the two pieces either side
+ * of it, which is what makes the tabs interlock, and the pattern comes from the grid slot
+ * rather than from a random number so the preview and the download always agree.
+ */
+export function jigsawCutPaths(width, height, cols, rows, options = {}) {
+  const w = Number(width), h = Number(height);
+  const c = Math.floor(Number(cols)), r = Math.floor(Number(rows));
+  if (!(w > 0 && h > 0)) throw new Error("Jigsaw width and height must be positive.");
+  if (!(c > 1 && r > 1)) throw new Error("A jigsaw needs at least a two by two grid.");
+  const samples = Math.max(6, Math.floor(Number(options.samples) || 20));
+  const seed = Number.isFinite(Number(options.seed)) ? Math.floor(Number(options.seed)) : 1;
+  const outline = [[0, 0], [w, 0], [w, h], [0, h]];
+  const cuts = [];
+  for (let col = 1; col < c; col++) {
+    for (let row = 0; row < r; row++) {
+      const x = (w * col) / c;
+      cuts.push(jigsawEdgePoints(x, (h * row) / r, x, (h * (row + 1)) / r, jigsawBulge(col, row, seed), samples));
+    }
+  }
+  for (let row = 1; row < r; row++) {
+    for (let col = 0; col < c; col++) {
+      const y = (h * row) / r;
+      cuts.push(jigsawEdgePoints((w * col) / c, y, (w * (col + 1)) / c, y, jigsawBulge(row + 31, col, seed), samples));
+    }
+  }
+  return { outline, cuts };
+}
+
 // ---------------------------------------------------------------- SVG output
 
 /** Straight-segment path data for one or many contours (used for exact cut geometry). */
@@ -955,6 +1070,15 @@ export function contoursToPathD(contours, precision = 2) {
     parts.push(contourToPathD(pts, precision));
   }
   return parts.join("");
+}
+
+/** Open path data for a polyline: no closing Z, so an interior cut does not loop back. */
+export function polylineToPathD(points, precision = 2) {
+  if (!points || points.length < 2) return "";
+  const f = (value) => String(Number(value.toFixed(precision)));
+  let d = `M${f(points[0][0])} ${f(points[0][1])}`;
+  for (let i = 1; i < points.length; i++) d += `L${f(points[i][0])} ${f(points[i][1])}`;
+  return d;
 }
 
 export function contourToPathD(points, precision = 2) {

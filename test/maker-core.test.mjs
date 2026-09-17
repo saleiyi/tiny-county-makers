@@ -52,11 +52,18 @@ import {
   widthAtY,
   circleInsidePolygon,
   PRINT_DPI,
+  JIGSAW_PUZZLE_SIZES,
+  JIGSAW_GRIDS,
+  jigsawGrid,
+  isJigsawGrid,
+  jigsawEdgePoints,
+  jigsawCutPaths,
+  polylineToPathD,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the thirteen distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster", "name-plate"]);
+test("the shared engine exposes the fourteen distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -82,6 +89,10 @@ test("the shared engine exposes the thirteen distinct maker profiles", () => {
   assert.equal(getProductProfile("name-plate").hasHardware, false);
   assert.equal(getProductProfile("name-plate").hasBase, false);
   assert.equal(getProductProfile("name-plate").sizes.length, 3);
+  assert.equal(getProductProfile("jigsaw").exportSvg, true);
+  assert.equal(getProductProfile("jigsaw").hasHardware, false);
+  assert.equal(getProductProfile("jigsaw").hasBase, false);
+  assert.equal(getProductProfile("jigsaw").sizes.length, 4);
 });
 
 test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
@@ -127,9 +138,58 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "cake-topper-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
+});
+
+
+// ---------------------------------------------------------------- jigsaw geometry
+
+test("unknown jigsaw grids fall back to the first offer and the offered four pass", () => {
+  assert.equal(JIGSAW_GRIDS.length, 4);
+  assert.deepEqual(JIGSAW_GRIDS.map((grid) => grid.id), ["3x3", "4x4", "5x5", "6x6"]);
+  assert.equal(JIGSAW_GRIDS[0].label, "3 x 3 - 9 pieces");
+  assert.equal(jigsawGrid("5x5").id, "5x5");
+  assert.equal(jigsawGrid("9x9").id, "3x3", "an unknown grid should fall back to the first offer");
+  assert.equal(jigsawGrid(undefined).id, "3x3");
+  assert.equal(isJigsawGrid("5x5"), true);
+  assert.equal(isJigsawGrid("2x2"), false);
+  assert.equal(isJigsawGrid(undefined), false);
+});
+
+test("jigsaw cut paths tile the sheet with the right number of interior seams", () => {
+  const { outline, cuts } = jigsawCutPaths(300, 200, 3, 3);
+  assert.equal(cuts.length, 12, "a 3 x 3 grid has twelve interior seams");
+  assert.equal(jigsawCutPaths(300, 200, 6, 6).cuts.length, 60, "a 6 x 6 grid has sixty interior seams");
+  const bounds = boundsOfContours([outline]);
+  assert.ok(Math.abs(bounds.minX) <= 0.6 && Math.abs(bounds.minY) <= 0.6, "outline sits on the origin");
+  assert.ok(Math.abs(bounds.maxX - 300) <= 0.6 && Math.abs(bounds.maxY - 200) <= 0.6, "outline covers the sheet");
+  for (const cut of cuts) {
+    assert.ok(cut.length >= 61, "every seam keeps enough samples for its wobble");
+    for (const [x, y] of cut) {
+      assert.ok(x >= -0.6 && x <= 300.6, "seam x stays inside the sheet");
+      assert.ok(y >= -0.6 && y <= 200.6, "seam y stays inside the sheet");
+    }
+  }
+});
+
+test("jigsaw knobs bulge one way and mirror when the sign flips", () => {
+  const up = jigsawEdgePoints(0, 0, 100, 0, 1);
+  const down = jigsawEdgePoints(0, 0, 100, 0, -1);
+  assert.equal(up.length, 101, "the seam keeps its one-unit sampling");
+  assert.deepEqual(up[0], [0, 0]);
+  assert.deepEqual(up[up.length - 1], [100, 0]);
+  const peakUp = Math.max(...up.map(([, y]) => y));
+  const peakDown = Math.min(...down.map(([, y]) => y));
+  assert.ok(Math.abs(peakUp - 31) <= 1, "the knob rises about 0.31 of the seam, saw " + peakUp);
+  assert.ok(Math.abs(peakDown + peakUp) <= 1, "the mirrored knob dips the same amount, saw " + peakDown);
+  assert.ok(Math.min(...up.map(([, y]) => y)) >= -0.6, "the seam never dips below its span");
+});
+
+test("open polylines become path data without a closing command", () => {
+  assert.equal(polylineToPathD([[0, 0], [10.5, 3]]), "M0 0L10.5 3");
+  assert.equal(polylineToPathD([[0, 0], [10.5, 3]]).includes("Z"), false, "a cut seam stays open");
 });
 
 // ---------------------------------------------------------------- contour geometry
