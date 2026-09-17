@@ -120,3 +120,11 @@ footer a { color: var(--muted); }
   .downloads { grid-template-columns: 1fr; }
   .panel, .preview { padding: 16px; }
 }
+.more-tools { padding: 58px 0; background: #fffdf8; border-top: 1px solid #dcded8; }
+.more-tools h2 { max-width: 720px; margin: 12px 0 24px; font: 700 clamp(26px, 3.4vw, 38px)/1.1 Georgia, serif; letter-spacing: -.04em; }
+.more-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.more-grid a { display: block; padding: 18px; border: 1px solid #dcded8; border-radius: 14px; background: #fff; text-decoration: none; transition: border-color .15s, transform .12s; }
+.more-grid a:hover { border-color: #ef694c; transform: translateY(-2px); }
+.more-grid a[aria-current="page"] { border-color: #ef694c; background: #fff7f4; }
+.more-grid b { display: block; font-size: 15px; margin-bottom: 6px; color: #1d2420; }
+.more-grid span { display: block; color: #68716b; font-size: 13px; line-height: 1.55; }

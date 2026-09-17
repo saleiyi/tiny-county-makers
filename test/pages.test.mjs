@@ -7,6 +7,7 @@ const ROOT = new URL("../", import.meta.url);
 const read = (name) => fs.readFileSync(new URL(name, ROOT), "utf8");
 
 const TOOL_PAGES = [
+  { file: "photo-keychain-maker.html", maker: "photo-keychain", title: "Photo Keychain Maker" },
   { file: "sticker-cutline-generator.html", maker: "sticker", title: "Sticker Cutline Generator" },
   { file: "acrylic-standee-maker.html", maker: "standee", title: "Acrylic Standee Maker" },
   { file: "fridge-magnet-maker.html", maker: "magnet", title: "Fridge Magnet Maker" },
@@ -122,6 +123,7 @@ test("the sitemap lists every published page with the current lastmod", () => {
     "https://saleiyi.github.io/tiny-county-makers/",
     "custom-acrylic-keychains.html",
     "pet-keychain-maker.html",
+    "photo-keychain-maker.html",
     "acrylic-standee-maker.html",
     "sticker-cutline-generator.html",
     "fridge-magnet-maker.html",
@@ -178,7 +180,7 @@ test("the keychain FAQ and how-to markup match what visitors can read", () => {
 
 test("the homepage advertises the other free tools with real descriptions", () => {
   const html = read("index.html");
-  for (const tool of ["pet-keychain-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
+  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
     assert.ok(html.includes(`href="./${tool}"`), `index.html does not link ${tool}`);
   }
   assert.match(html, /<section class="tools-band" id="more-tools">/, "the related-tools band disappeared");

@@ -27,6 +27,7 @@ const ctx = canvas.getContext("2d");
 const upload = document.querySelector("#photo");
 const sizeSelect = document.querySelector("#size");
 const sizeLabel = document.querySelector("#sizeLabel");
+const shapeSelect = document.querySelector("#shape");
 const offsetInput = document.querySelector("#offset");
 const offsetLabel = document.querySelector("#offsetLabel");
 const offsetControl = document.querySelector("#offsetControl");
@@ -59,6 +60,7 @@ function boot() {
   setDownloadsEnabled(false);
   upload.addEventListener("change", onUpload);
   sizeSelect.addEventListener("change", schedule);
+  shapeSelect?.addEventListener("change", schedule);
   offsetInput?.addEventListener("input", schedule);
   smoothingInput?.addEventListener("input", schedule);
   document.querySelector("#sampleArtwork")?.addEventListener("click", loadSample);
@@ -137,12 +139,32 @@ function extractContours() {
 function layout() {
   const longest = Math.max(image.naturalWidth, image.naturalHeight);
   const ratio = WORK_LONG_SIDE / longest;
-  const w = image.naturalWidth * ratio;
-  const h = image.naturalHeight * ratio;
+  let w = image.naturalWidth * ratio;
+  let h = image.naturalHeight * ratio;
+  const longSideCm = Number(sizeSelect.value);
+  const shape = profile.id === "photo-keychain" ? (shapeSelect?.value || "rounded") : "";
+  let topBand = 0;
+  let pad = 0;
+
+  if (profile.id === "photo-keychain" && shape !== "rounded") {
+    const side = Math.max(w, h);
+    w = side;
+    h = side;
+  }
+
+  if (profile.id === "photo-keychain") {
+    topBand = Math.max(46, Math.min(w, h) * 0.13);
+    pad = Math.max(14, Math.min(w, h) * 0.075);
+    const outerW = w + pad * 2;
+    const outerH = h + pad * 2 + topBand;
+    const x = (CANVAS - outerW) / 2 + pad;
+    const y = (CANVAS - outerH) / 2 + topBand + pad;
+    return { x, y, w, h, longSideCm, dpi: workDpi(WORK_LONG_SIDE, longSideCm), shape, topBand, pad };
+  }
+
   const baseRoom = profile.hasBase ? 76 : 0;
   const x = (CANVAS - w) / 2;
   const y = (CANVAS - h - baseRoom) / 2;
-  const longSideCm = Number(sizeSelect.value);
   return {
     x,
     y,
@@ -167,6 +189,19 @@ function render() {
     const outline = offsetContours(base, offsetPx);
     scene = { kind: "sticker", base, outline, rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image, offsetPx, dpi: artDpi, longSideCm: L.longSideCm };
     drawSticker(ctx, scene, true);
+  } else if (profile.id === "photo-keychain") {
+    const geometry = photoKeychainGeometry(L);
+    scene = {
+      kind: "photo-keychain",
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      outer: geometry.outer,
+      hole: geometry.hole,
+      shape: L.shape,
+      image,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawPhotoKeychain(ctx, scene, true);
   } else if (profile.id === "magnet") {
     scene = { kind: "magnet", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image, dpi: L.dpi, longSideCm: L.longSideCm };
     drawMagnet(ctx, scene);
@@ -197,7 +232,11 @@ function readout(L) {
   const piece = pieceBox();
   const cmPerWorkPx = (exportScale() * 2.54) / PRINT_DPI;
   const exportLong = physicalPixels(L.longSideCm, PRINT_DPI);
-  const suffix = profile.exportSvg ? "the download is the cut shape, offset included" : "transparent PNG, no watermark";
+  const suffix = profile.exportSvg
+    ? "the download is the cut shape, offset included"
+    : profile.id === "photo-keychain"
+      ? "transparent PNG at 300 DPI; the keyring is a preview only"
+      : "transparent PNG, no watermark";
   dimensions.textContent = `${round2(piece.width * cmPerWorkPx)} x ${round2(piece.height * cmPerWorkPx)} cm finished piece at ${PRINT_DPI} DPI (${exportLong} px long side) - ${suffix}.`;
 }
 
@@ -248,6 +287,86 @@ function drawMagnet(c, s) {
   c.restore();
 }
 
+function photoKeychainGeometry(L) {
+  const r = { x: L.x, y: L.y, w: L.w, h: L.h };
+  const pad = L.pad || Math.max(14, Math.min(r.w, r.h) * 0.075);
+  const topBand = L.topBand || Math.max(46, Math.min(r.w, r.h) * 0.13);
+  const outer = { x: r.x - pad, y: r.y - pad - topBand, w: r.w + pad * 2, h: r.h + pad * 2 + topBand };
+  const holeR = Math.max(9, Math.min(outer.w, outer.h) * 0.045);
+  const hole = { cx: outer.x + outer.w / 2, cy: outer.y + topBand * 0.62, r: holeR };
+  return { outer, hole };
+}
+
+function drawPhotoKeychain(c, s, guides) {
+  const r = s.rect;
+  const o = s.outer;
+  const h = s.hole;
+  const shape = s.shape || "rounded";
+
+  if (guides) {
+    const ringRadius = h.r * 1.8;
+    c.save();
+    c.strokeStyle = "#98a09b";
+    c.lineWidth = Math.max(3, h.r * 0.28);
+    c.beginPath();
+    c.arc(h.cx, h.cy, ringRadius, 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+  }
+
+  c.save();
+  pathForKeychain(c, o.x, o.y, o.w, o.h, shape, Math.min(o.w, o.h) * 0.14);
+  c.fillStyle = "#fffdf8";
+  c.fill();
+  c.strokeStyle = "rgba(29,36,32,.18)";
+  c.lineWidth = 1.5;
+  c.stroke();
+  c.restore();
+
+  c.save();
+  if (shape === "circle") {
+    c.beginPath();
+    c.arc(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) / 2, 0, Math.PI * 2);
+    c.clip();
+  } else {
+    pathForKeychain(c, r.x, r.y, r.w, r.h, shape, Math.min(r.w, r.h) * 0.08);
+    c.clip();
+  }
+  if (shape === "rounded") c.drawImage(s.image, r.x, r.y, r.w, r.h);
+  else drawCover(c, s.image, r.x, r.y, r.w, r.h);
+  c.restore();
+
+  c.save();
+  c.globalCompositeOperation = "destination-out";
+  c.beginPath();
+  c.arc(h.cx, h.cy, h.r, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+function pathForKeychain(c, x, y, w, h, shape, radius) {
+  if (shape === "circle") {
+    c.beginPath();
+    c.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    return;
+  }
+  roundRect(c, x, y, w, h, radius || Math.min(w, h) * 0.12);
+}
+
+function drawCover(c, img, x, y, w, h) {
+  const sourceRatio = img.naturalWidth / img.naturalHeight;
+  const destRatio = w / h;
+  let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
+  if (sourceRatio > destRatio) {
+    sw = sh * destRatio;
+    sx = (img.naturalWidth - sw) / 2;
+  } else {
+    sh = sw / destRatio;
+    sy = (img.naturalHeight - sh) / 2;
+  }
+  c.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+}
+
 function drawStandee(c, s) {
   const r = s.rect;
   const margin = 9;
@@ -295,6 +414,11 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
+  if (scene.kind === "photo-keychain") {
+    const o = scene.outer;
+    const pad = 2;
+    return { x: o.x - pad, y: o.y - pad, width: o.w + pad * 2, height: o.h + pad * 2 };
+  }
   const r = scene.rect;
   if (scene.kind === "magnet") {
     const pad = Math.max(10, Math.min(r.w, r.h) * 0.055) + 2;
@@ -316,6 +440,7 @@ function renderScene(scale) {
   c.scale(scale, scale);
   c.translate(-box.x, -box.y);
   if (scene.kind === "sticker") drawSticker(c, scene, false);
+  else if (scene.kind === "photo-keychain") drawPhotoKeychain(c, scene, false);
   else if (scene.kind === "magnet") drawMagnet(c, scene);
   else drawStandee(c, scene);
   return { canvas: out, box };
@@ -329,6 +454,10 @@ function pieceBox() {
   if (scene.kind === "sticker") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
+  }
+  if (scene.kind === "photo-keychain") {
+    const o = scene.outer;
+    return { width: o.w, height: o.h, x: o.x, y: o.y };
   }
   const r = scene.rect;
   if (scene.kind === "magnet") {
@@ -382,6 +511,7 @@ function exportSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
+  if (profile.id === "photo-keychain") return photoSampleArtwork();
   const c = document.createElement("canvas");
   c.width = 600;
   c.height = 600;
@@ -413,8 +543,52 @@ function sampleArtwork() {
   return c;
 }
 
+function photoSampleArtwork() {
+  const c = document.createElement("canvas");
+  c.width = 720;
+  c.height = 900;
+  const x = c.getContext("2d");
+  const sky = x.createLinearGradient(0, 0, 0, 900);
+  sky.addColorStop(0, "#9bc9e8");
+  sky.addColorStop(0.55, "#f3d6a7");
+  sky.addColorStop(1, "#d98c68");
+  x.fillStyle = sky;
+  x.fillRect(0, 0, 720, 900);
+  x.fillStyle = "rgba(255,255,255,.78)";
+  x.beginPath();
+  x.arc(540, 170, 62, 0, Math.PI * 2);
+  x.fill();
+  x.fillStyle = "#7898a8";
+  x.beginPath();
+  x.moveTo(0, 640);
+  x.lineTo(190, 390);
+  x.lineTo(340, 600);
+  x.lineTo(475, 430);
+  x.lineTo(720, 690);
+  x.lineTo(720, 900);
+  x.lineTo(0, 900);
+  x.closePath();
+  x.fill();
+  x.fillStyle = "#425f68";
+  x.beginPath();
+  x.moveTo(0, 760);
+  x.lineTo(210, 570);
+  x.lineTo(390, 745);
+  x.lineTo(580, 555);
+  x.lineTo(720, 680);
+  x.lineTo(720, 900);
+  x.lineTo(0, 900);
+  x.closePath();
+  x.fill();
+  x.fillStyle = "rgba(255,255,255,.75)";
+  x.font = "700 34px Inter, Segoe UI, sans-serif";
+  x.textAlign = "center";
+  x.fillText("SAMPLE PHOTO", 360, 845);
+  return c;
+}
+
 async function loadSample() {
-  note("Loading a sample star so you can try the tool...");
+  note("Loading a sample image so you can try the tool...");
   const ok = await adoptImage(sampleArtwork().toDataURL("image/png"));
   if (!ok) return note("The sample could not load. Please upload an image instead.");
   adoptSource("sample");
@@ -423,7 +597,7 @@ async function loadSample() {
 
 function adoptSource(label) {
   const badge = document.querySelector("#sourceBadge");
-  if (badge) badge.textContent = label === "sample" ? "Sample star - replace with your own file anytime" : "";
+  if (badge) badge.textContent = label === "sample" ? "Sample image - replace with your own file anytime" : "";
 }
 
 // ------------------------------------------------------------------ helpers
