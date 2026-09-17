@@ -12,6 +12,16 @@ export const PHOTO_BLOCK_SIZES = Object.freeze([
 /** Long sides an acrylic luggage tag is sold in, in centimetres. */
 export const LUGGAGE_TAG_SIZES = Object.freeze([7, 9, 11]);
 
+/**
+ * A pet ID tag is the same acrylic family as the bag tag, just sized for a collar: the long
+ * side is the diameter, so 3, 4 and 5 cm cover the discs people actually buy for cats and
+ * small dogs. The photo sits on the front and the name and phone number are etched under it.
+ */
+export const PET_TAG_SIZES = Object.freeze([3, 4, 5]);
+
+/** Every silhouette the pet ID tag tool offers, in the order the UI lists them. */
+export const PET_TAG_SHAPES = Object.freeze(["circle", "oval", "rounded", "tag"]);
+
 /** Long sides an acrylic cake topper is sold in, in centimetres. */
 export const CAKE_TOPPER_SIZES = Object.freeze([10, 12, 15]);
 
@@ -105,6 +115,7 @@ const PROFILES = Object.freeze([
   { id: "ornament", name: "Photo Ornament Maker", product: "Photo ornament", hasHardware: true, hasBase: false, exportSvg: true, sizes: [6, 8, 10] },
   { id: "block", name: "Acrylic Photo Block Maker", product: "Acrylic photo block", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_BLOCK_SIZES.map((size) => size.heightCm), sizeLabels: PHOTO_BLOCK_SIZES.map((size) => size.label) },
   { id: "luggage-tag", name: "Luggage Tag Maker", product: "Acrylic luggage tag", hasHardware: false, hasBase: false, exportSvg: true, sizes: LUGGAGE_TAG_SIZES },
+  { id: "pet-tag", name: "Pet ID Tag Maker", product: "Acrylic pet ID tag", hasHardware: false, hasBase: false, exportSvg: true, sizes: PET_TAG_SIZES, sizeLabels: ["Small (3 cm)", "Medium (4 cm)", "Large (5 cm)"] },
   { id: "cake-topper", name: "Cake Topper Maker", product: "Acrylic cake topper", hasHardware: false, hasBase: false, exportSvg: true, sizes: CAKE_TOPPER_SIZES },
   { id: "bookmark", name: "Bookmark Maker", product: "Acrylic bookmark", hasHardware: false, hasBase: false, exportSvg: true, sizes: BOOKMARK_SIZES },
   { id: "coaster", name: "Acrylic Coaster Maker", product: "Acrylic coaster", hasHardware: false, hasBase: false, exportSvg: true, sizes: COASTER_SIZES },
@@ -791,6 +802,19 @@ export const LUGGAGE_TAG_SHAPES = Object.freeze(["rounded", "tag", "circle", "ov
 
 export function isLuggageTagShape(shape) {
   return LUGGAGE_TAG_SHAPES.includes(shape);
+}
+
+/** True when the pet ID tag tool can draw this silhouette. */
+export function isPetTagShape(shape) {
+  return PET_TAG_SHAPES.includes(shape);
+}
+
+/**
+ * Pet ID tag outlines. A pet tag is the same slab as a bag tag, so the polygons come from
+ * the same builder; only the default silhouette and the sizes the tool offers differ.
+ */
+export function petTagShapePoints(shape, width, height, samples = 160) {
+  return luggageTagShapePoints(isPetTagShape(shape) ? shape : "circle", width, height, samples);
 }
 
 /**

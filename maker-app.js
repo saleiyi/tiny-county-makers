@@ -18,6 +18,7 @@ import {
   ornamentHole,
   luggageTagShapePoints,
   luggageTagHole,
+  petTagShapePoints,
   bookmarkShapePoints,
   bookmarkHole,
   coasterShapePoints,
@@ -566,6 +567,8 @@ function layout() {
       ? (shapeSelect?.value || "round")
       : profile.id === "luggage-tag"
         ? (shapeSelect?.value || "rounded")
+      : profile.id === "pet-tag"
+        ? (shapeSelect?.value || "circle")
       : profile.id === "bookmark"
         ? (shapeSelect?.value || "classic")
       : profile.id === "coaster"
@@ -617,7 +620,7 @@ function layout() {
     return { x, y, w, h, longSideCm, dpi: workDpi(h, longSideCm), spec, depth };
   }
 
-  if (profile.id === "luggage-tag") {
+  if (profile.id === "luggage-tag" || profile.id === "pet-tag") {
     // A tag is a portrait slab, so the silhouette aspect is fixed here instead of by the
     // uploaded photo. That keeps a 7/9/11 cm tag looking like a tag for every upload.
     const box = shape === "circle" ? [1, 1]
@@ -770,8 +773,11 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawOrnament(ctx, scene, true);
-  } else if (profile.id === "luggage-tag") {
-    const outline = luggageTagShapePoints(L.shape, L.w, L.h).map(([px, py]) => [px + L.x, py + L.y]);
+  } else if (profile.id === "luggage-tag" || profile.id === "pet-tag") {
+    // A pet tag is the same slab as a bag tag, so it shares the painter and only swaps the
+    // outline builder, which defaults to a collar-friendly circle.
+    const tagPoints = profile.id === "pet-tag" ? petTagShapePoints : luggageTagShapePoints;
+    const outline = tagPoints(L.shape, L.w, L.h).map(([px, py]) => [px + L.x, py + L.y]);
     const local = luggageTagHole(L.shape, L.w, L.h);
     scene = {
       kind: "luggage-tag",
@@ -952,6 +958,8 @@ function readout(L) {
       ? "transparent PNG at 300 DPI plus an SVG cut path; the hanging loop is a preview only"
     : profile.id === "luggage-tag"
       ? "transparent PNG at 300 DPI plus an SVG cut path with the strap hole; the strap is a preview only"
+    : profile.id === "pet-tag"
+      ? "transparent PNG at 300 DPI plus an SVG cut path with the collar hole; the loop is a preview only"
       : profile.id === "bookmark"
         ? "transparent PNG at 300 DPI plus an SVG cut path with the tassel hole; the tassel is a preview only"
       : profile.id === "coaster"
@@ -2464,7 +2472,7 @@ function exportTopperSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw") return photoSampleArtwork();
   if (profile.id === "sticker-outline") return stickerOutlineSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");

@@ -28,6 +28,10 @@ import {
   LUGGAGE_TAG_SHAPES,
   luggageTagShapePoints,
   luggageTagHole,
+  PET_TAG_SIZES,
+  PET_TAG_SHAPES,
+  petTagShapePoints,
+  isPetTagShape,
   BOOKMARK_SIZES,
   BOOKMARK_SHAPES,
   bookmarkShapePoints,
@@ -72,8 +76,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the sixteen distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip"]);
+test("the shared engine exposes the seventeen distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -87,6 +91,12 @@ test("the shared engine exposes the sixteen distinct maker profiles", () => {
   assert.equal(getProductProfile("block").sizes.length, 4);
   assert.equal(getProductProfile("luggage-tag").exportSvg, true);
   assert.equal(getProductProfile("luggage-tag").sizes.length, 3);
+  assert.equal(getProductProfile("pet-tag").exportSvg, true);
+  assert.equal(getProductProfile("pet-tag").hasHardware, false);
+  assert.equal(getProductProfile("pet-tag").hasBase, false);
+  assert.equal(getProductProfile("pet-tag").sizes.length, 3);
+  assert.equal(getProductProfile("pet-tag").sizeLabels.length, 3);
+  assert.equal(getProductProfile("pet-tag").sizeLabels[0], "Small (3 cm)");
   assert.equal(getProductProfile("cake-topper").exportSvg, true);
   assert.equal(getProductProfile("cake-topper").hasHardware, false);
   assert.equal(getProductProfile("cake-topper").hasBase, false);
@@ -157,7 +167,7 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
 });
@@ -427,6 +437,50 @@ test("luggage tag sizes print at 300 DPI on the long side", () => {
   assert.equal(physicalPixels(9, PRINT_DPI), 1063);
   assert.equal(physicalPixels(7, PRINT_DPI), 827);
   assert.equal(physicalPixels(11, PRINT_DPI), 1299);
+});
+
+// ---------------------------------------------------------------- pet ID tag silhouette geometry
+
+test("every pet ID tag silhouette fills its box exactly", () => {
+  assert.deepEqual([...PET_TAG_SHAPES], ["circle", "oval", "rounded", "tag"]);
+  assert.equal(isPetTagShape("circle"), true);
+  assert.equal(isPetTagShape("oval"), true);
+  assert.equal(isPetTagShape("rounded"), true);
+  assert.equal(isPetTagShape("tag"), true);
+  assert.equal(isPetTagShape("bone"), false);
+  const boxes = { rounded: [0.66, 1], tag: [0.6, 1], circle: [1, 1], oval: [1, 0.72] };
+  for (const shape of PET_TAG_SHAPES) {
+    const base = 620;
+    const w = base * boxes[shape][0];
+    const h = base * boxes[shape][1];
+    const box = polygonBounds(petTagShapePoints(shape, w, h));
+    assert.ok(Math.abs(box.width - w) < 0.5, shape + " width should fill the box, got " + box.width);
+    assert.ok(Math.abs(box.height - h) < 0.5, shape + " height should fill the box, got " + box.height);
+    assert.ok(Math.abs(box.minX) < 0.5 && Math.abs(box.minY) < 0.5, shape + " should anchor at the top-left of its box");
+  }
+});
+
+test("an unknown pet ID tag shape falls back to the round disc", () => {
+  const box = polygonBounds(petTagShapePoints("bone", 620, 620));
+  const circle = polygonBounds(petTagShapePoints("circle", 620, 620));
+  assert.ok(Math.abs(box.width - circle.width) < 0.5 && Math.abs(box.height - circle.height) < 0.5);
+  assert.deepEqual(polygonBounds(petTagShapePoints(undefined, 620, 620)), circle);
+});
+
+test("the collar hole always sits on solid material for every pet ID tag silhouette", () => {
+  for (const shape of PET_TAG_SHAPES) {
+    const points = petTagShapePoints(shape, 620, 620);
+    const hole = luggageTagHole(shape, 620, 620);
+    assert.ok(hole.r >= 3, shape + " hole should keep a usable radius");
+    assert.equal(circleInsidePolygon(hole.cx, hole.cy, hole.r, points), true, shape + " hole must not cut through the outline");
+  }
+});
+
+test("pet ID tag sizes print as a 3, 4 and 5 cm disc", () => {
+  assert.deepEqual([...PET_TAG_SIZES], [3, 4, 5]);
+  assert.equal(physicalPixels(3, PRINT_DPI), 354);
+  assert.equal(physicalPixels(4, PRINT_DPI), 472);
+  assert.equal(physicalPixels(5, PRINT_DPI), 591);
 });
 
 // ---------------------------------------------------------------- cake topper geometry
