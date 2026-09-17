@@ -105,6 +105,29 @@ export const PHOTO_STRIP_PAPERS = Object.freeze([
   { id: "blush", label: "blush", hex: "#f4dede" },
 ]);
 
+/**
+ * A table number is a portrait card that stands in the middle of a wedding table, so it is sold
+ * in the two print sizes every lab and home printer handles, plus the A5 that fits a frame. The
+ * height is the long side, which is what the shared print maths keys off.
+ */
+export const TABLE_NUMBER_SIZES = Object.freeze([
+  { id: "4x6", widthCm: 10.16, heightCm: 15.24, shorter: "4 x 6 in", label: "4 x 6 in portrait (10 x 15 cm)", short: "4 x 6 in (10 x 15 cm)" },
+  { id: "5x7", widthCm: 12.7, heightCm: 17.78, shorter: "5 x 7 in", label: "5 x 7 in portrait (13 x 18 cm)", short: "5 x 7 in (13 x 18 cm)" },
+  { id: "a5", widthCm: 14.8, heightCm: 21, shorter: "A5", label: "A5 portrait (15 x 21 cm)", short: "A5 (15 x 21 cm)" },
+]);
+
+/** The card silhouettes the table number tool can draw, in the order the UI offers them. */
+export const TABLE_NUMBER_SHAPES = Object.freeze(["arch", "rectangle", "rounded"]);
+
+/** The card stocks a table number is normally printed on, in the order the tool lists them. */
+export const TABLE_NUMBER_PAPERS = Object.freeze([
+  { id: "white", label: "white", hex: "#ffffff" },
+  { id: "ivory", label: "ivory", hex: "#f7f1e4" },
+  { id: "blush", label: "blush", hex: "#f3dede" },
+  { id: "sage", label: "sage", hex: "#dce5d8" },
+  { id: "black", label: "black", hex: "#14181a" },
+]);
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -123,6 +146,7 @@ const PROFILES = Object.freeze([
   { id: "jigsaw", name: "Photo Jigsaw Puzzle Maker", product: "Photo jigsaw puzzle", hasHardware: false, hasBase: false, exportSvg: true, sizes: JIGSAW_PUZZLE_SIZES },
   { id: "sticker-outline", name: "Sticker Outline Maker", product: "Sticker with a printed border", hasHardware: false, hasBase: false, exportSvg: true, sizes: STICKER_OUTLINE_SIZES },
   { id: "photo-strip", name: "Photo Strip Maker", product: "Photo booth strip", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_STRIP_SIZES.map((size) => size.widthCm), sizeLabels: PHOTO_STRIP_SIZES.map((size) => size.label) },
+  { id: "table-number", name: "Table Number Maker", product: "Wedding table number", hasHardware: false, hasBase: false, exportSvg: false, sizes: TABLE_NUMBER_SIZES.map((size) => size.widthCm), sizeLabels: TABLE_NUMBER_SIZES.map((size) => size.label) },
 ]);
 
 export const PRINT_DPI = 300;
@@ -154,6 +178,23 @@ export function photoStripSize(value) {
 /** How many photos one strip is split into, clamped to the two layouts the tool offers. */
 export function photoStripCount(value) {
   return Number(value) === PHOTO_STRIP_COUNTS[0] ? PHOTO_STRIP_COUNTS[0] : PHOTO_STRIP_COUNTS[1];
+}
+
+/** The table number format, looked up by the printed width the size picker stores. */
+export function tableNumberSize(value) {
+  const cm = Number(value);
+  return TABLE_NUMBER_SIZES.find((size) => Math.abs(size.widthCm - cm) < 0.02) || TABLE_NUMBER_SIZES[0];
+}
+
+/** The card silhouette, falling back to the arch that most table numbers are searched for. */
+export function tableNumberShape(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return TABLE_NUMBER_SHAPES.includes(raw) ? raw : TABLE_NUMBER_SHAPES[0];
+}
+
+/** A usable hex colour for the printed card stock, falling back to white. */
+export function tableNumberPaperHex(value) {
+  return readHexColour(value, TABLE_NUMBER_PAPERS, "#ffffff");
 }
 
 /** The desk name plate sizes, looked up by the long side the size picker stores. */

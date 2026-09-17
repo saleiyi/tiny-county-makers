@@ -29,6 +29,9 @@ import {
   photoStripSize,
   photoStripCount,
   photoStripPaperHex,
+  tableNumberSize,
+  tableNumberShape,
+  tableNumberPaperHex,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -54,6 +57,7 @@ const TOPPER_MAX_CHARS = 24;
 const TOPPER_INK = "#1d2420";
 const DEFAULT_STRIP_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
 const STRIP_MAX_PHOTOS = 4;
+const DEFAULT_TABLE_NUMBER_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
 
 const root = document.querySelector("[data-maker]");
 const profile = getProductProfile(root.dataset.maker);
@@ -89,6 +93,11 @@ const stripCaptionInput = document.querySelector("#stripCaption");
 const stripFontSelect = document.querySelector("#stripFont");
 const stripPaperInput = document.querySelector("#stripPaper");
 const stripClearButton = document.querySelector("#stripClear");
+const tableNumberText = document.querySelector("#tableNumber");
+const tableNumberNames = document.querySelector("#tableName");
+const tableNumberFont = document.querySelector("#tableFont");
+const tableNumberPaper = document.querySelector("#tablePaper");
+const tableNumberClear = document.querySelector("#tableClear");
 
 let image = null;
 let imageDataUrl = "";
@@ -96,6 +105,7 @@ let namePhoto = null;
 let topperPhoto = null;
 let plateLogo = null;
 let stripPhotos = [];
+let tablePhoto = null;
 let rawContours = null;
 let backgroundLifted = false;
 let liftedCanvas = null;
@@ -154,10 +164,26 @@ function boot() {
     render();
     document.fonts?.ready?.then?.(() => schedule());
   }
+  if (profile.id === "table-number") {
+    tableNumberText?.addEventListener("input", schedule);
+    tableNumberNames?.addEventListener("input", schedule);
+    tableNumberFont?.addEventListener("change", schedule);
+    tableNumberPaper?.addEventListener("input", schedule);
+    tableNumberClear?.addEventListener("click", clearTableNumberPhoto);
+    // The card is typed rather than uploaded, so a blank canvas stands in for the artwork and
+    // the shared preview and download plumbing works before any photo is added.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
   offsetInput?.addEventListener("input", schedule);
   borderColorInput?.addEventListener("input", schedule);
   wireHexPresets(borderColorInput, "#borderPresets", "data-border", schedule);
   wireHexPresets(stripPaperInput, "#stripPaperPresets", "data-paper", schedule);
+  wireHexPresets(tableNumberPaper, "#tableNumberPaperPresets", "data-paper", schedule);
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
   contactInput?.addEventListener("input", schedule);
@@ -468,10 +494,14 @@ async function adoptImage(dataUrl) {
     image = await loadImage(dataUrl);
   } catch (error) {
     image = null;
+    if (profile.id === "table-number") tablePhoto = null;
     setDownloadsEnabled(false);
     note("We could not read that image. Please try another file.");
     return false;
   }
+  // A table number keeps its photo beside the typed number, so it is remembered here rather
+  // than read back off the shared artwork slot.
+  if (profile.id === "table-number") tablePhoto = image;
   rawContours = null;
   backgroundLifted = false;
   liftedCanvas = null;
@@ -555,6 +585,16 @@ function layout() {
     const x = (CANVAS - w) / 2;
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: spec.heightCm, dpi: workDpi(h, spec.heightCm), spec };
+  }
+  if (profile.id === "table-number") {
+    // A table number is sold as a print size, so the card decides the box instead of an upload
+    // and the number and the optional photo simply follow the stock.
+    const spec = tableNumberSize(sizeSelect.value);
+    const h = WORK_LONG_SIDE;
+    const w = Math.round(h * (spec.widthCm / spec.heightCm));
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: spec.heightCm, dpi: workDpi(h, spec.heightCm), spec, shape: tableNumberShape(shapeSelect?.value) };
   }
   const longest = Math.max(image.naturalWidth, image.naturalHeight);
   const ratio = WORK_LONG_SIDE / longest;
@@ -731,6 +771,21 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawPhotoStrip(ctx, scene, true);
+  } else if (profile.id === "table-number") {
+    scene = {
+      kind: "table-number",
+      spec: L.spec,
+      shape: L.shape,
+      number: (tableNumberText?.value || "").trim().slice(0, 4),
+      names: (tableNumberNames?.value || "").trim().replace(/\s+/g, " ").slice(0, 40),
+      photo: tablePhoto,
+      paper: tableNumberPaperHex(tableNumberPaper?.value),
+      font: tableNumberFont?.value || DEFAULT_TABLE_NUMBER_FONT,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawTableNumber(ctx, scene, true);
   } else if (profile.id === "photo-keychain") {
     const geometry = photoKeychainGeometry(L);
     scene = {
@@ -882,7 +937,9 @@ function buildStickerContours(L) {
 
 function readout(L) {
   sizeLabel.textContent = scene.spec
-    ? scene.spec.id.split("x").join(" x ") + " in"
+    ? profile.id === "table-number" && scene.spec.short
+      ? scene.spec.short
+      : scene.spec.id.split("x").join(" x ") + " in"
     : L.longSideCm + " cm";
   if (offsetLabel) offsetLabel.textContent = `${Number(offsetInput.value)} mm`;
   if (smoothingLabel) smoothingLabel.textContent = String(normalizeCutlineSmoothing(smoothingInput?.value));
@@ -922,6 +979,21 @@ function readout(L) {
       + (missing > 0
         ? " Add " + missing + " more photo" + (missing === 1 ? "" : "s") + " to fill every frame."
         : " Every frame is filled, so the download is ready to print.")
+      + " No watermark, and the photos never leave your device.";
+    return;
+  }
+
+  if (profile.id === "table-number") {
+    // The card is a print, so the readout leads with the stock and says what is actually on it.
+    const spec = scene.spec;
+    const shapeName = scene.shape === "arch" ? "arch" : scene.shape === "rounded" ? "rounded corner" : "straight edge";
+    dimensions.textContent = spec.short + " " + shapeName + " table number at " + PRINT_DPI + " DPI ("
+      + physicalPixels(spec.heightCm, PRINT_DPI) + " px tall) - a print-ready PNG of the whole card, paper and all."
+      + (scene.photo
+        ? " Your photo runs across the card with the number on a band of paper, so it stays readable."
+        : " Add a photo when you want the picture to run across the card behind the number.")
+      + (scene.names ? " The names print under the number." : "")
+      + (scene.number ? "" : " Type a table number to put it on the card.")
       + " No watermark, and the photos never leave your device.";
     return;
   }
@@ -1092,6 +1164,124 @@ function clearStripPhotos() {
   setDownloadsEnabled(false);
   adoptSource("upload");
   render();
+}
+
+/** Drops the optional photo but keeps the finished card, which stands on its own. */
+function clearTableNumberPhoto() {
+  tablePhoto = null;
+  if (upload) upload.value = "";
+  adoptSource("upload");
+  render();
+}
+
+/** The card silhouette as a path: an arch, a soft-cornered card, or a plain rectangle. */
+function tableNumberPath(c, r, shape) {
+  c.beginPath();
+  if (shape === "arch") {
+    // A full semicircle on top, so the card reads as the arch sign people search for.
+    const radius = r.w / 2;
+    c.moveTo(r.x, r.y + r.h);
+    c.lineTo(r.x, r.y + radius);
+    c.quadraticCurveTo(r.x, r.y, r.x + radius, r.y);
+    c.quadraticCurveTo(r.x + r.w, r.y, r.x + r.w, r.y + radius);
+    c.lineTo(r.x + r.w, r.y + r.h);
+    c.closePath();
+    return;
+  }
+  const radius = shape === "rounded" ? Math.min(r.w, r.h) * 0.1 : Math.min(r.w, r.h) * 0.012;
+  if (typeof c.roundRect === "function") c.roundRect(r.x, r.y, r.w, r.h, radius);
+  else c.rect(r.x, r.y, r.w, r.h);
+}
+
+/**
+ * A wedding table number. The card stock, the silhouette and the two lines of type all follow
+ * the chosen size, so the same painter draws every combination. With a photo the picture runs
+ * edge to edge and the number sits on a band of card stock; without one the number is centred on
+ * plain stock. The preview adds a drop shadow; the export never does.
+ */
+function drawTableNumber(c, s, guides) {
+  const r = s.rect;
+  const ink = readableInk(s.paper);
+  const family = s.font || DEFAULT_TABLE_NUMBER_FONT;
+  const pad = Math.min(r.w, r.h) * 0.09;
+  const number = (s.number || "").trim();
+  const names = (s.names || "").trim();
+
+  c.save();
+  if (guides) {
+    c.shadowColor = "rgba(29,36,32,.22)";
+    c.shadowBlur = 28;
+    c.shadowOffsetY = 12;
+  }
+  tableNumberPath(c, r, s.shape);
+  c.fillStyle = s.paper;
+  c.fill();
+  c.restore();
+
+  c.save();
+  tableNumberPath(c, r, s.shape);
+  c.clip();
+
+  if (s.photo) {
+    drawCover(c, s.photo, r.x, r.y, r.w, r.h);
+    // A solid band of card stock at the foot is what keeps the number readable over any photo.
+    const bandH = Math.round(r.h * (names ? 0.34 : 0.26));
+    const bandY = r.y + r.h - bandH;
+    c.fillStyle = s.paper;
+    c.fillRect(r.x, bandY, r.w, bandH);
+    c.save();
+    c.strokeStyle = "rgba(29,36,32,.14)";
+    c.lineWidth = Math.max(1, r.w * 0.003);
+    c.beginPath();
+    c.moveTo(r.x, bandY);
+    c.lineTo(r.x + r.w, bandY);
+    c.stroke();
+    c.restore();
+    c.save();
+    c.fillStyle = ink;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    const wanted = bandH * (names ? 0.62 : 0.7);
+    const numberSize = Math.min(bandH * (names ? 0.62 : 0.72), fitFont(c, number, r.w * 0.68, wanted, family, 700));
+    c.font = "700 " + numberSize + "px " + family;
+    c.fillText(number, r.x + r.w / 2, bandY + (names ? bandH * 0.36 : bandH * 0.5), r.w * 0.8);
+    if (names) {
+      const nameSize = fitFont(c, names, r.w * 0.76, bandH * 0.2, family, 600);
+      c.font = "600 " + nameSize + "px " + family;
+      c.fillText(names, r.x + r.w / 2, bandY + bandH * 0.74, r.w * 0.8);
+    }
+    c.restore();
+  } else {
+    // Plain stock: the arch pushes the number down so it never rides into the curved shoulder.
+    const top = s.shape === "arch" ? r.y + r.w * 0.42 : r.y + pad;
+    const bottom = r.y + r.h - pad;
+    const namesH = names ? Math.min((bottom - top) * 0.2, r.w * 0.16) : 0;
+    const numberBottom = bottom - namesH;
+    const numberSize = fitFont(c, number, r.w - pad * 2, (numberBottom - top) * 0.82, family, 700);
+    c.save();
+    c.fillStyle = ink;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.font = "700 " + numberSize + "px " + family;
+    c.fillText(number, r.x + r.w / 2, (top + numberBottom) / 2, r.w - pad * 2);
+    if (names) {
+      const ruleY = bottom - namesH * 0.72;
+      const ruleW = Math.min(r.w * 0.22, (r.w - pad * 2) * 0.4);
+      c.globalAlpha = 0.5;
+      c.strokeStyle = ink;
+      c.lineWidth = Math.max(1, r.w * 0.006);
+      c.beginPath();
+      c.moveTo(r.x + r.w / 2 - ruleW / 2, ruleY);
+      c.lineTo(r.x + r.w / 2 + ruleW / 2, ruleY);
+      c.stroke();
+      c.globalAlpha = 1;
+      const nameSize = fitFont(c, names, r.w - pad * 2, namesH * 0.8, family, 600);
+      c.font = "600 " + nameSize + "px " + family;
+      c.fillText(names, r.x + r.w / 2, bottom - namesH * 0.28, r.w - pad * 2);
+    }
+    c.restore();
+  }
+  c.restore();
 }
 
 /**
@@ -2077,7 +2267,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -2121,6 +2311,7 @@ function renderScene(scale) {
   else if (scene.kind === "block") drawBlock(c, scene, false);
   else if (scene.kind === "jigsaw") drawJigsaw(c, scene, false);
   else if (scene.kind === "photo-strip") drawPhotoStrip(c, scene, false);
+  else if (scene.kind === "table-number") drawTableNumber(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -2146,7 +2337,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -2170,11 +2361,13 @@ function exportScale() {
 
 /** Download name: photo blocks read as inches, everything else as a long side in cm. */
 function exportName(extension) {
-  const stem = scene.spec
-    ? scene.spec.id + "in-" + profile.id
-    : scene.kind === "jigsaw" && scene.grid
-      ? profile.id + "-" + scene.grid.id + "-" + scene.longSideCm + "cm"
-      : profile.id + "-" + scene.longSideCm + "cm";
+  const stem = scene.kind === "table-number" && scene.spec
+    ? "table-number-" + scene.spec.id
+    : scene.spec
+      ? scene.spec.id + "in-" + profile.id
+      : scene.kind === "jigsaw" && scene.grid
+        ? profile.id + "-" + scene.grid.id + "-" + scene.longSideCm + "cm"
+        : profile.id + "-" + scene.longSideCm + "cm";
   return stem + "-" + PRINT_DPI + "dpi." + extension;
 }
 
@@ -2473,6 +2666,7 @@ function exportTopperSvg() {
 
 function sampleArtwork() {
   if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw") return photoSampleArtwork();
+  if (profile.id === "table-number") return photoSampleArtwork();
   if (profile.id === "sticker-outline") return stickerOutlineSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
@@ -2676,6 +2870,18 @@ async function loadSample() {
     setDownloadsEnabled(true);
     adoptSource("sample");
     render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "table-number") {
+    // The sample is a finished card, so the number and the names are filled in the way a real
+    // visitor would fill them and the shared sample photo stands in for their picture.
+    if (tableNumberText && !tableNumberText.value.trim()) tableNumberText.value = "12";
+    if (tableNumberNames && !tableNumberNames.value.trim()) tableNumberNames.value = "Sarah & James";
+    note("Loading a sample photo so you can try the tool...");
+    const ok = await adoptImage(sampleArtwork().toDataURL("image/png"));
+    if (!ok) return note("The sample could not load. Please upload a photo instead.");
+    adoptSource("sample");
     track("sample_loaded", { product: profile.id });
     return;
   }

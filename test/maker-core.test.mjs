@@ -72,12 +72,17 @@ import {
   photoStripSize,
   photoStripCount,
   photoStripPaperHex,
+  TABLE_NUMBER_SIZES,
+  TABLE_NUMBER_SHAPES,
+  tableNumberSize,
+  tableNumberShape,
+  tableNumberPaperHex,
   readableInk,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the seventeen distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip"]);
+test("the shared engine exposes the eighteen distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -167,7 +172,7 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html", "table-number-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
 });
@@ -722,4 +727,38 @@ test("the caption ink flips to white on dark paper and stays dark on light paper
   assert.equal(readableInk("#14181a"), "#ffffff");
   assert.equal(readableInk("#000000"), "#ffffff");
   assert.equal(readableInk(undefined), "#1d2420");
+});
+
+test("table number card sizes map inches onto the centimetre print maths", () => {
+  assert.equal(TABLE_NUMBER_SIZES.length, 3);
+  assert.equal(tableNumberSize("10.16").id, "4x6");
+  assert.equal(tableNumberSize("12.7").id, "5x7");
+  assert.equal(tableNumberSize("12.7").heightCm, 17.78, "the size picker keys off the width, so 5 x 7 stores 12.7 cm");
+  assert.equal(tableNumberSize("12.7").shorter, "5 x 7 in");
+  assert.equal(tableNumberSize("14.8").id, "a5");
+  assert.equal(tableNumberSize("999").id, "4x6", "an unknown width should fall back to the first card");
+  assert.equal(tableNumberSize(undefined).id, "4x6");
+  assert.equal(physicalPixels(tableNumberSize("10.16").heightCm, PRINT_DPI), 1800);
+  assert.equal(physicalPixels(tableNumberSize("12.7").heightCm, PRINT_DPI), 2100);
+  assert.equal(physicalPixels(tableNumberSize("14.8").heightCm, PRINT_DPI), 2480);
+  assert.equal(tableNumberSize("10.16").short, "4 x 6 in (10 x 15 cm)");
+});
+
+test("table number shapes offer an arch, a rectangle and a rounded card", () => {
+  assert.deepEqual([...TABLE_NUMBER_SHAPES], ["arch", "rectangle", "rounded"]);
+  assert.equal(tableNumberShape("arch"), "arch");
+  assert.equal(tableNumberShape("Rounded"), "rounded");
+  assert.equal(tableNumberShape("rectangle"), "rectangle");
+  assert.equal(tableNumberShape("junk"), "arch", "an unknown shape should fall back to the arch");
+  assert.equal(tableNumberShape(undefined), "arch");
+});
+
+test("table number card colours take a hex value, a short hex value or a preset name", () => {
+  assert.equal(tableNumberPaperHex("#ABC"), "#aabbcc");
+  assert.equal(tableNumberPaperHex("#14181a"), "#14181a");
+  assert.equal(tableNumberPaperHex("ivory"), "#f7f1e4");
+  assert.equal(tableNumberPaperHex("sage"), "#dce5d8");
+  assert.equal(tableNumberPaperHex("blush"), "#f3dede");
+  assert.equal(tableNumberPaperHex("no-such-paper"), "#ffffff");
+  assert.equal(tableNumberPaperHex(undefined), "#ffffff");
 });
