@@ -57,6 +57,23 @@ export const JIGSAW_GRIDS = Object.freeze([
   { id: "6x6", cols: 6, rows: 6, pieces: 36, label: "6 x 6 - 36 pieces" },
 ]);
 
+/**
+ * The printable long sides for a bordered sticker, in centimetres. The small end suits
+ * planners and phone cases; the large end suits a laptop lid or a water bottle.
+ */
+export const STICKER_OUTLINE_SIZES = Object.freeze([4, 6, 8, 10]);
+
+/**
+ * Border colours that cover almost every "make it look like a real sticker" request.
+ * The picker on the page still accepts any hex, these are just the one-click answers.
+ */
+export const STICKER_BORDER_PRESETS = Object.freeze([
+  { id: "white", label: "white", hex: "#ffffff" },
+  { id: "black", label: "black", hex: "#14181a" },
+  { id: "cream", label: "cream", hex: "#f7efe1" },
+  { id: "grey", label: "grey", hex: "#a8b0b3" },
+]);
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -72,6 +89,7 @@ const PROFILES = Object.freeze([
   { id: "coaster", name: "Acrylic Coaster Maker", product: "Acrylic coaster", hasHardware: false, hasBase: false, exportSvg: true, sizes: COASTER_SIZES },
   { id: "name-plate", name: "Desk Name Plate Maker", product: "Acrylic desk name plate", hasHardware: false, hasBase: false, exportSvg: true, sizes: DESK_NAME_PLATE_SIZES.map((size) => size.widthCm), sizeLabels: DESK_NAME_PLATE_SIZES.map((size) => size.label) },
   { id: "jigsaw", name: "Photo Jigsaw Puzzle Maker", product: "Photo jigsaw puzzle", hasHardware: false, hasBase: false, exportSvg: true, sizes: JIGSAW_PUZZLE_SIZES },
+  { id: "sticker-outline", name: "Sticker Outline Maker", product: "Sticker with a printed border", hasHardware: false, hasBase: false, exportSvg: true, sizes: STICKER_OUTLINE_SIZES },
 ]);
 
 export const PRINT_DPI = 300;
@@ -122,6 +140,25 @@ export function stickerOffsetPixels(millimeters, dpi = PRINT_DPI) {
 
 export function normalizeCutlineSmoothing(value) {
   return Math.max(0, Math.min(10, Math.round(Number(value) || 0)));
+}
+
+/**
+ * The border width a visitor asked for, in millimetres. Anything outside the printable range
+ * is pulled back in rather than thrown away, so a hand-typed query string still renders.
+ */
+export function stickerBorderWidth(millimetres) {
+  const value = Number(millimetres);
+  if (!Number.isFinite(value)) return 2;
+  return Math.max(1, Math.min(10, Math.round(value * 2) / 2));
+}
+
+/** A usable hex colour for the border, falling back to white on anything unrecognised. */
+export function stickerBorderHex(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(raw)) return raw;
+  if (/^#[0-9a-f]{3}$/.test(raw)) return "#" + raw.slice(1).split("").map((ch) => ch + ch).join("");
+  const preset = STICKER_BORDER_PRESETS.find((entry) => entry.id === raw);
+  return preset ? preset.hex : "#ffffff";
 }
 
 /** Physical longest side in centimetres -> whole pixels at a print DPI. */

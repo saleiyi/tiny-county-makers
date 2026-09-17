@@ -59,11 +59,15 @@ import {
   jigsawEdgePoints,
   jigsawCutPaths,
   polylineToPathD,
+  STICKER_OUTLINE_SIZES,
+  STICKER_BORDER_PRESETS,
+  stickerBorderWidth,
+  stickerBorderHex,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the fourteen distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw"]);
+test("the shared engine exposes the fifteen distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -93,6 +97,10 @@ test("the shared engine exposes the fourteen distinct maker profiles", () => {
   assert.equal(getProductProfile("jigsaw").hasHardware, false);
   assert.equal(getProductProfile("jigsaw").hasBase, false);
   assert.equal(getProductProfile("jigsaw").sizes.length, 4);
+  assert.equal(getProductProfile("sticker-outline").exportSvg, true);
+  assert.equal(getProductProfile("sticker-outline").hasHardware, false);
+  assert.equal(getProductProfile("sticker-outline").hasBase, false);
+  assert.equal(getProductProfile("sticker-outline").sizes.length, 4);
 });
 
 test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
@@ -594,4 +602,21 @@ test("an unknown desk name plate finish is rejected and the offered three pass",
   assert.equal(isNamePlateFinish("frosted"), true);
   assert.equal(isNamePlateFinish("glossy"), false);
   assert.equal(isNamePlateFinish(undefined), false);
+});
+
+test("sticker border width stays inside one to ten millimetres and snaps to half steps", () => {
+  assert.equal(stickerBorderWidth(0.2), 1);
+  assert.equal(stickerBorderWidth(4.4), 4.5);
+  assert.equal(stickerBorderWidth(99), 10);
+  assert.equal(stickerBorderWidth("x"), 2);
+  assert.equal(stickerBorderWidth(undefined), 2);
+});
+
+test("sticker border colours accept a hex value, a short hex value or a preset name", () => {
+  assert.equal(stickerBorderHex("#ABC"), "#aabbcc");
+  assert.equal(stickerBorderHex("cream"), "#f7efe1");
+  assert.equal(stickerBorderHex("no-such-preset"), "#ffffff");
+  assert.equal(stickerBorderHex(undefined), "#ffffff");
+  assert.equal(STICKER_BORDER_PRESETS.length, 4);
+  assert.equal(STICKER_OUTLINE_SIZES.length, 4);
 });

@@ -22,6 +22,9 @@ import {
   bookmarkHole,
   coasterShapePoints,
   jigsawCutPaths,
+  stickerBorderWidth,
+  stickerBorderHex,
+  STICKER_BORDER_PRESETS,
   jigsawGrid,
   polylineToPathD,
   deskNamePlatePoints,
@@ -73,6 +76,7 @@ const plateName = document.querySelector("#plaqueName");
 const plateTitle = document.querySelector("#plaqueTitle");
 const plateCompany = document.querySelector("#plaqueCompany");
 const finishSelect = document.querySelector("#finish");
+const borderColorInput = document.querySelector("#borderColor");
 
 let image = null;
 let imageDataUrl = "";
@@ -124,6 +128,25 @@ function boot() {
     document.fonts?.ready?.then?.(() => schedule());
   }
   offsetInput?.addEventListener("input", schedule);
+  borderColorInput?.addEventListener("input", schedule);
+  const borderPresetButtons = document.querySelectorAll("#borderPresets button[data-border]");
+  function syncBorderPresets() {
+    if (!borderPresetButtons.length) return;
+    const current = String((borderColorInput && borderColorInput.value) || "").toLowerCase();
+    borderPresetButtons.forEach((button) => {
+      button.setAttribute("aria-pressed", button.getAttribute("data-border").toLowerCase() === current ? "true" : "false");
+    });
+  }
+  borderPresetButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!borderColorInput) return;
+      borderColorInput.value = button.getAttribute("data-border");
+      syncBorderPresets();
+      schedule();
+    });
+  });
+  borderColorInput?.addEventListener("input", syncBorderPresets);
+  syncBorderPresets();
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
   contactInput?.addEventListener("input", schedule);
@@ -394,9 +417,9 @@ async function adoptImage(dataUrl) {
   backgroundLifted = false;
   liftedCanvas = null;
   // Only the cutline tool traces the picture itself, so only it re-keys a flat backdrop.
-  if (profile.id === "sticker") liftFlatArtwork();
+  if (profile.id === "sticker" || profile.id === "sticker-outline") liftFlatArtwork();
   // Only the two tools whose cut line follows the picture itself trace contours.
-  if (profile.id === "sticker" || profile.id === "cake-topper") extractContours();
+  if (profile.id === "sticker" || profile.id === "sticker-outline" || profile.id === "cake-topper") extractContours();
   setDownloadsEnabled(true);
   adoptSource("upload");
   render();
@@ -598,16 +621,30 @@ function render() {
   const L = layout();
   ctx.clearRect(0, 0, CANVAS, CANVAS);
 
-  if (profile.id === "sticker") {
+  if (profile.id === "sticker" || profile.id === "sticker-outline") {
     const base = buildStickerContours(L);
     // The border is measured against the artwork's own DPI, not the padded canvas,
     // otherwise a 2 mm border grows into a 3.3 mm one on a shape that floats inside the frame.
     const baseBounds = boundsOfContours(base);
     const artDpi = baseBounds ? Math.max(baseBounds.width, baseBounds.height) / (L.longSideCm / 2.54) : L.dpi;
-    const offsetPx = stickerOffsetPixels(Number(offsetInput.value), artDpi);
+    const borderMm = stickerBorderWidth(offsetInput.value);
+    const offsetPx = stickerOffsetPixels(borderMm, artDpi);
     const outline = offsetContours(base, offsetPx);
-    scene = { kind: "sticker", base, outline, rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image: artworkSource(), offsetPx, dpi: artDpi, longSideCm: L.longSideCm };
-    drawSticker(ctx, scene, true);
+    const kind = profile.id === "sticker" ? "sticker" : "sticker-outline";
+    scene = {
+      kind,
+      base,
+      outline,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      image: artworkSource(),
+      offsetPx,
+      borderMm,
+      dpi: artDpi,
+      longSideCm: L.longSideCm,
+      border: kind === "sticker-outline" ? stickerBorderHex(borderColorInput && borderColorInput.value) : "#ffffff",
+    };
+    if (kind === "sticker") drawSticker(ctx, scene, true);
+    else drawStickerOutline(ctx, scene, true);
   } else if (profile.id === "photo-keychain") {
     const geometry = photoKeychainGeometry(L);
     scene = {
@@ -791,6 +828,20 @@ function readout(L) {
     return;
   }
 
+  if (profile.id === "sticker-outline") {
+    // The keyline is the product here, so the readout leads with the border that was chosen.
+    const preset = STICKER_BORDER_PRESETS.find((entry) => entry.hex === scene.border);
+    const named = preset ? preset.label : scene.border;
+    const box = pieceBox();
+    const cmPerWorkPx = (exportScale() * 2.54) / PRINT_DPI;
+    dimensions.textContent = round2(box.width * cmPerWorkPx) + " x " + round2(box.height * cmPerWorkPx)
+      + " cm sticker at " + PRINT_DPI + " DPI (" + physicalPixels(scene.longSideCm, PRINT_DPI) + " px long side) - a "
+      + scene.borderMm + " mm " + named + " border around your artwork, on a transparent background, so it prints clean"
+      + " and drops straight into Canva, Procreate or a print queue."
+      + (backgroundLifted ? " The flat background behind your picture was removed first, so the border hugs the subject." : "");
+    return;
+  }
+
   const piece = pieceBox();
   const cmPerWorkPx = (exportScale() * 2.54) / PRINT_DPI;
   const exportLong = physicalPixels(L.longSideCm, PRINT_DPI);
@@ -887,6 +938,38 @@ function drawSticker(c, s, guides) {
     c.setLineDash([7, 6]);
     c.lineWidth = 1.6;
     c.strokeStyle = "rgba(239,105,76,.9)";
+    c.beginPath();
+    for (const pts of s.base) addPolygon(c, pts);
+    c.stroke();
+    c.restore();
+  }
+}
+
+/**
+ * The sticker a visitor actually prints. Same traced silhouette as the cutline tool, but the
+ * fill is the border colour they chose, and the preview adds a soft drop shadow so a
+ * transparent-background sticker still reads as an object sitting on the page. The shadow is
+ * preview-only: the exported PNG keeps clean edges and its transparency.
+ */
+function drawStickerOutline(c, s, guides) {
+  if (!s.outline.length) return;
+  c.save();
+  if (guides) {
+    c.shadowColor = "rgba(29,36,32,.28)";
+    c.shadowBlur = 24;
+    c.shadowOffsetY = 11;
+  }
+  c.fillStyle = s.border;
+  c.beginPath();
+  for (const pts of s.outline) addPolygon(c, pts);
+  c.fill("evenodd");
+  c.restore();
+  c.drawImage(s.image, s.rect.x, s.rect.y, s.rect.w, s.rect.h);
+  if (guides) {
+    c.save();
+    c.setLineDash([7, 6]);
+    c.lineWidth = 1.6;
+    c.strokeStyle = "rgba(239,105,76,.55)";
     c.beginPath();
     for (const pts of s.base) addPolygon(c, pts);
     c.stroke();
@@ -1769,7 +1852,7 @@ function roundRect(c, x, y, w, h, radius) {
 // ------------------------------------------------------------------ export
 
 function sceneBox() {
-  if (scene.kind === "sticker") {
+  if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
     if (!b) return null;
     const pad = 2;
@@ -1824,6 +1907,7 @@ function renderScene(scale) {
   c.scale(scale, scale);
   c.translate(-box.x, -box.y);
   if (scene.kind === "sticker") drawSticker(c, scene, false);
+  else if (scene.kind === "sticker-outline") drawStickerOutline(c, scene, false);
   else if (scene.kind === "photo-keychain") drawPhotoKeychain(c, scene, false);
   else if (scene.kind === "name-keychain") drawNameKeychain(c, scene, false);
   else if (scene.kind === "coaster") drawCoaster(c, scene, false);
@@ -1844,7 +1928,7 @@ function renderScene(scale) {
  * 620 px artboard: a die-cut star inside a square frame is only as wide as the star.
  */
 function pieceBox() {
-  if (scene.kind === "sticker") {
+  if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
@@ -1905,6 +1989,7 @@ function exportSvg() {
   if (scene.kind === "coaster") return exportCoasterSvg();
   if (scene.kind === "name-plate") return exportNamePlateSvg();
   if (scene.kind === "jigsaw") return exportJigsawSvg();
+  if (scene.kind === "sticker-outline") return exportStickerOutlineSvg();
   if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") return exportOrnamentSvg();
   if (scene.kind !== "sticker") return;
   const scale = exportScale();
@@ -1930,6 +2015,82 @@ function exportSvg() {
   ];
   downloadBlob(lines.join("\n"), `${profile.id}-${scene.longSideCm}cm-${PRINT_DPI}dpi.svg`, "image/svg+xml;charset=utf-8");
   track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
+}
+
+/**
+ * Border layer plus the artwork, drawn in the same order the canvas uses. The extra hairline
+ * edge marks where the artwork stops and the border starts, which is handy when the sticker is
+ * placed on a light page and a white border would otherwise be invisible.
+ */
+function exportStickerOutlineSvg() {
+  const scale = exportScale();
+  const box = sceneBox();
+  if (!box || !scene.base.length) return note("Upload an image with visible artwork first.");
+  const tx = (points) => points.map(([x, y]) => [(x - box.x) * scale, (y - box.y) * scale]);
+  const width = Math.round(box.width * scale);
+  const height = Math.round(box.height * scale);
+  const r = scene.rect;
+  const art = document.createElement("canvas");
+  art.width = Math.max(1, Math.round(r.w * scale));
+  art.height = Math.max(1, Math.round(r.h * scale));
+  art.getContext("2d").drawImage(scene.image, 0, 0, art.width, art.height);
+  const lines = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + " " + height + '" role="img">',
+    "<title>" + profile.product + " - " + scene.borderMm + " mm border, " + scene.longSideCm + " cm long side, " + PRINT_DPI + " DPI</title>",
+    '<g id="StickerOutline">',
+    '<path id="Border" d="' + contoursToPathD(scene.outline.map(tx), 2) + '" fill="' + scene.border + '" fill-rule="evenodd"/>',
+    '<image id="Artwork" x="' + (r.x - box.x) * scale + '" y="' + (r.y - box.y) * scale + '" width="' + art.width + '" height="' + art.height + '" href="' + art.toDataURL("image/png") + '"/>',
+    '<path id="Edge" d="' + contoursToPathD(scene.base.map(tx), 2) + '" fill="none" stroke="rgba(0,0,0,.10)" stroke-width="1"/>',
+    "</g>",
+    "</svg>",
+  ];
+  downloadBlob(lines.join("\n"), exportName("svg"), "image/svg+xml;charset=utf-8");
+  track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
+}
+
+/**
+ * A five-petal bloom on a transparent background: solid, clean-edged shapes that trace into a
+ * tidy silhouette, so the border is the first thing a visitor sees before they upload anything.
+ */
+function stickerOutlineSampleArtwork() {
+  const c = document.createElement("canvas");
+  c.width = 880;
+  c.height = 880;
+  const x = c.getContext("2d");
+  x.translate(440, 430);
+  const leaf = (angle, length, wide) => {
+    x.save();
+    x.rotate(angle);
+    x.beginPath();
+    x.moveTo(0, 30);
+    x.quadraticCurveTo(wide, -length * 0.4, 0, -length);
+    x.quadraticCurveTo(-wide, -length * 0.4, 0, 30);
+    x.closePath();
+    x.fillStyle = "#5f9463";
+    x.fill();
+    x.restore();
+  };
+  leaf(0.42, 300, 104);
+  leaf(-0.42, 300, 104);
+  for (let i = 0; i < 5; i++) {
+    x.save();
+    x.rotate((i / 5) * Math.PI * 2);
+    x.beginPath();
+    x.ellipse(0, -168, 106, 162, 0, 0, Math.PI * 2);
+    x.fillStyle = i % 2 ? "#f2a0bd" : "#ec7ba3";
+    x.fill();
+    x.restore();
+  }
+  x.beginPath();
+  x.arc(0, 0, 92, 0, Math.PI * 2);
+  x.fillStyle = "#f6c351";
+  x.fill();
+  x.beginPath();
+  x.arc(0, 0, 92, 0, Math.PI * 2);
+  x.strokeStyle = "rgba(180,124,20,.35)";
+  x.lineWidth = 6;
+  x.stroke();
+  return c;
 }
 
 /** Cut path plus a printable artwork layer, the same split the sticker tool ships. */
@@ -2110,6 +2271,7 @@ function exportTopperSvg() {
 
 function sampleArtwork() {
   if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw") return photoSampleArtwork();
+  if (profile.id === "sticker-outline") return stickerOutlineSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
   if (profile.id === "cake-topper") return topperArtworkCanvas(topperTextValue() || "Happy Birthday", topperFont?.value || DEFAULT_TOPPER_FONT, topperStyleName());
