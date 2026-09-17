@@ -138,3 +138,47 @@ test("internal links between the tools resolve to files that exist", () => {
   }
   assert.ok(path.basename(new URL(".", ROOT).pathname) === "tiny-county-makers");
 });
+const MAIN_PAGES = ["index.html", "create.html"];
+
+test("the keychain homepage keeps its canonical, social tags and structured data", () => {
+  for (const file of MAIN_PAGES) {
+    const html = read(file);
+    assert.match(html, /<link rel="canonical" href="https:\/\/saleiyi\.github\.io\/tiny-county-makers\/">/, `${file} must consolidate onto the root URL`);
+    assert.match(html, /property="og:title"/, `${file} needs an og:title`);
+    assert.match(html, /name="twitter:card"/, `${file} needs a Twitter card`);
+    const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+    assert.equal(blocks.length, 1, `${file} should ship exactly one JSON-LD block`);
+    const graph = JSON.parse(blocks[0][1])["@graph"];
+    for (const type of ["WebSite", "WebApplication", "Product", "HowTo", "FAQPage"]) {
+      assert.ok(graph.some((node) => node["@type"] === type), `${file} JSON-LD is missing ${type}`);
+    }
+  }
+});
+
+test("the keychain FAQ and how-to markup match what visitors can read", () => {
+  for (const file of MAIN_PAGES) {
+    const html = read(file);
+    const graph = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])["@graph"];
+    const faq = graph.find((node) => node["@type"] === "FAQPage");
+    const howTo = graph.find((node) => node["@type"] === "HowTo");
+    assert.equal(faq.mainEntity.length, 5, `${file} FAQ count changed; keep the page and the markup in step`);
+    for (const question of faq.mainEntity) {
+      assert.ok(html.includes(question.name), `${file} FAQ "${question.name}" is not visible on the page`);
+    }
+    assert.ok(howTo.step.length >= 3, `${file} how-to needs at least three steps`);
+    assert.ok(!html.includes("aggregateRating") && !html.includes("reviewCount"), `${file} must not invent ratings`);
+  }
+});
+
+test("the homepage advertises the other free tools with real descriptions", () => {
+  const html = read("index.html");
+  for (const tool of ["pet-keychain-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
+    assert.ok(html.includes(`href="./${tool}"`), `index.html does not link ${tool}`);
+  }
+  assert.match(html, /<section class="tools-band" id="more-tools">/, "the related-tools band disappeared");
+  assert.match(html, /<section class="faq-band" id="faq">/, "the FAQ band disappeared");
+});
+
+test("index.html and create.html never drift apart", () => {
+  assert.equal(read("index.html"), read("create.html"), "the two entry files are byte-identical by design: edit index.html then copy it over create.html");
+});

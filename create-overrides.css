@@ -163,3 +163,20 @@
 @media(max-width:520px){.field-grid{grid-template-columns:1fr}.field-grid .wide{grid-column:auto}.bundle-prices{grid-template-columns:1fr}.bundle-prices div{min-height:0}.top-actions .pill{display:none}.after-order ol{grid-template-columns:1fr}}
 
 .hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* --- FAQ and related-tool bands --- */
+.faq-band { padding: 90px max(20px, calc((100% - 1180px) / 2)); background: var(--cream); }
+.faq-band h2,
+.tools-band h2 { margin: 12px 0 26px; font-family: Georgia, serif; font-size: clamp(36px, 4.6vw, 58px); line-height: 1.02; letter-spacing: -.05em; }
+.faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.faq-band details.faq { padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+details.faq summary { cursor: pointer; font-size: 15px; font-weight: 750; }
+details.faq summary::marker { color: var(--coral); }
+details.faq p { margin: 10px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+.tools-band { width: min(1180px, calc(100% - 40px)); margin: auto; padding: 90px 0; }
+.tool-links { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tool-links a { display: block; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; text-decoration: none; transition: border-color .15s, transform .15s; }
+.tool-links a:hover { border-color: var(--coral); transform: translateY(-2px); }
+.tool-links b { display: block; font: 700 17px Georgia, serif; }
+.tool-links span { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+@media (max-width: 850px) { .faq-grid, .tool-links { grid-template-columns: 1fr; } .faq-band, .tools-band { padding-top: 56px; padding-bottom: 56px; } }
