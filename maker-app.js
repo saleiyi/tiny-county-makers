@@ -13,6 +13,9 @@ import {
   scalePath,
   boundsOfContours,
   contoursToPathD,
+  ornamentShapePoints,
+  ornamentHole,
+  widthAtY,
   PRINT_DPI,
 } from "./assets/maker-core.mjs";
 
@@ -40,6 +43,7 @@ const smoothingLabel = document.querySelector("#smoothingLabel");
 const dimensions = document.querySelector("#dimensions");
 const pngButton = document.querySelector("#pngDownload");
 const svgButton = document.querySelector("#svgDownload");
+const engravingInput = document.querySelector("#engraving");
 
 let image = null;
 let imageDataUrl = "";
@@ -72,6 +76,7 @@ function boot() {
   }
   offsetInput?.addEventListener("input", schedule);
   smoothingInput?.addEventListener("input", schedule);
+  engravingInput?.addEventListener("input", schedule);
   document.querySelector("#sampleArtwork")?.addEventListener("click", loadSample);
   pngButton.addEventListener("click", () => { if (image) exportPng(); });
   svgButton?.addEventListener("click", () => { if (image) exportSvg(); });
@@ -248,7 +253,11 @@ function layout() {
   let w = image.naturalWidth * ratio;
   let h = image.naturalHeight * ratio;
   const longSideCm = Number(sizeSelect.value);
-  const shape = profile.id === "photo-keychain" ? (shapeSelect?.value || "rounded") : "";
+  const shape = profile.id === "photo-keychain"
+    ? (shapeSelect?.value || "rounded")
+    : profile.id === "ornament"
+      ? (shapeSelect?.value || "round")
+      : "";
   let topBand = 0;
   let pad = 0;
 
@@ -272,6 +281,15 @@ function layout() {
     const nx = (CANVAS - w) / 2;
     const ny = (CANVAS - h) / 2;
     return { x: nx, y: ny, w, h, longSideCm, dpi: workDpi(WORK_LONG_SIDE, longSideCm) };
+  }
+
+  if (profile.id === "ornament") {
+    // The silhouette decides the box; the photo is cover-fitted into whatever shape it is.
+    const w = WORK_LONG_SIDE;
+    const h = shape === "oval" ? Math.round(WORK_LONG_SIDE * 0.78) : WORK_LONG_SIDE;
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm, dpi: workDpi(Math.max(w, h), longSideCm), shape };
   }
 
   const baseRoom = profile.hasBase ? 76 : 0;
@@ -317,6 +335,21 @@ function render() {
   } else if (profile.id === "name-keychain") {
     scene = { kind: "name-keychain", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, hole: nameHole(L), image, dpi: L.dpi, longSideCm: L.longSideCm };
     drawNameKeychain(ctx, scene, true);
+  } else if (profile.id === "ornament") {
+    const outline = ornamentShapePoints(L.shape, L.w, L.h).map(([px, py]) => [px + L.x, py + L.y]);
+    const local = ornamentHole(L.shape, L.w, L.h);
+    scene = {
+      kind: "ornament",
+      shape: L.shape,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      outline,
+      hole: { cx: local.cx + L.x, cy: local.cy + L.y, r: local.r },
+      text: ornamentText(),
+      image,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawOrnament(ctx, scene, true);
   } else if (profile.id === "magnet") {
     scene = { kind: "magnet", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image, dpi: L.dpi, longSideCm: L.longSideCm };
     drawMagnet(ctx, scene);
@@ -347,9 +380,11 @@ function readout(L) {
   const piece = pieceBox();
   const cmPerWorkPx = (exportScale() * 2.54) / PRINT_DPI;
   const exportLong = physicalPixels(L.longSideCm, PRINT_DPI);
-  const suffix = profile.exportSvg
+  const suffix = profile.id === "sticker"
     ? "the download is the cut shape, offset included"
-    : profile.id === "photo-keychain"
+    : profile.id === "ornament"
+      ? "transparent PNG at 300 DPI plus an SVG cut path; the hanging loop is a preview only"
+      : profile.id === "photo-keychain"
       ? "transparent PNG at 300 DPI; the keyring is a preview only"
       : profile.id === "name-keychain"
         ? "transparent PNG at 300 DPI; the hanging hole and ring are preview only"
@@ -499,6 +534,120 @@ function drawNameKeychain(c, s, guides) {
   }
 }
 
+// ------------------------------------------------------------------ ornament
+
+function ornamentText() {
+  return (engravingInput?.value || "").trim().slice(0, 24);
+}
+
+/** Largest font size (down to 8px) at which `text` still fits `maxWidth`. */
+function fitFont(c, text, maxWidth, startSize, family, weight) {
+  let size = Math.max(8, startSize);
+  for (; size > 8; size -= 1) {
+    c.font = `${weight} ${size}px ${family}`;
+    if (c.measureText(text).width <= maxWidth) break;
+  }
+  return size;
+}
+
+/**
+ * Etched-looking caption. White face plus a soft dark halo so the name stays readable
+ * over a dark or a light photo, and survives being printed.
+ */
+function drawOrnamentEngraving(c, text, x, y, w, h, outline) {
+  if (!text) return;
+  const family = "Inter, 'Segoe UI', system-ui, sans-serif";
+  const size = fitFont(c, text, w * 0.72, Math.min(w, h) * 0.11, family, 800);
+  c.save();
+  c.font = `800 ${size}px ${family}`;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  const textWidth = c.measureText(text).width;
+  const margin = Math.max(6, size * 0.45);
+  // Start near the base and climb until the silhouette is wide enough to hold the caption,
+  // so a heart or star never slices the engraved name in half.
+  let baseline = y + h * 0.855;
+  if (outline && outline.length) {
+    for (let f = 0.855; f >= 0.6; f -= 0.015) {
+      const ty = y + h * f;
+      const span = widthAtY(outline, ty);
+      if (span && span.width >= textWidth + margin * 2) { baseline = ty; break; }
+    }
+  }
+  c.lineJoin = "round";
+  c.lineWidth = Math.max(3, size * 0.16);
+  c.strokeStyle = "rgba(29,36,32,.45)";
+  c.strokeText(text, x + w / 2, baseline);
+  c.fillStyle = "#ffffff";
+  c.fillText(text, x + w / 2, baseline);
+  c.restore();
+}
+
+function drawOrnament(c, s, guides) {
+  const r = s.rect;
+  const hole = s.hole;
+
+  if (guides) {
+    c.save();
+    c.globalAlpha = 0.18;
+    c.filter = "blur(8px)";
+    c.fillStyle = "#1d2420";
+    c.beginPath();
+    addPolygon(c, s.outline.map(([x, y]) => [x + 4, y + 10]));
+    c.fill();
+    c.restore();
+  }
+
+  // Clear acrylic disc with the photo floated behind it.
+  c.save();
+  c.beginPath();
+  addPolygon(c, s.outline);
+  c.clip();
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  drawCover(c, s.image, r.x, r.y, r.w, r.h);
+  drawOrnamentEngraving(c, s.text, r.x, r.y, r.w, r.h, s.outline);
+  c.restore();
+
+  // The hole is punched out, so the exported file can be printed, cut and drilled as-is.
+  c.save();
+  c.globalCompositeOperation = "destination-out";
+  c.beginPath();
+  c.arc(hole.cx, hole.cy, hole.r, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+
+  if (guides) {
+    c.save();
+    c.beginPath();
+    addPolygon(c, s.outline);
+    c.strokeStyle = "rgba(255,255,255,.8)";
+    c.lineWidth = 6;
+    c.stroke();
+    c.strokeStyle = "rgba(29,36,32,.18)";
+    c.lineWidth = 1.6;
+    c.stroke();
+    c.restore();
+    drawHanger(c, hole);
+  }
+}
+
+/** Preview-only ribbon loop, so the mockup reads as a hanging ornament. */
+function drawHanger(c, hole) {
+  const r = hole.r;
+  c.save();
+  c.lineCap = "round";
+  c.lineWidth = Math.max(3, r * 0.3);
+  c.strokeStyle = "#c0472f";
+  c.beginPath();
+  c.arc(hole.cx, hole.cy - r * 1.9, r * 1.7, Math.PI * 1.12, Math.PI * 1.88);
+  c.stroke();
+  c.strokeStyle = "rgba(255,255,255,.45)";
+  c.lineWidth = Math.max(1, r * 0.09);
+  c.stroke();
+  c.restore();
+}
+
 function pathForKeychain(c, x, y, w, h, shape, radius) {
   if (shape === "circle") {
     c.beginPath();
@@ -580,6 +729,11 @@ function sceneBox() {
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
   }
+  if (scene.kind === "ornament") {
+    // The silhouette fills its box exactly, so the export canvas is the finished piece.
+    const r = scene.rect;
+    return { x: r.x, y: r.y, width: r.w, height: r.h };
+  }
   const r = scene.rect;
   if (scene.kind === "magnet") {
     const pad = Math.max(10, Math.min(r.w, r.h) * 0.055) + 2;
@@ -604,6 +758,7 @@ function renderScene(scale) {
   else if (scene.kind === "photo-keychain") drawPhotoKeychain(c, scene, false);
   else if (scene.kind === "name-keychain") drawNameKeychain(c, scene, false);
   else if (scene.kind === "magnet") drawMagnet(c, scene);
+  else if (scene.kind === "ornament") drawOrnament(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -622,6 +777,10 @@ function pieceBox() {
     return { width: o.w, height: o.h, x: o.x, y: o.y };
   }
   if (scene.kind === "name-keychain") {
+    const r = scene.rect;
+    return { width: r.w, height: r.h, x: r.x, y: r.y };
+  }
+  if (scene.kind === "ornament") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -648,6 +807,7 @@ function exportPng() {
 }
 
 function exportSvg() {
+  if (scene.kind === "ornament") return exportOrnamentSvg();
   if (scene.kind !== "sticker") return;
   const scale = exportScale();
   const box = sceneBox();
@@ -674,10 +834,47 @@ function exportSvg() {
   track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
 }
 
+/** Cut path plus a printable artwork layer, the same split the sticker tool ships. */
+function exportOrnamentSvg() {
+  const scale = exportScale();
+  const box = sceneBox();
+  const r = scene.rect;
+  if (!box) return note("Add a photo before exporting.");
+  const tx = ([x, y]) => [(x - box.x) * scale, (y - box.y) * scale];
+  const width = Math.round(box.width * scale);
+  const height = Math.round(box.height * scale);
+  const shape = contoursToPathD([scene.outline.map(tx)], 2);
+  const art = document.createElement("canvas");
+  art.width = Math.max(1, Math.round(r.w * scale));
+  art.height = Math.max(1, Math.round(r.h * scale));
+  const ax = art.getContext("2d");
+  ax.fillStyle = "#ffffff";
+  ax.fillRect(0, 0, art.width, art.height);
+  drawCover(ax, scene.image, 0, 0, art.width, art.height);
+  const localOutline = scene.outline.map(([px, py]) => [(px - box.x) * scale, (py - box.y) * scale]);
+  drawOrnamentEngraving(ax, scene.text, 0, 0, art.width, art.height, localOutline);
+  const lines = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">`,
+    `<title>${profile.product} cutline - ${scene.longSideCm} cm long side, ${PRINT_DPI} DPI</title>`,
+    `<defs><clipPath id="OrnamentShape"><path d="${shape}"/></clipPath></defs>`,
+    `<g id="Artwork" clip-path="url(#OrnamentShape)">`,
+    `<image x="0" y="0" width="${width}" height="${height}" href="${art.toDataURL("image/png")}"/>`,
+    `</g>`,
+    `<g id="Cutline" fill="none" stroke="#ff00ff" stroke-width="1">`,
+    `<path d="${shape}"/>`,
+    `<circle cx="${round2((scene.hole.cx - box.x) * scale)}" cy="${round2((scene.hole.cy - box.y) * scale)}" r="${round2(scene.hole.r * scale)}"/>`,
+    `</g>`,
+    `</svg>`,
+  ];
+  downloadBlob(lines.join("\n"), `${profile.id}-${scene.longSideCm}cm-${PRINT_DPI}dpi.svg`, "image/svg+xml;charset=utf-8");
+  track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
+}
+
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
   if (profile.id === "photo-keychain") return photoSampleArtwork();
+  if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
   const c = document.createElement("canvas");
   c.width = 600;
@@ -707,6 +904,72 @@ function sampleArtwork() {
   x.textBaseline = "middle";
   x.font = "800 92px Inter, Segoe UI, sans-serif";
   x.fillText("TC", 0, 6);
+  return c;
+}
+
+/** A warm Christmas-night scene, so the tool is worth trying before any upload. */
+function ornamentSampleArtwork() {
+  const c = document.createElement("canvas");
+  c.width = 900;
+  c.height = 900;
+  const x = c.getContext("2d");
+  const sky = x.createLinearGradient(0, 0, 0, 900);
+  sky.addColorStop(0, "#152a3d");
+  sky.addColorStop(0.55, "#2f5f6f");
+  sky.addColorStop(1, "#e6a866");
+  x.fillStyle = sky;
+  x.fillRect(0, 0, 900, 900);
+
+  x.fillStyle = "rgba(255,255,255,.9)";
+  x.beginPath();
+  x.arc(690, 190, 66, 0, Math.PI * 2);
+  x.fill();
+
+  for (let i = 0; i < 90; i++) {
+    const sx = (i * 137.508) % 900;
+    const sy = ((i * 271.3) % 640);
+    const sr = 1.5 + ((i * 7) % 5);
+    x.fillStyle = `rgba(255,255,255,${0.35 + ((i % 5) / 10)})`;
+    x.beginPath();
+    x.arc(sx, sy, sr, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  x.fillStyle = "#2f5d43";
+  x.beginPath();
+  x.moveTo(450, 300);
+  x.lineTo(360, 520);
+  x.lineTo(540, 520);
+  x.closePath();
+  x.fill();
+  x.beginPath();
+  x.moveTo(450, 430);
+  x.lineTo(330, 640);
+  x.lineTo(570, 640);
+  x.closePath();
+  x.fill();
+  x.beginPath();
+  x.moveTo(450, 570);
+  x.lineTo(300, 760);
+  x.lineTo(600, 760);
+  x.closePath();
+  x.fill();
+  x.fillStyle = "#6b4a2c";
+  x.fillRect(432, 750, 36, 60);
+
+  x.fillStyle = "rgba(255,255,255,.95)";
+  x.beginPath();
+  x.moveTo(0, 780);
+  x.quadraticCurveTo(450, 700, 900, 780);
+  x.lineTo(900, 900);
+  x.lineTo(0, 900);
+  x.closePath();
+  x.fill();
+
+  x.fillStyle = "rgba(29,36,32,.42)";
+  x.font = "800 34px Inter, Segoe UI, sans-serif";
+  x.textAlign = "center";
+  x.fillText("SAMPLE PHOTO", 450, 862);
   return c;
 }
 

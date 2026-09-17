@@ -19,16 +19,23 @@ import {
   contourDepths,
   contoursToPathD,
   boundsOfContours,
+  ORNAMENT_SHAPES,
+  ornamentShapePoints,
+  ornamentHole,
+  widthAtY,
+  circleInsidePolygon,
   PRINT_DPI,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the six distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain"]);
+test("the shared engine exposes the seven distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
   assert.equal(getProductProfile("name-keychain").hasHardware, true);
+  assert.equal(getProductProfile("ornament").hasHardware, true);
+  assert.equal(getProductProfile("ornament").exportSvg, true);
 });
 
 test("physical dimensions preserve aspect ratio on the selected long side", () => {
@@ -55,7 +62,7 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
 });
@@ -166,4 +173,63 @@ test("an island inside a hole is material again and grows outwards", () => {
   const offset = offsetContours(contours, 2);
   const island = contours.findIndex((points) => polygonArea(points) < 100);
   assert.ok(polygonArea(offset[island]) > polygonArea(contours[island]), "the island is depth 2, so it grows");
+});
+
+// ---------------------------------------------------------------- ornament silhouette geometry
+
+function polygonBounds(points) {
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  const width = Math.max(...xs) - Math.min(...xs);
+  const height = Math.max(...ys) - Math.min(...ys);
+  return { width, height, minX: Math.min(...xs), minY: Math.min(...ys) };
+}
+
+test("every ornament silhouette fills its box exactly so the long side means the same thing", () => {
+  assert.deepEqual([...ORNAMENT_SHAPES], ["round", "oval", "hexagon", "star", "heart", "arch"]);
+  for (const shape of ORNAMENT_SHAPES) {
+    const box = polygonBounds(ornamentShapePoints(shape, 620, 620));
+    assert.ok(Math.abs(box.width - 620) < 0.5, shape + " width should fill the box, got " + box.width);
+    assert.ok(Math.abs(box.height - 620) < 0.5, shape + " height should fill the box, got " + box.height);
+    assert.ok(Math.abs(box.minX) < 0.5 && Math.abs(box.minY) < 0.5, shape + " should anchor at the top-left of its box");
+  }
+  const oval = polygonBounds(ornamentShapePoints("oval", 620, 430));
+  assert.ok(Math.abs(oval.width - 620) < 0.5 && Math.abs(oval.height - 430) < 0.5, "an oval box keeps its own aspect ratio");
+});
+
+test("an unknown ornament shape falls back to a safe round silhouette", () => {
+  const box = polygonBounds(ornamentShapePoints("triangle", 300, 300));
+  assert.ok(Math.abs(box.width - 300) < 0.5 && Math.abs(box.height - 300) < 0.5);
+});
+
+test("the hanging hole always sits on solid material for every silhouette", () => {
+  for (const shape of ORNAMENT_SHAPES) {
+    const points = ornamentShapePoints(shape, 620, 620);
+    const hole = ornamentHole(shape, 620, 620);
+    assert.ok(hole.r >= 3, shape + " hole should keep a usable radius");
+    assert.equal(circleInsidePolygon(hole.cx, hole.cy, hole.r, points), true, shape + " hole must not cut through the outline");
+  }
+});
+
+test("the pointed silhouettes drop their hanging hole below the narrow tips", () => {
+  // A star point and the heart centre notch cannot hold a round hole at the very top,
+  // so the geometry slides the hole down instead of clipping the outline.
+  const starHole = ornamentHole("star", 620, 620);
+  const roundHole = ornamentHole("round", 620, 620);
+  assert.ok(starHole.cy > roundHole.cy + 6, "the star hole sits lower than a disc hole");
+  const heartHole = ornamentHole("heart", 620, 620);
+  assert.ok(heartHole.cy > roundHole.cy + 6, "the heart hole sits lower than a disc hole");
+});
+
+test("the silhouette width report gives engraving text a safe band to sit in", () => {
+  // Engraving text is placed by walking up the silhouette until the row is wide
+  // enough, so widthAtY has to report the real chord width at a given height.
+  const heart = ornamentShapePoints("heart", 620, 620);
+  const wide = widthAtY(heart, 620 * 0.5);
+  const narrow = widthAtY(heart, 620 * 0.855);
+  assert.ok(wide && narrow, "both probe heights should cross the heart");
+  assert.ok(wide.width > narrow.width, "the heart is wider above its tip");
+  const round = widthAtY(ornamentShapePoints("round", 620, 620), 620 * 0.5);
+  assert.ok(Math.abs(round.width - 620) < 1, "a disc is at its full width through the middle");
+  assert.equal(widthAtY(heart, -40), null, "heights outside the shape report nothing");
 });

@@ -8,6 +8,7 @@ const PROFILES = Object.freeze([
   { id: "magnet", name: "Fridge Magnet Maker", product: "Fridge magnet", hasHardware: false, hasBase: false, exportSvg: false, sizes: [5, 7, 9] },
   { id: "photo-keychain", name: "Photo Keychain Maker", product: "Acrylic photo keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "name-keychain", name: "Name Keychain Maker", product: "Acrylic name keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [5, 7, 9] },
+  { id: "ornament", name: "Photo Ornament Maker", product: "Photo ornament", hasHardware: true, hasBase: false, exportSvg: true, sizes: [6, 8, 10] },
 ]);
 
 export const PRINT_DPI = 300;
@@ -355,6 +356,150 @@ export function boundsOfContours(contours) {
   }
   if (!Number.isFinite(minX)) return null;
   return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+}
+
+// ---------------------------------------------------------------- ornament geometry
+
+/** Every hanging shape the ornament tool can draw, in the order the UI offers them. */
+export const ORNAMENT_SHAPES = Object.freeze(["round", "oval", "hexagon", "star", "heart", "arch"]);
+
+export function isOrnamentShape(shape) {
+  return ORNAMENT_SHAPES.includes(shape);
+}
+
+/**
+ * Closed polygon for a hanging ornament, in a local box of width x height.
+ * The shape is scaled so its own bounding box fills the box exactly, which keeps
+ * "longest side" meaning the same thing for every silhouette.
+ */
+export function ornamentShapePoints(shape, width, height, samples = 160) {
+  const w = Number(width), h = Number(height);
+  if (!(w > 0 && h > 0)) throw new Error("Ornament width and height must be positive.");
+  const count = Math.max(24, Math.floor(Number(samples) || 160));
+  const id = isOrnamentShape(shape) ? shape : "round";
+  const raw = rawOrnamentPolygon(id, count);
+  return fitPolygonToBox(raw, w, h);
+}
+
+function rawOrnamentPolygon(shape, samples) {
+  const pts = [];
+  if (shape === "heart") {
+    for (let i = 0; i < samples; i++) {
+      const t = (i / samples) * Math.PI * 2;
+      const s = Math.sin(t);
+      const x = 16 * s * s * s;
+      const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+      pts.push([x, -y]);
+    }
+    return pts;
+  }
+  if (shape === "star") {
+    for (let i = 0; i < 10; i++) {
+      const radius = i % 2 === 0 ? 1 : 0.44;
+      const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+      pts.push([radius * Math.cos(angle), radius * Math.sin(angle)]);
+    }
+    return pts;
+  }
+  if (shape === "hexagon") {
+    for (let i = 0; i < 6; i++) {
+      const angle = -Math.PI / 2 + (i * Math.PI) / 3;
+      pts.push([Math.cos(angle), Math.sin(angle)]);
+    }
+    return pts;
+  }
+  if (shape === "arch") {
+    // Semicircular top, straight sides, flat bottom: the classic acrylic plaque.
+    const half = Math.floor(samples / 2);
+    for (let i = 0; i <= half; i++) {
+      const angle = Math.PI + (i / half) * Math.PI;
+      pts.push([0.5 + 0.5 * Math.cos(angle), 0.5 + 0.5 * Math.sin(angle)]);
+    }
+    pts.push([1, 1], [0, 1]);
+    return pts;
+  }
+  // round and oval share one ellipse; the box decides which one you actually get.
+  for (let i = 0; i < samples; i++) {
+    const angle = -Math.PI / 2 + (i / samples) * Math.PI * 2;
+    pts.push([Math.cos(angle), Math.sin(angle)]);
+  }
+  return pts;
+}
+
+/** Translate and scale a polygon so its own bounding box becomes exactly 0,0 -> w,h. */
+export function fitPolygonToBox(points, width, height) {
+  const w = Number(width), h = Number(height);
+  const box = boundsOfContours([points]);
+  if (!box || box.width <= 0 || box.height <= 0) throw new Error("Cannot fit a degenerate polygon to a box.");
+  const sx = w / box.width, sy = h / box.height;
+  return points.map(([x, y]) => [(x - box.minX) * sx, (y - box.minY) * sy]);
+}
+
+/** Smallest y where the outline crosses the vertical line at `x`. */
+export function topEdgeAtX(points, x) {
+  let best = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const [x1, y1] = points[i], [x2, y2] = points[(i + 1) % points.length];
+    if (x1 === x2) {
+      if (Math.abs(x1 - x) < 1e-9) best = Math.min(best, y1, y2);
+      continue;
+    }
+    const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
+    if (x < lo - 1e-9 || x > hi + 1e-9) continue;
+    best = Math.min(best, y1 + ((x - x1) / (x2 - x1)) * (y2 - y1));
+  }
+  return Number.isFinite(best) ? best : 0;
+}
+
+/**
+ * Horizontal extent of the outline along the scan line \`y\`. Returns null when the line
+ * misses the shape, so callers can probe for a band wide enough to hold a caption.
+ */
+export function widthAtY(points, y) {
+  let minX = Infinity, maxX = -Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const [x1, y1] = points[i], [x2, y2] = points[(i + 1) % points.length];
+    if (y1 === y2) {
+      if (Math.abs(y1 - y) < 1e-9) { minX = Math.min(minX, x1, x2); maxX = Math.max(maxX, x1, x2); }
+      continue;
+    }
+    const lo = Math.min(y1, y2), hi = Math.max(y1, y2);
+    if (y < lo - 1e-9 || y > hi + 1e-9) continue;
+    const x = x1 + ((y - y1) / (y2 - y1)) * (x2 - x1);
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+  }
+  if (!Number.isFinite(minX)) return null;
+  return { minX, maxX, width: maxX - minX };
+}
+
+export function circleInsidePolygon(cx, cy, r, points, samples = 32) {
+  if (!pointInPolygon([cx, cy], points)) return false;
+  for (let i = 0; i < samples; i++) {
+    const angle = (i / samples) * Math.PI * 2;
+    if (!pointInPolygon([cx + r * Math.cos(angle), cy + r * Math.sin(angle)], points)) return false;
+  }
+  return true;
+}
+
+/**
+ * Drill hole for the hanging cord. The hole starts just under the top of the outline and
+ * slides down, shrinking if it must, until the whole circle sits on solid material.
+ * That keeps every silhouette - including the heart's centre notch and the star's narrow
+ * point - safe to cut on real acrylic.
+ */
+export function ornamentHole(shape, width, height) {
+  const w = Number(width), h = Number(height);
+  const points = ornamentShapePoints(shape, w, h);
+  const cx = w / 2;
+  const top = topEdgeAtX(points, cx);
+  const nominal = Math.max(6, Math.min(w, h) * 0.03);
+  for (let r = nominal; r >= 4; r -= nominal / 24) {
+    for (let step = 0; step <= 48; step++) {
+      const cy = top + r * 1.7 + (step / 48) * r * 3.2;
+      if (circleInsidePolygon(cx, cy, r, points)) return { cx, cy, r: Math.round(r * 100) / 100 };
+    }
+  }
+  return { cx, cy: top + nominal * 1.7, r: Math.round(Math.max(3, nominal * 0.4) * 100) / 100 };
 }
 
 // ---------------------------------------------------------------- SVG output
