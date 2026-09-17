@@ -226,3 +226,43 @@ test("the keychain guide keeps an article, a breadcrumb and a matching FAQ", () 
   assert.ok(crumb.itemListElement[0].item, "the first breadcrumb must point at the free maker");
   assert.ok(!html.includes("aggregateRating"), "the guide must not invent ratings");
 });
+
+const PUBLISHED_PAGES = fs
+  .readdirSync(new URL(".", ROOT))
+  .filter((name) => name.endsWith(".html") && name !== "googled29f145cd217092d.html");
+
+// The homepage shipped a second, half-closed copy of its FAQ and tools band for a while:
+// the links all resolved, so link tests stayed green while the markup was broken.
+test("every published page keeps balanced block markup", () => {
+  for (const file of PUBLISHED_PAGES) {
+    const html = read(file);
+    for (const tag of ["div", "section", "main", "footer", "details", "form"]) {
+      const open = (html.match(new RegExp("<" + tag + "\\b", "gi")) || []).length;
+      const close = (html.match(new RegExp("</" + tag + ">", "gi")) || []).length;
+      assert.equal(open, close, file + " has " + open + " <" + tag + "> and " + close + " </" + tag + ">");
+    }
+  }
+});
+
+test("no published page repeats an id", () => {
+  for (const file of PUBLISHED_PAGES) {
+    const seen = new Set();
+    for (const match of read(file).matchAll(/\sid="([^"]+)"/g)) {
+      assert.ok(!seen.has(match[1]), file + " repeats id=\"" + match[1] + "\"");
+      seen.add(match[1]);
+    }
+  }
+});
+
+test("every published page keeps a title and description that fit in a search result", () => {
+  for (const file of PUBLISHED_PAGES) {
+    const html = read(file);
+    const title = html.match(/<title>([\s\S]*?)<\/title>/);
+    assert.ok(title, file + " has no <title>");
+    assert.ok(title[1].length <= 60, file + " title is " + title[1].length + " characters");
+    const desc = html.match(/<meta name="description" content="([\s\S]*?)">/);
+    assert.ok(desc, file + " has no meta description");
+    assert.ok(desc[1].length >= 80, file + " description is only " + desc[1].length + " characters");
+    assert.ok(desc[1].length <= 158, file + " description is " + desc[1].length + " characters");
+  }
+});
