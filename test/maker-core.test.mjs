@@ -37,6 +37,11 @@ import {
   COASTER_SHAPES,
   coasterShapePoints,
   isCoasterShape,
+  DESK_NAME_PLATE_SIZES,
+  NAME_PLATE_FINISHES,
+  deskNamePlateSize,
+  deskNamePlatePoints,
+  isNamePlateFinish,
   CAKE_TOPPER_SIZES,
   CAKE_TOPPER_STYLES,
   cakeTopperBarRect,
@@ -50,8 +55,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twelve distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster"]);
+test("the shared engine exposes the thirteen distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark", "coaster", "name-plate"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -73,6 +78,10 @@ test("the shared engine exposes the twelve distinct maker profiles", () => {
   assert.equal(getProductProfile("coaster").hasHardware, false);
   assert.equal(getProductProfile("coaster").hasBase, false);
   assert.equal(getProductProfile("coaster").sizes.length, 3);
+  assert.equal(getProductProfile("name-plate").exportSvg, true);
+  assert.equal(getProductProfile("name-plate").hasHardware, false);
+  assert.equal(getProductProfile("name-plate").hasBase, false);
+  assert.equal(getProductProfile("name-plate").sizes.length, 3);
 });
 
 test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
@@ -495,4 +504,34 @@ test("coaster sizes print at 300 DPI on the square blank", () => {
   assert.equal(physicalPixels(9, PRINT_DPI), 1063);
   assert.equal(physicalPixels(10, PRINT_DPI), 1181);
   assert.equal(physicalPixels(11, PRINT_DPI), 1299);
+});
+
+test("desk name plate sizes map inches onto the centimetre print maths", () => {
+  assert.equal(DESK_NAME_PLATE_SIZES.length, 3);
+  assert.equal(deskNamePlateSize("20.32").id, "2x8");
+  assert.equal(deskNamePlateSize(20.32).label, "2 x 8 in (20 x 5 cm)");
+  assert.equal(deskNamePlateSize(25.4).id, "2x10");
+  assert.equal(deskNamePlateSize(30.48).id, "2x12");
+  assert.equal(deskNamePlateSize("999").id, "2x8", "an unknown width should fall back to the first size");
+  assert.equal(physicalPixels(deskNamePlateSize("20.32").widthCm, PRINT_DPI), 2400);
+  assert.equal(physicalPixels(deskNamePlateSize("30.48").widthCm, PRINT_DPI), 3600);
+});
+
+test("every desk name plate blank fills its box", () => {
+  const width = 1200, height = 300;
+  const points = deskNamePlatePoints(width, height);
+  const bounds = boundsOfContours([points]);
+  assert.ok(Math.abs(bounds.minX) <= 0.6, "left edge " + bounds.minX);
+  assert.ok(Math.abs(bounds.maxX - width) <= 0.6, "right edge " + bounds.maxX);
+  assert.ok(Math.abs(bounds.minY) <= 0.6, "top edge " + bounds.minY);
+  assert.ok(Math.abs(bounds.maxY - height) <= 0.6, "bottom edge " + bounds.maxY);
+  assert.equal(deskNamePlatePoints(width, height, 64).length, 64, "the blank keeps the requested sample count");
+});
+
+test("an unknown desk name plate finish is rejected and the offered three pass", () => {
+  assert.deepEqual([...NAME_PLATE_FINISHES], ["black", "clear", "frosted"]);
+  assert.equal(isNamePlateFinish("black"), true);
+  assert.equal(isNamePlateFinish("frosted"), true);
+  assert.equal(isNamePlateFinish("glossy"), false);
+  assert.equal(isNamePlateFinish(undefined), false);
 });

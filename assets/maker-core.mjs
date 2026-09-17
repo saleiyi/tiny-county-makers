@@ -29,6 +29,20 @@ export const COASTER_SIZES = Object.freeze([9, 10, 11]);
 /** Every silhouette the acrylic coaster tool can draw, in the order the UI offers them. */
 export const COASTER_SHAPES = Object.freeze(["square", "round"]);
 
+/**
+ * Desk name plates are sold in inches. A 2 inch tall plate is the office default and the 8,
+ * 10 and 12 inch widths are the three sizes every supplier stocks, so the engine keeps the
+ * inch label next to the centimetre value the print maths needs.
+ */
+export const DESK_NAME_PLATE_SIZES = Object.freeze([
+  { id: "2x8", widthCm: 20.32, heightCm: 5.08, label: "2 x 8 in (20 x 5 cm)" },
+  { id: "2x10", widthCm: 25.4, heightCm: 5.08, label: "2 x 10 in (25 x 5 cm)" },
+  { id: "2x12", widthCm: 30.48, heightCm: 5.08, label: "2 x 12 in (30 x 5 cm)" },
+]);
+
+/** Every acrylic finish the desk name plate tool offers, in the order the UI lists them. */
+export const NAME_PLATE_FINISHES = Object.freeze(["black", "clear", "frosted"]);
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -42,6 +56,7 @@ const PROFILES = Object.freeze([
   { id: "cake-topper", name: "Cake Topper Maker", product: "Acrylic cake topper", hasHardware: false, hasBase: false, exportSvg: true, sizes: CAKE_TOPPER_SIZES },
   { id: "bookmark", name: "Bookmark Maker", product: "Acrylic bookmark", hasHardware: false, hasBase: false, exportSvg: true, sizes: BOOKMARK_SIZES },
   { id: "coaster", name: "Acrylic Coaster Maker", product: "Acrylic coaster", hasHardware: false, hasBase: false, exportSvg: true, sizes: COASTER_SIZES },
+  { id: "name-plate", name: "Desk Name Plate Maker", product: "Acrylic desk name plate", hasHardware: false, hasBase: false, exportSvg: true, sizes: DESK_NAME_PLATE_SIZES.map((size) => size.widthCm), sizeLabels: DESK_NAME_PLATE_SIZES.map((size) => size.label) },
 ]);
 
 export const PRINT_DPI = 300;
@@ -62,6 +77,12 @@ export function getProductProfile(id) {
 export function photoBlockSize(value) {
   const cm = Number(value);
   return PHOTO_BLOCK_SIZES.find((size) => Math.abs(size.heightCm - cm) < 0.02) || PHOTO_BLOCK_SIZES[0];
+}
+
+/** The desk name plate sizes, looked up by the long side the size picker stores. */
+export function deskNamePlateSize(value) {
+  const cm = Number(value);
+  return DESK_NAME_PLATE_SIZES.find((size) => Math.abs(size.widthCm - cm) < 0.02) || DESK_NAME_PLATE_SIZES[0];
 }
 
 /** Size dropdown label: photo blocks read in inches, every other product reads in cm. */
@@ -881,6 +902,38 @@ function rawCoasterPolygon(shape, samples) {
     [1 - r, r, -Math.PI / 2, 0],
     [1 - r, 1 - r, 0, Math.PI / 2],
     [r, 1 - r, Math.PI / 2, Math.PI],
+    [r, r, Math.PI, Math.PI * 1.5],
+  ];
+  for (const [cx, cy, a0, a1] of corners) {
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+  }
+  return pts;
+}
+
+// ---------------------------------------------------------------- desk name plate geometry
+
+export function isNamePlateFinish(finish) {
+  return NAME_PLATE_FINISHES.includes(finish);
+}
+
+/**
+ * Closed polygon for a desk name plate. The product is a long, low acrylic slab, so the
+ * footprint is fixed at the selected inch size and the corner radius is measured from the
+ * short side, which keeps the corners soft on a 2 x 12 plate as well as a 2 x 8 one.
+ */
+export function deskNamePlatePoints(width, height, samples = 96) {
+  const w = Number(width), h = Number(height);
+  if (!(w > 0 && h > 0)) throw new Error("Desk name plate width and height must be positive.");
+  const steps = Math.max(3, Math.floor(Math.max(24, Number(samples) || 96) / 4) - 1);
+  const r = Math.min(w, h) * 0.14;
+  const pts = [];
+  const corners = [
+    [w - r, r, -Math.PI / 2, 0],
+    [w - r, h - r, 0, Math.PI / 2],
+    [r, h - r, Math.PI / 2, Math.PI],
     [r, r, Math.PI, Math.PI * 1.5],
   ];
   for (const [cx, cy, a0, a1] of corners) {

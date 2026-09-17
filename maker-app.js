@@ -21,6 +21,9 @@ import {
   bookmarkShapePoints,
   bookmarkHole,
   coasterShapePoints,
+  deskNamePlatePoints,
+  deskNamePlateSize,
+  isNamePlateFinish,
   widthAtY,
   cakeTopperBarRect,
   cakeTopperPlaque,
@@ -63,11 +66,16 @@ const contactInput = document.querySelector("#contact");
 const topperText = document.querySelector("#topperText");
 const topperFont = document.querySelector("#topperFont");
 const topperStyle = document.querySelector("#topperStyle");
+const plateName = document.querySelector("#plaqueName");
+const plateTitle = document.querySelector("#plaqueTitle");
+const plateCompany = document.querySelector("#plaqueCompany");
+const finishSelect = document.querySelector("#finish");
 
 let image = null;
 let imageDataUrl = "";
 let namePhoto = null;
 let topperPhoto = null;
+let plateLogo = null;
 let rawContours = null;
 let backgroundLifted = false;
 let liftedCanvas = null;
@@ -101,6 +109,16 @@ function boot() {
     topperFont?.addEventListener("change", onTopperInput);
     topperStyle?.addEventListener("change", onTopperInput);
     generateTopperArtwork();
+  }
+  if (profile.id === "name-plate") {
+    [plateName, plateTitle, plateCompany].forEach((input) => input?.addEventListener("input", schedule));
+    finishSelect?.addEventListener("change", schedule);
+    // The plate is built from type plus an optional logo, so finished artwork exists the
+    // moment the page opens and the downloads never have to wait for an upload.
+    image = namePlateBlank();
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
   }
   offsetInput?.addEventListener("input", schedule);
   smoothingInput?.addEventListener("input", schedule);
@@ -336,6 +354,20 @@ async function onUpload() {
     await generateTopperArtwork();
     return;
   }
+  if (profile.id === "name-plate") {
+    // The upload is the optional logo mark, not the plate itself; the plate keeps its type.
+    note("Loading your logo...");
+    const logoDataUrl = await fileToDataUrl(file);
+    try {
+      plateLogo = await loadImage(logoDataUrl);
+    } catch (error) {
+      plateLogo = null;
+      return note("We could not read that image. Please try another file.");
+    }
+    track("photo_uploaded", { tool: "name-plate", width: plateLogo.naturalWidth, height: plateLogo.naturalHeight });
+    render();
+    return;
+  }
 
   note("Loading your image...");
   const dataUrl = await fileToDataUrl(file);
@@ -360,7 +392,7 @@ async function adoptImage(dataUrl) {
   liftedCanvas = null;
   // Only the cutline tool traces the picture itself, so only it re-keys a flat backdrop.
   if (profile.id === "sticker") liftFlatArtwork();
-  if (profile.exportSvg) extractContours();
+  if (profile.exportSvg && profile.id !== "name-plate") extractContours();
   setDownloadsEnabled(true);
   adoptSource("upload");
   render();
@@ -523,6 +555,17 @@ function layout() {
     return { x, y, w: side, h: side, longSideCm, dpi: workDpi(side, longSideCm), shape };
   }
 
+  if (profile.id === "name-plate") {
+    // A desk plate is a fixed long slab, so the inch size decides the box instead of the
+    // uploaded file. The 4:1 preview keeps the real proportions of a 2 inch tall plate.
+    const spec = deskNamePlateSize(longSideCm);
+    const w = WORK_LONG_SIDE;
+    const h = Math.round(w * (spec.heightCm / spec.widthCm));
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2;
+    return { x, y, w, h, longSideCm, dpi: workDpi(w, spec.widthCm), spec, finish: plateFinish() };
+  }
+
   const baseRoom = profile.hasBase ? 76 : 0;
   const x = (CANVAS - w) / 2;
   const y = (CANVAS - h - baseRoom) / 2;
@@ -644,6 +687,20 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawCoaster(ctx, scene, true);
+  } else if (profile.id === "name-plate") {
+    scene = {
+      kind: "name-plate",
+      finish: plateFinish(),
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      outline: deskNamePlatePoints(L.w, L.h).map(([px, py]) => [px + L.x, py + L.y]),
+      lines: namePlateLines(),
+      logo: plateLogo,
+      image,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+      spec: L.spec,
+    };
+    drawNamePlate(ctx, scene, true);
   } else if (profile.id === "magnet") {
     scene = { kind: "magnet", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image, dpi: L.dpi, longSideCm: L.longSideCm };
     drawMagnet(ctx, scene);
@@ -668,7 +725,7 @@ function buildStickerContours(L) {
 }
 
 function readout(L) {
-  sizeLabel.textContent = profile.id === "block" && scene.spec
+  sizeLabel.textContent = scene.spec
     ? scene.spec.id.split("x").join(" x ") + " in"
     : L.longSideCm + " cm";
   if (offsetLabel) offsetLabel.textContent = `${Number(offsetInput.value)} mm`;
@@ -681,6 +738,17 @@ function readout(L) {
       + " in acrylic photo block at " + PRINT_DPI + " DPI ("
       + physicalPixels(L.longSideCm, PRINT_DPI) + " px long side) - transparent PNG, no watermark;"
       + " the block edge and drop shadow are a 3D preview only.";
+    return;
+  }
+
+  if (profile.id === "name-plate") {
+    // Desk plates are bought in inches, so the readout leads with the inch size and keeps 300 DPI honest.
+    const spec = scene.spec;
+    const inches = (cm) => round2(cm / 2.54);
+    dimensions.textContent = inches(spec.widthCm) + " x " + inches(spec.heightCm)
+      + " in acrylic desk name plate at " + PRINT_DPI + " DPI ("
+      + physicalPixels(spec.widthCm, PRINT_DPI) + " px wide) - a transparent PNG plus an SVG cut path;"
+      + " the stand in the preview is decoration only.";
     return;
   }
 
@@ -754,6 +822,196 @@ function drawMagnet(c, s) {
   roundRect(c, r.x, r.y, r.w, r.h, radius * 0.7);
   c.clip();
   c.drawImage(s.image, r.x, r.y, r.w, r.h);
+  c.restore();
+}
+
+/** The chosen acrylic finish, falling back to the clearest blank. */
+function plateFinish() {
+  const value = finishSelect?.value;
+  return isNamePlateFinish(value) ? value : "clear";
+}
+
+/** The three etched lines on the plate, each clipped so a pasted essay cannot break the layout. */
+function namePlateLines() {
+  const clip = (input, max) => (input?.value || "").trim().slice(0, max);
+  return { name: clip(plateName, 28), title: clip(plateTitle, 32), company: clip(plateCompany, 40) };
+}
+
+/**
+ * The desk plate carries type and an optional logo rather than a traced photo. A blank
+ * canvas stands in for the artwork so the shared upload, preview and download plumbing
+ * keeps working; the painter never reads it.
+ */
+function namePlateBlank() {
+  const c = document.createElement("canvas");
+  c.width = WORK_LONG_SIDE;
+  c.height = Math.round(WORK_LONG_SIDE * 0.2);
+  return c;
+}
+
+/** A desk name plate: a long acrylic slab etched with a name over a title and a company line. */
+function drawNamePlate(c, s, guides) {
+  const r = s.rect;
+  const radius = Math.min(r.w, r.h) * 0.14;
+  const bevel = Math.max(3, Math.min(r.w, r.h) * 0.055);
+  const dark = s.finish === "black";
+
+  if (guides) {
+    // The wedge a desk name plate actually stands in. Preview only: it never enters a file.
+    const baseH = Math.max(14, r.h * 0.3);
+    const bx = r.x + r.w * 0.02;
+    const bw = r.w * 0.96;
+    const by = r.y + r.h + bevel * 1.4;
+    c.save();
+    c.shadowColor = "rgba(29,36,32,.28)";
+    c.shadowBlur = bevel * 1.4;
+    c.shadowOffsetY = bevel * 0.6;
+    const metal = c.createLinearGradient(bx, by, bx, by + baseH);
+    metal.addColorStop(0, "#d3d8d5");
+    metal.addColorStop(0.42, "#939b96");
+    metal.addColorStop(1, "#6a716d");
+    c.fillStyle = metal;
+    roundRect(c, bx, by, bw, baseH, baseH * 0.42);
+    c.fill();
+    c.restore();
+    c.save();
+    c.globalAlpha = 0.16;
+    c.fillStyle = dark ? "#0f1211" : "#7c8681";
+    roundRect(c, bx, by, bw, baseH * 0.52, baseH * 0.3);
+    c.fill();
+    c.restore();
+
+    // A soft contact shadow so the slab sits on the stand instead of floating over it.
+    c.save();
+    c.shadowColor = "rgba(29,36,32,.22)";
+    c.shadowBlur = bevel * 1.6;
+    c.shadowOffsetY = bevel * 0.8;
+    c.fillStyle = dark ? "#171b1a" : "#ffffff";
+    roundRect(c, r.x, r.y, r.w, r.h, radius);
+    c.fill();
+    c.restore();
+  }
+
+  // The acrylic body: a vertical gradient so the slab reads as material, not a flat swatch.
+  const body = c.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+  if (dark) {
+    body.addColorStop(0, "#343b38");
+    body.addColorStop(0.44, "#1c211f");
+    body.addColorStop(1, "#0d1110");
+  } else if (s.finish === "frosted") {
+    body.addColorStop(0, "#fdfdfb");
+    body.addColorStop(0.5, "#ecefeb");
+    body.addColorStop(1, "#d6dcd7");
+  } else {
+    body.addColorStop(0, "#ffffff");
+    body.addColorStop(0.5, "#f3f6f4");
+    body.addColorStop(1, "#dbe4df");
+  }
+  c.save();
+  roundRect(c, r.x, r.y, r.w, r.h, radius);
+  c.fillStyle = body;
+  c.fill();
+  c.restore();
+
+  // A glass sheen across the face, the way a polished acrylic plate catches the light.
+  c.save();
+  roundRect(c, r.x, r.y, r.w, r.h, radius);
+  c.clip();
+  const sheen = c.createLinearGradient(r.x, r.y + r.h, r.x + r.w * 0.7, r.y);
+  sheen.addColorStop(0, "rgba(255,255,255,0)");
+  sheen.addColorStop(0.4, "rgba(255,255,255,0)");
+  sheen.addColorStop(0.47, dark ? "rgba(255,255,255,.13)" : "rgba(255,255,255,.5)");
+  sheen.addColorStop(0.56, "rgba(255,255,255,0)");
+  sheen.addColorStop(1, "rgba(255,255,255,0)");
+  c.fillStyle = sheen;
+  c.fillRect(r.x, r.y, r.w, r.h);
+  c.restore();
+
+  // The etched frame and the inner bevel that a laser-cut acrylic plate carries.
+  c.save();
+  roundRect(c, r.x, r.y, r.w, r.h, radius);
+  c.strokeStyle = dark ? "rgba(255,255,255,.22)" : "rgba(255,255,255,.9)";
+  c.lineWidth = Math.max(1.4, bevel * 0.24);
+  c.stroke();
+  roundRect(c, r.x + bevel * 0.5, r.y + bevel * 0.5, r.w - bevel, r.h - bevel, radius * 0.86);
+  c.strokeStyle = dark ? "rgba(0,0,0,.5)" : "rgba(29,36,32,.14)";
+  c.lineWidth = 1.2;
+  c.stroke();
+  c.restore();
+
+  drawNamePlateText(c, s, r.x, r.y, r.w, r.h, guides);
+  if (markSize(s.logo).w) drawNamePlateLogo(c, s, r.x, r.y, r.w, r.h);
+}
+
+/**
+ * The etched copy: a name in the chosen face, a smaller title under it and an optional
+ * company line. The lines centre as one block, so a plate with no title still sits level.
+ * An empty name shows a light placeholder in the preview and nothing at all in a download.
+ */
+function drawNamePlateText(c, s, x, y, w, h, guides) {
+  const lines = s.lines || {};
+  const ghost = !lines.name;
+  const name = lines.name || (guides ? "Your Name" : "");
+  if (!name) return;
+  const family = nameFont?.value || DEFAULT_NAME_FONT;
+  const dark = s.finish === "black";
+  const ink = dark ? "#f4f1ea" : "#1d2420";
+  const halo = dark ? "rgba(0,0,0,.5)" : "rgba(255,255,255,.8)";
+  const padX = w * 0.05;
+  const logoRoom = markSize(s.logo).w ? w * 0.21 : 0;
+  const maxWidth = w - padX * 2 - logoRoom;
+  const nameSize = fitFont(c, name, maxWidth, h * 0.36, family, 700);
+  const titleSize = lines.title ? fitFont(c, lines.title, maxWidth, h * 0.18, family, 600) : 0;
+  const companySize = lines.company ? fitFont(c, lines.company, maxWidth, h * 0.155, family, 600) : 0;
+  const gap = h * 0.045;
+  const blockH = nameSize + (titleSize ? gap + titleSize : 0) + (companySize ? gap + companySize : 0);
+  let cursor = y + (h - blockH) / 2;
+
+  const drawLine = (text, size, weight, opacity) => {
+    const cy = cursor + size / 2;
+    c.save();
+    c.font = weight + " " + size + "px " + family;
+    c.textAlign = "left";
+    c.textBaseline = "middle";
+    c.lineJoin = "round";
+    c.globalAlpha = opacity;
+    c.lineWidth = Math.max(2.5, size * 0.16);
+    c.strokeStyle = halo;
+    c.strokeText(text, x + padX, cy);
+    c.fillStyle = ink;
+    c.fillText(text, x + padX, cy);
+    c.restore();
+    cursor += size + gap;
+  };
+
+  drawLine(name, nameSize, 700, ghost ? 0.4 : 1);
+  if (titleSize) drawLine(lines.title, titleSize, 600, 0.92);
+  if (companySize) drawLine(lines.company, companySize, 600, 0.78);
+}
+
+/** Optional logo mark, pinned right of the plate and fitted whole inside its own tile. */
+function drawNamePlateLogo(c, s, x, y, w, h) {
+  const img = s.logo;
+  const size = markSize(img);
+  const tile = Math.min(h * 0.62, w * 0.16);
+  const bx = x + w - w * 0.05 - tile;
+  const by = y + (h - tile) / 2;
+  const scale = Math.min(tile / size.w, tile / size.h);
+  const dw = size.w * scale;
+  const dh = size.h * scale;
+  c.save();
+  c.beginPath();
+  roundRect(c, bx, by, tile, tile, tile * 0.2);
+  c.clip();
+  c.fillStyle = "rgba(255,255,255,.92)";
+  c.fillRect(bx, by, tile, tile);
+  c.drawImage(img, bx + (tile - dw) / 2, by + (tile - dh) / 2, dw, dh);
+  c.restore();
+  c.save();
+  roundRect(c, bx, by, tile, tile, tile * 0.2);
+  c.strokeStyle = "rgba(29,36,32,.16)";
+  c.lineWidth = 1;
+  c.stroke();
   c.restore();
 }
 
@@ -1408,6 +1666,11 @@ function addPolygon(c, points) {
   c.closePath();
 }
 
+/** Natural pixel size of a loaded image, or zeroes when there is nothing to place. */
+function markSize(img) {
+  if (!img) return { w: 0, h: 0 };
+  return { w: img.naturalWidth || img.width || 0, h: img.naturalHeight || img.height || 0 };
+}
 function roundRect(c, x, y, w, h, radius) {
   c.beginPath();
   if (typeof c.roundRect === "function") c.roundRect(x, y, w, h, radius);
@@ -1441,7 +1704,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -1475,6 +1738,7 @@ function renderScene(scale) {
   else if (scene.kind === "photo-keychain") drawPhotoKeychain(c, scene, false);
   else if (scene.kind === "name-keychain") drawNameKeychain(c, scene, false);
   else if (scene.kind === "coaster") drawCoaster(c, scene, false);
+  else if (scene.kind === "name-plate") drawNamePlate(c, scene, false);
   else if (scene.kind === "magnet") drawMagnet(c, scene);
   else if (scene.kind === "ornament") drawOrnament(c, scene, false);
   else if (scene.kind === "luggage-tag") drawLuggageTag(c, scene, false);
@@ -1506,7 +1770,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -1530,9 +1794,7 @@ function exportScale() {
 
 /** Download name: photo blocks read as inches, everything else as a long side in cm. */
 function exportName(extension) {
-  const stem = scene.kind === "block"
-    ? scene.spec.id + "in-" + profile.id
-    : profile.id + "-" + scene.longSideCm + "cm";
+  const stem = scene.spec ? scene.spec.id + "in-" + profile.id : profile.id + "-" + scene.longSideCm + "cm";
   return stem + "-" + PRINT_DPI + "dpi." + extension;
 }
 
@@ -1547,6 +1809,7 @@ function exportPng() {
 function exportSvg() {
   if (scene.kind === "cake-topper") return exportTopperSvg();
   if (scene.kind === "coaster") return exportCoasterSvg();
+  if (scene.kind === "name-plate") return exportNamePlateSvg();
   if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") return exportOrnamentSvg();
   if (scene.kind !== "sticker") return;
   const scale = exportScale();
@@ -1642,6 +1905,38 @@ function exportCoasterSvg() {
     `</svg>`,
   ];
   downloadBlob(lines.join("\n"), `${profile.id}-${scene.longSideCm}cm-${PRINT_DPI}dpi.svg`, "image/svg+xml;charset=utf-8");
+  track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
+}
+
+/** The plate face plus a real cut path, the same artwork/cutline split the other SVG tools ship. */
+function exportNamePlateSvg() {
+  const scale = exportScale();
+  const box = sceneBox();
+  if (!box) return note("The plate could not be measured. Please reload the page and try again.");
+  const tx = ([x, y]) => [(x - box.x) * scale, (y - box.y) * scale];
+  const width = Math.round(box.width * scale);
+  const height = Math.round(box.height * scale);
+  const shape = contoursToPathD([scene.outline.map(tx)], 2);
+  const art = document.createElement("canvas");
+  art.width = Math.max(1, width);
+  art.height = Math.max(1, height);
+  const ax = art.getContext("2d");
+  ax.scale(scale, scale);
+  ax.translate(-box.x, -box.y);
+  drawNamePlate(ax, scene, false);
+  const lines = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">`,
+    `<title>${profile.product} cutline - ${scene.spec.id.replace("x", " x ")} in, ${PRINT_DPI} DPI</title>`,
+    `<defs><clipPath id="PlateShape"><path d="${shape}"/></clipPath></defs>`,
+    `<g id="Artwork" clip-path="url(#PlateShape)">`,
+    `<image x="0" y="0" width="${width}" height="${height}" href="${art.toDataURL("image/png")}"/>`,
+    `</g>`,
+    `<g id="Cutline" fill="none" stroke="#ff00ff" stroke-width="1">`,
+    `<path d="${shape}"/>`,
+    `</g>`,
+    `</svg>`,
+  ];
+  downloadBlob(lines.join("\n"), exportName("svg"), "image/svg+xml;charset=utf-8");
   track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
 }
 
@@ -1829,6 +2124,23 @@ function photoSampleArtwork() {
 }
 
 async function loadSample() {
+  if (profile.id === "name-plate") {
+    // The plate sample is typed copy plus a logo mark, so the shared sample canvas stands in
+    // for the logo and the fields are filled the way a real visitor would fill them.
+    if (plateName) plateName.value = "Eleanor Whitfield";
+    if (plateTitle) plateTitle.value = "Principal Designer";
+    if (plateCompany) plateCompany.value = "Whitfield Studio";
+    if (finishSelect) finishSelect.value = "black";
+    try {
+      plateLogo = await loadImage(sampleArtwork().toDataURL("image/png"));
+    } catch (error) {
+      plateLogo = null;
+    }
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
   note("Loading a sample image so you can try the tool...");
   const ok = await adoptImage(sampleArtwork().toDataURL("image/png"));
   if (!ok) return note("The sample could not load. Please upload an image instead.");
