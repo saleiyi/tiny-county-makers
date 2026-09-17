@@ -8,12 +8,21 @@ const read = (name) => fs.readFileSync(new URL(name, ROOT), "utf8");
 
 const TOOL_PAGES = [
   { file: "photo-keychain-maker.html", maker: "photo-keychain", title: "Photo Keychain Maker" },
+  { file: "name-keychain-maker.html", maker: "name-keychain", title: "Name Keychain Maker" },
   { file: "sticker-cutline-generator.html", maker: "sticker", title: "Sticker Cutline Generator" },
   { file: "acrylic-standee-maker.html", maker: "standee", title: "Acrylic Standee Maker" },
   { file: "fridge-magnet-maker.html", maker: "magnet", title: "Fridge Magnet Maker" },
 ];
 
 const SHARED_IDS = ["photo", "size", "sizeLabel", "pngDownload", "preview", "dimensions", "productName"];
+
+// The name tool types instead of uploading, so it must keep carrying both text controls.
+test("the name keychain control contract stays wired up", () => {
+  const html = read("name-keychain-maker.html");
+  assert.match(html, /id="nameText"/, "name-keychain-maker.html lost #nameText");
+  assert.match(html, /id="nameFont"/, "name-keychain-maker.html lost #nameFont");
+  assert.match(html, /id="sampleArtwork"/, "name-keychain-maker.html lost the sample button");
+});
 
 test("every tool page exposes the DOM contract maker-app.js expects", () => {
   for (const page of TOOL_PAGES) {
@@ -124,6 +133,7 @@ test("the sitemap lists every published page with the current lastmod", () => {
     "custom-acrylic-keychains.html",
     "pet-keychain-maker.html",
     "photo-keychain-maker.html",
+    "name-keychain-maker.html",
     "acrylic-standee-maker.html",
     "sticker-cutline-generator.html",
     "fridge-magnet-maker.html",
@@ -180,7 +190,7 @@ test("the keychain FAQ and how-to markup match what visitors can read", () => {
 
 test("the homepage advertises the other free tools with real descriptions", () => {
   const html = read("index.html");
-  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
+  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html"]) {
     assert.ok(html.includes(`href="./${tool}"`), `index.html does not link ${tool}`);
   }
   assert.match(html, /<section class="tools-band" id="more-tools">/, "the related-tools band disappeared");

@@ -19,6 +19,7 @@ import {
 const CANVAS = 900;
 const WORK_LONG_SIDE = 620;
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+const DEFAULT_NAME_FONT = "'Playfair Display', Georgia, serif";
 
 const root = document.querySelector("[data-maker]");
 const profile = getProductProfile(root.dataset.maker);
@@ -28,6 +29,8 @@ const upload = document.querySelector("#photo");
 const sizeSelect = document.querySelector("#size");
 const sizeLabel = document.querySelector("#sizeLabel");
 const shapeSelect = document.querySelector("#shape");
+const nameInput = document.querySelector("#nameText");
+const nameFont = document.querySelector("#nameFont");
 const offsetInput = document.querySelector("#offset");
 const offsetLabel = document.querySelector("#offsetLabel");
 const offsetControl = document.querySelector("#offsetControl");
@@ -40,6 +43,7 @@ const svgButton = document.querySelector("#svgDownload");
 
 let image = null;
 let imageDataUrl = "";
+let namePhoto = null;
 let rawContours = null;
 let rawSource = { width: 0, height: 0 };
 let scene = null;
@@ -61,6 +65,11 @@ function boot() {
   upload.addEventListener("change", onUpload);
   sizeSelect.addEventListener("change", schedule);
   shapeSelect?.addEventListener("change", schedule);
+  if (profile.id === "name-keychain") {
+    nameInput?.addEventListener("input", onNameInput);
+    nameFont?.addEventListener("change", onNameInput);
+    generateNameArtwork();
+  }
   offsetInput?.addEventListener("input", schedule);
   smoothingInput?.addEventListener("input", schedule);
   document.querySelector("#sampleArtwork")?.addEventListener("click", loadSample);
@@ -81,6 +90,87 @@ function schedule() {
   raf = requestAnimationFrame(() => { raf = 0; render(); });
 }
 
+// ------------------------------------------------------------------ name artwork
+
+let nameTimer = 0;
+
+function onNameInput() {
+  clearTimeout(nameTimer);
+  nameTimer = setTimeout(generateNameArtwork, 200);
+}
+
+async function generateNameArtwork() {
+  const text = (nameInput?.value || "").trim().slice(0, 16);
+  if (!text) {
+    image = null;
+    setDownloadsEnabled(false);
+    return note("Type a name to see the acrylic keychain shape.");
+  }
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (error) { /* fall back to the system face */ }
+  const ok = await adoptImage(nameArtworkCanvas(text, nameFont?.value || DEFAULT_NAME_FONT, namePhoto).toDataURL("image/png"));
+  if (ok) track("name_rendered", { characters: text.length, photo: !!namePhoto });
+}
+
+/**
+ * Draws the name as solid artwork with a welded hanging tab on top.
+ * The tab keeps the drilled hole on real material for every letter combination,
+ * which a hole punched straight into a letter would not.
+ */
+function nameArtworkCanvas(text, family, photo) {
+  const FONT_SIZE = 260;
+  const INK = "#1d2420";
+  const probe = document.createElement("canvas").getContext("2d");
+  probe.font = `700 ${FONT_SIZE}px ${family}`;
+  const metrics = probe.measureText(text);
+  const textW = Math.max(96, Math.ceil(metrics.width));
+  const textH = Math.ceil(FONT_SIZE * 1.06);
+  const padX = Math.max(30, Math.round(textW * 0.05));
+  const tabH = Math.round(textH * 0.34);
+  const W = textW + padX * 2;
+  const H = textH + tabH;
+  const baseline = tabH + textH / 2 + FONT_SIZE * 0.015;
+
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, W, H);
+
+  // The welded hanging tab always stays solid ink so the drilled hole sits on real material,
+  // whichever letters follow underneath.
+  const tabW = Math.max(58, Math.round(Math.min(W * 0.17, textH * 0.36)));
+  g.fillStyle = INK;
+  g.beginPath();
+  roundRect(g, W / 2 - tabW / 2, 0, tabW, tabH + textH * 0.42, tabW * 0.42);
+  g.fill();
+
+  if (photo && photo.naturalWidth) {
+    // Photo lettering: draw the glyphs on a scratch layer, then clip the photo into them.
+    const glyphs = document.createElement("canvas");
+    glyphs.width = W;
+    glyphs.height = H;
+    const gg = glyphs.getContext("2d");
+    gg.fillStyle = "#000";
+    gg.textAlign = "center";
+    gg.textBaseline = "middle";
+    gg.font = `700 ${FONT_SIZE}px ${family}`;
+    gg.fillText(text, W / 2, baseline);
+    gg.globalCompositeOperation = "source-in";
+    const cover = Math.max(W / photo.naturalWidth, (textH * 1.45) / photo.naturalHeight);
+    const dw = photo.naturalWidth * cover;
+    const dh = photo.naturalHeight * cover;
+    gg.drawImage(photo, (W - dw) / 2, baseline - dh / 2, dw, dh);
+    g.drawImage(glyphs, 0, 0);
+  } else {
+    g.fillStyle = INK;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.font = `700 ${FONT_SIZE}px ${family}`;
+    g.fillText(text, W / 2, baseline);
+  }
+  return c;
+}
+
 // ------------------------------------------------------------------ upload
 
 async function onUpload() {
@@ -88,6 +178,22 @@ async function onUpload() {
   if (!file) return;
   if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return note("That file type is not supported. Use PNG, JPG or WEBP.");
   if (file.size > MAX_UPLOAD_BYTES) return note("That image is larger than 12 MB. Please resize it first.");
+
+  if (profile.id === "name-keychain") {
+    // Optional photo ink: the letters keep their shape and the photo fills them.
+    note("Loading your photo...");
+    const nameDataUrl = await fileToDataUrl(file);
+    try {
+      namePhoto = await loadImage(nameDataUrl);
+    } catch (error) {
+      namePhoto = null;
+      return note("We could not read that photo. Please try another file.");
+    }
+    track("photo_uploaded", { tool: "name-keychain", width: namePhoto.naturalWidth, height: namePhoto.naturalHeight });
+    await generateNameArtwork();
+    return;
+  }
+
   note("Loading your image...");
   const dataUrl = await fileToDataUrl(file);
   const ok = await adoptImage(dataUrl);
@@ -162,6 +268,12 @@ function layout() {
     return { x, y, w, h, longSideCm, dpi: workDpi(WORK_LONG_SIDE, longSideCm), shape, topBand, pad };
   }
 
+  if (profile.id === "name-keychain") {
+    const nx = (CANVAS - w) / 2;
+    const ny = (CANVAS - h) / 2;
+    return { x: nx, y: ny, w, h, longSideCm, dpi: workDpi(WORK_LONG_SIDE, longSideCm) };
+  }
+
   const baseRoom = profile.hasBase ? 76 : 0;
   const x = (CANVAS - w) / 2;
   const y = (CANVAS - h - baseRoom) / 2;
@@ -202,6 +314,9 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawPhotoKeychain(ctx, scene, true);
+  } else if (profile.id === "name-keychain") {
+    scene = { kind: "name-keychain", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, hole: nameHole(L), image, dpi: L.dpi, longSideCm: L.longSideCm };
+    drawNameKeychain(ctx, scene, true);
   } else if (profile.id === "magnet") {
     scene = { kind: "magnet", rect: { x: L.x, y: L.y, w: L.w, h: L.h }, image, dpi: L.dpi, longSideCm: L.longSideCm };
     drawMagnet(ctx, scene);
@@ -236,7 +351,9 @@ function readout(L) {
     ? "the download is the cut shape, offset included"
     : profile.id === "photo-keychain"
       ? "transparent PNG at 300 DPI; the keyring is a preview only"
-      : "transparent PNG, no watermark";
+      : profile.id === "name-keychain"
+        ? "transparent PNG at 300 DPI; the hanging hole and ring are preview only"
+        : "transparent PNG, no watermark";
   dimensions.textContent = `${round2(piece.width * cmPerWorkPx)} x ${round2(piece.height * cmPerWorkPx)} cm finished piece at ${PRINT_DPI} DPI (${exportLong} px long side) - ${suffix}.`;
 }
 
@@ -344,6 +461,44 @@ function drawPhotoKeychain(c, s, guides) {
   c.restore();
 }
 
+function nameHole(L) {
+  // The welded tab sits at the top centre, so its hole is a fixed ratio of the artwork box.
+  return { cx: L.x + L.w / 2, cy: L.y + L.h * 0.121, r: Math.max(8, L.h * 0.071) };
+}
+
+function drawNameKeychain(c, s, guides) {
+  const r = s.rect;
+  const h = s.hole;
+  const depth = Math.max(3, Math.min(r.w, r.h) * 0.014);
+
+  c.save();
+  c.globalAlpha = 0.16;
+  c.save();
+  c.translate(depth * 1.1, depth * 1.7);
+  c.drawImage(s.image, r.x, r.y, r.w, r.h);
+  c.restore();
+  c.restore();
+
+  c.drawImage(s.image, r.x, r.y, r.w, r.h);
+
+  c.save();
+  c.globalCompositeOperation = "destination-out";
+  c.beginPath();
+  c.arc(h.cx, h.cy, h.r, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+
+  if (guides) {
+    c.save();
+    c.strokeStyle = "#98a09b";
+    c.lineWidth = Math.max(3, h.r * 0.3);
+    c.beginPath();
+    c.arc(h.cx, h.cy - h.r * 1.15, h.r * 1.75, 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+  }
+}
+
 function pathForKeychain(c, x, y, w, h, shape, radius) {
   if (shape === "circle") {
     c.beginPath();
@@ -419,6 +574,12 @@ function sceneBox() {
     const pad = 2;
     return { x: o.x - pad, y: o.y - pad, width: o.w + pad * 2, height: o.h + pad * 2 };
   }
+  if (scene.kind === "name-keychain") {
+    // The name artwork already contains its own hanging tab and drill hole, so the export
+    // canvas is exactly the finished piece: 300 DPI long side with no hidden padding.
+    const r = scene.rect;
+    return { x: r.x, y: r.y, width: r.w, height: r.h };
+  }
   const r = scene.rect;
   if (scene.kind === "magnet") {
     const pad = Math.max(10, Math.min(r.w, r.h) * 0.055) + 2;
@@ -441,6 +602,7 @@ function renderScene(scale) {
   c.translate(-box.x, -box.y);
   if (scene.kind === "sticker") drawSticker(c, scene, false);
   else if (scene.kind === "photo-keychain") drawPhotoKeychain(c, scene, false);
+  else if (scene.kind === "name-keychain") drawNameKeychain(c, scene, false);
   else if (scene.kind === "magnet") drawMagnet(c, scene);
   else drawStandee(c, scene);
   return { canvas: out, box };
@@ -458,6 +620,10 @@ function pieceBox() {
   if (scene.kind === "photo-keychain") {
     const o = scene.outer;
     return { width: o.w, height: o.h, x: o.x, y: o.y };
+  }
+  if (scene.kind === "name-keychain") {
+    const r = scene.rect;
+    return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
   const r = scene.rect;
   if (scene.kind === "magnet") {
@@ -512,6 +678,7 @@ function exportSvg() {
 
 function sampleArtwork() {
   if (profile.id === "photo-keychain") return photoSampleArtwork();
+  if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
   const c = document.createElement("canvas");
   c.width = 600;
   c.height = 600;
