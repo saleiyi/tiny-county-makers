@@ -2741,8 +2741,10 @@ function downloadBlob(text, name, type) {
 
 function track(event, metadata = {}) {
   const endpoint = window.TCM_CONFIG?.analyticsEndpoint;
-  if (!endpoint || !location.hostname.endsWith("github.io") || new URLSearchParams(location.search).has("qa") || navigator.doNotTrack === "1") return;
-  const sessionId = sessionStorage.getItem("tcm-analytics-session") || crypto.randomUUID().replaceAll("-", "");
+  const qaMode = new URLSearchParams(location.search).get("qa");
+  if (!endpoint || !location.hostname.endsWith("github.io") || navigator.doNotTrack === "1") return;
+  if (qaMode && qaMode !== "track") return;
+  const sessionId = sessionStorage.getItem("tcm-analytics-session") || (qaMode === "track" ? "qa_" : "") + crypto.randomUUID().replaceAll("-", "");
   sessionStorage.setItem("tcm-analytics-session", sessionId);
   fetch(endpoint, {
     method: "POST",
@@ -2757,6 +2759,26 @@ function track(event, metadata = {}) {
     }),
   }).catch(() => {});
 }
+
+/* Privacy-first engagement signals: how long a visitor actually spends on a tool. */
+(() => {
+  let activeSeconds = 0;
+  let scrolledHalfway = false;
+  setInterval(() => {
+    if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+    activeSeconds += 1;
+    if (activeSeconds === 10) track("engaged_10s");
+    if (activeSeconds === 30) track("engaged_30s");
+  }, 1000);
+  document.addEventListener("scroll", () => {
+    if (scrolledHalfway) return;
+    const scrollable = document.documentElement.scrollHeight - innerHeight;
+    if (scrollable > 0 && scrollY / scrollable >= 0.5) {
+      scrolledHalfway = true;
+      track("scroll_50");
+    }
+  }, { passive: true });
+})();
 
 /* Mobile tools menu: the long nav collapses behind one button on small screens. */
 (() => {

@@ -309,8 +309,10 @@ test("the create hero keeps its call to action above the fold on a phone", () =>
   assert.ok(css.includes("flex-wrap: wrap") && css.includes("gap: 10px 22px"), "create.css lost the desktop header wrapping rules");
 });
 
-test("the analytics helpers stay quiet when a page is opened with ?qa", () => {
+test("the analytics helpers stay quiet when a page is opened with ?qa, and only record when ?qa=track asks for it", () => {
   for (const file of ["maker-app.js", "assets/quote-form.js", "create.js"]) {
-    assert.ok(read(file).includes('has("qa")'), file + " would record analytics for a ?qa testing page");
+    const source = read(file);
+    assert.ok(/"qa"/.test(source), file + " would record analytics for a ?qa testing page");
+    assert.ok(/"qa"[^]{0,220}?return/.test(source), file + " no longer returns early for a ?qa testing page");
   }
 });
