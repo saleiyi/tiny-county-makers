@@ -18,6 +18,8 @@ import {
   ornamentHole,
   luggageTagShapePoints,
   luggageTagHole,
+  bookmarkShapePoints,
+  bookmarkHole,
   widthAtY,
   cakeTopperBarRect,
   cakeTopperPlaque,
@@ -436,6 +438,8 @@ function layout() {
       ? (shapeSelect?.value || "round")
       : profile.id === "luggage-tag"
         ? (shapeSelect?.value || "rounded")
+      : profile.id === "bookmark"
+        ? (shapeSelect?.value || "classic")
         : "";
   let topBand = 0;
   let pad = 0;
@@ -495,6 +499,16 @@ function layout() {
     const x = (CANVAS - w) / 2;
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm, dpi: workDpi(Math.max(w, h), longSideCm), shape };
+  }
+
+  if (profile.id === "bookmark") {
+    // A bookmark is a tall narrow slab, so the silhouette aspect is fixed here instead of
+    // by the uploaded photo. That keeps a 15, 18 or 20 cm bookmark looking like a bookmark.
+    const w = Math.round(WORK_LONG_SIDE * 0.29);
+    const h = WORK_LONG_SIDE;
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm, dpi: workDpi(h, longSideCm), shape };
   }
 
   const baseRoom = profile.hasBase ? 76 : 0;
@@ -581,6 +595,21 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawLuggageTag(ctx, scene, true);
+  } else if (profile.id === "bookmark") {
+    const outline = bookmarkShapePoints(L.shape, L.w, L.h).map(([px, py]) => [px + L.x, py + L.y]);
+    const local = bookmarkHole(L.shape, L.w, L.h);
+    scene = {
+      kind: "bookmark",
+      shape: L.shape,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      outline,
+      hole: { cx: local.cx + L.x, cy: local.cy + L.y, r: local.r },
+      lines: bookmarkLines(),
+      image,
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawBookmark(ctx, scene, true);
   } else if (profile.id === "block") {
     scene = {
       kind: "block",
@@ -641,6 +670,8 @@ function readout(L) {
       ? "transparent PNG at 300 DPI plus an SVG cut path; the hanging loop is a preview only"
     : profile.id === "luggage-tag"
       ? "transparent PNG at 300 DPI plus an SVG cut path with the strap hole; the strap is a preview only"
+      : profile.id === "bookmark"
+        ? "transparent PNG at 300 DPI plus an SVG cut path with the tassel hole; the tassel is a preview only"
       : profile.id === "photo-keychain"
       ? "transparent PNG at 300 DPI; the keyring is a preview only"
       : profile.id === "name-keychain"
@@ -963,6 +994,120 @@ function drawTagStrap(c, hole) {
   c.restore();
 }
 
+// ------------------------------------------------------------------ bookmark
+
+/** Up to two engraved lines: a title on top and a note or a date under it. */
+function bookmarkLines() {
+  const title = (engravingInput?.value || "").trim().slice(0, 28);
+  const note = (contactInput?.value || "").trim().slice(0, 32);
+  return [title, note].filter(Boolean);
+}
+
+/**
+ * Etched caption for a bookmark. A bookmark slab is narrow, so the type is measured against
+ * the width of the slab rather than its height, and the lines sit low on the face so the
+ * photo keeps the top two thirds of the piece. The ribbon notch and the tapered tip both eat
+ * into the bottom of the silhouette, so those shapes lift the caption clear of the cut line.
+ */
+function drawBookmarkText(c, lines, x, y, w, h, shape) {
+  if (!lines || !lines.length) return;
+  const family = "Inter, 'Segoe UI', system-ui, sans-serif";
+  const maxWidth = w * 0.84;
+  const taper = shape === "notch" ? h * 0.16 : shape === "pointed" ? h * 0.2 : 0;
+  let cursor = y + h - taper - w * 0.12;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const text = lines[i];
+    const startSize = w * (i === 0 ? 0.24 : 0.15);
+    const size = fitFont(c, text, maxWidth, startSize, family, 700);
+    cursor -= size * 0.75;
+    c.save();
+    c.font = "700 " + size + "px " + family;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.lineJoin = "round";
+    c.lineWidth = Math.max(3, size * 0.2);
+    c.strokeStyle = "rgba(29,36,32,.5)";
+    c.strokeText(text, x + w / 2, cursor);
+    c.fillStyle = "#ffffff";
+    c.fillText(text, x + w / 2, cursor);
+    c.restore();
+    cursor -= size * 0.62;
+  }
+}
+
+function drawBookmark(c, s, guides) {
+  const r = s.rect;
+  const hole = s.hole;
+
+  if (guides) {
+    c.save();
+    c.globalAlpha = 0.18;
+    c.filter = "blur(8px)";
+    c.fillStyle = "#1d2420";
+    c.beginPath();
+    addPolygon(c, s.outline.map(([x, y]) => [x + 4, y + 10]));
+    c.fill();
+    c.restore();
+  }
+
+  // Acrylic bookmark face: the photo fills the slab and the caption is etched on top.
+  c.save();
+  c.beginPath();
+  addPolygon(c, s.outline);
+  c.clip();
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  drawCover(c, s.image, r.x, r.y, r.w, r.h);
+  drawBookmarkText(c, s.lines, r.x, r.y, r.w, r.h, s.shape);
+  c.restore();
+
+  // The tassel hole is punched out, so the exported file can be printed and cut as-is.
+  c.save();
+  c.globalCompositeOperation = "destination-out";
+  c.beginPath();
+  c.arc(hole.cx, hole.cy, hole.r, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+
+  if (guides) {
+    c.save();
+    c.beginPath();
+    addPolygon(c, s.outline);
+    c.strokeStyle = "rgba(255,255,255,.8)";
+    c.lineWidth = 6;
+    c.stroke();
+    c.strokeStyle = "rgba(29,36,32,.18)";
+    c.lineWidth = 1.6;
+    c.stroke();
+    c.restore();
+    drawTassel(c, hole);
+  }
+}
+
+/** Preview-only tassel, so the mockup reads as a bookmark with a cord through the hole. */
+function drawTassel(c, hole) {
+  const r = hole.r;
+  c.save();
+  c.lineCap = "round";
+  c.lineWidth = Math.max(3, r * 0.34);
+  c.strokeStyle = "#b8894f";
+  c.beginPath();
+  c.moveTo(hole.cx, hole.cy);
+  c.quadraticCurveTo(hole.cx + r * 1.1, hole.cy - r * 4, hole.cx + r * 2, hole.cy - r * 6.4);
+  c.stroke();
+  const bx = hole.cx + r * 2;
+  const by = hole.cy - r * 6.4;
+  for (let i = -2; i <= 2; i++) {
+    c.strokeStyle = i % 2 ? "#a9762f" : "#d0a05c";
+    c.lineWidth = Math.max(2, r * 0.2);
+    c.beginPath();
+    c.moveTo(bx, by);
+    c.quadraticCurveTo(bx + i * r * 0.5, by + r * 3.2, bx + i * r * 0.95, by + r * 6.4);
+    c.stroke();
+  }
+  c.restore();
+}
+
 // ------------------------------------------------------------------ ornament
 
 function ornamentText() {
@@ -1235,7 +1380,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "ornament" || scene.kind === "luggage-tag") {
+  if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -1271,6 +1416,7 @@ function renderScene(scale) {
   else if (scene.kind === "magnet") drawMagnet(c, scene);
   else if (scene.kind === "ornament") drawOrnament(c, scene, false);
   else if (scene.kind === "luggage-tag") drawLuggageTag(c, scene, false);
+  else if (scene.kind === "bookmark") drawBookmark(c, scene, false);
   else if (scene.kind === "cake-topper") drawCakeTopper(c, scene, false);
   else if (scene.kind === "block") drawBlock(c, scene, false);
   else drawStandee(c, scene);
@@ -1298,7 +1444,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "ornament" || scene.kind === "luggage-tag") {
+  if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -1338,7 +1484,7 @@ function exportPng() {
 
 function exportSvg() {
   if (scene.kind === "cake-topper") return exportTopperSvg();
-  if (scene.kind === "ornament" || scene.kind === "luggage-tag") return exportOrnamentSvg();
+  if (scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark") return exportOrnamentSvg();
   if (scene.kind !== "sticker") return;
   const scale = exportScale();
   const box = sceneBox();
@@ -1383,7 +1529,8 @@ function exportOrnamentSvg() {
   ax.fillRect(0, 0, art.width, art.height);
   drawCover(ax, scene.image, 0, 0, art.width, art.height);
   const localOutline = scene.outline.map(([px, py]) => [(px - box.x) * scale, (py - box.y) * scale]);
-  if (scene.kind === "luggage-tag") drawTagText(ax, scene.lines, 0, 0, art.width, art.height);
+  if (scene.kind === "bookmark") drawBookmarkText(ax, scene.lines, 0, 0, art.width, art.height, scene.shape);
+  else if (scene.kind === "luggage-tag") drawTagText(ax, scene.lines, 0, 0, art.width, art.height);
   else drawOrnamentEngraving(ax, scene.text, 0, 0, art.width, art.height, localOutline);
   const lines = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">`,
@@ -1438,7 +1585,7 @@ function exportTopperSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "bookmark") return photoSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
   if (profile.id === "name-keychain") return nameArtworkCanvas((nameInput?.value || "").trim() || "Tiny", nameFont?.value || "'Playfair Display', Georgia, serif");
   if (profile.id === "cake-topper") return topperArtworkCanvas(topperTextValue() || "Happy Birthday", topperFont?.value || DEFAULT_TOPPER_FONT, topperStyleName());
@@ -1552,7 +1699,8 @@ function photoSampleArtwork() {
   x.fillRect(0, 0, 720, 900);
   x.fillStyle = "rgba(255,255,255,.78)";
   x.beginPath();
-  x.arc(540, 170, 62, 0, Math.PI * 2);
+  // Centred, so a very narrow crop (a bookmark slab) still shows the whole sun instead of a sliver.
+  x.arc(360, 170, 62, 0, Math.PI * 2);
   x.fill();
   x.fillStyle = "#7898a8";
   x.beginPath();
@@ -1579,7 +1727,8 @@ function photoSampleArtwork() {
   x.fillStyle = "rgba(255,255,255,.75)";
   x.font = "700 34px Inter, Segoe UI, sans-serif";
   x.textAlign = "center";
-  x.fillText("SAMPLE PHOTO", 360, 845);
+  // Kept in the sky rather than along the base, so it never sits under the engraved caption.
+  x.fillText("SAMPLE PHOTO", 360, 300);
   return c;
 }
 

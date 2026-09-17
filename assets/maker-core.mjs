@@ -17,6 +17,12 @@ export const CAKE_TOPPER_SIZES = Object.freeze([10, 12, 15]);
 
 /** How a cake topper is built: bare letters, letters welded to a bar, or a drilled plaque. */
 export const CAKE_TOPPER_STYLES = Object.freeze(["cutout", "bar", "plaque"]);
+
+/** Long sides an acrylic bookmark is sold in, in centimetres. */
+export const BOOKMARK_SIZES = Object.freeze([15, 18, 20]);
+
+/** Every silhouette the acrylic bookmark tool can draw, in the order the UI offers them. */
+export const BOOKMARK_SHAPES = Object.freeze(["classic", "arch", "notch", "pointed"]);
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -28,6 +34,7 @@ const PROFILES = Object.freeze([
   { id: "block", name: "Acrylic Photo Block Maker", product: "Acrylic photo block", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_BLOCK_SIZES.map((size) => size.heightCm), sizeLabels: PHOTO_BLOCK_SIZES.map((size) => size.label) },
   { id: "luggage-tag", name: "Luggage Tag Maker", product: "Acrylic luggage tag", hasHardware: false, hasBase: false, exportSvg: true, sizes: LUGGAGE_TAG_SIZES },
   { id: "cake-topper", name: "Cake Topper Maker", product: "Acrylic cake topper", hasHardware: false, hasBase: false, exportSvg: true, sizes: CAKE_TOPPER_SIZES },
+  { id: "bookmark", name: "Bookmark Maker", product: "Acrylic bookmark", hasHardware: false, hasBase: false, exportSvg: true, sizes: BOOKMARK_SIZES },
 ]);
 
 export const PRINT_DPI = 300;
@@ -750,6 +757,85 @@ export function cakeTopperPlaque(width, height) {
   const safeH = Math.max(1, Number(height));
   const size = Math.min(safeW, safeH);
   return { cx: safeW / 2, cy: safeH / 2, r: size * 0.5 };
+}
+
+// ---------------------------------------------------------------- bookmark geometry
+
+export function isBookmarkShape(shape) {
+  return BOOKMARK_SHAPES.includes(shape);
+}
+
+/**
+ * Closed polygon for an acrylic bookmark, in a local box of width x height.
+ * Every silhouette is a tall slab rather than a square, because a bookmark that is not
+ * tall stops reading as a bookmark, and every one is fitted to the box so "longest side"
+ * means the same thing whatever the shape and whatever the photo behind it.
+ */
+export function bookmarkShapePoints(shape, width, height, samples = 160) {
+  const w = Number(width), h = Number(height);
+  if (!(w > 0 && h > 0)) throw new Error("Bookmark width and height must be positive.");
+  const count = Math.max(24, Math.floor(Number(samples) || 160));
+  const id = isBookmarkShape(shape) ? shape : "classic";
+  return fitPolygonToBox(rawBookmarkPolygon(id, count), w, h);
+}
+
+function rawBookmarkPolygon(shape, samples) {
+  if (shape === "arch") {
+    // Rounded top, straight sides, flat bottom: the reading-app bookmark silhouette.
+    const half = Math.floor(samples / 2);
+    const pts = [];
+    for (let i = 0; i <= half; i++) {
+      const angle = Math.PI + (i / half) * Math.PI;
+      pts.push([0.5 + 0.5 * Math.cos(angle), 0.5 + 0.5 * Math.sin(angle)]);
+    }
+    pts.push([1, 1], [0, 1]);
+    return pts;
+  }
+  if (shape === "notch") {
+    // Straight slab with a V cut out of the bottom edge, like a ribbon bookmark.
+    return [[0, 0], [1, 0], [1, 1], [0.64, 1], [0.5, 0.84], [0.36, 1], [0, 1]];
+  }
+  if (shape === "pointed") {
+    // Straight slab that tapers to a single point, so it slips between two pages.
+    return [[0, 0], [1, 0], [1, 0.8], [0.5, 1], [0, 0.8]];
+  }
+  // Classic: a plain rounded slab, the shape of a shop-bought acrylic blank.
+  const r = 0.09;
+  const pts = [];
+  const steps = Math.max(3, Math.floor(samples / 4) - 1);
+  const corners = [
+    [1 - r, r, -Math.PI / 2, 0],
+    [1 - r, 1 - r, 0, Math.PI / 2],
+    [r, 1 - r, Math.PI / 2, Math.PI],
+    [r, r, Math.PI, Math.PI * 1.5],
+  ];
+  for (const [cx, cy, a0, a1] of corners) {
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + ((a1 - a0) * i) / steps;
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+  }
+  return pts;
+}
+
+/**
+ * Drill hole for the tassel. Same search the tag and ornament holes use: start just under
+ * the top of the outline and slide down, shrinking if it must, until the whole circle sits
+ * on solid material, so a narrow bookmark slab still keeps a clean hole.
+ */
+export function bookmarkHole(shape, width, height) {
+  const w = Number(width), h = Number(height);
+  const points = bookmarkShapePoints(shape, w, h);
+  const cx = w / 2;
+  const top = topEdgeAtX(points, cx);
+  const nominal = Math.max(5, Math.min(w, h) * 0.05);
+  for (let r = nominal; r >= 3.5; r -= nominal / 24) {
+    for (let step = 0; step <= 48; step++) {
+      const cy = top + r * 1.7 + (step / 48) * r * 3.4;
+      if (circleInsidePolygon(cx, cy, r, points)) return { cx, cy, r: Math.round(r * 100) / 100 };
+    }
+  }
+  return { cx, cy: top + nominal * 1.7, r: Math.round(Math.max(2.5, nominal * 0.4) * 100) / 100 };
 }
 
 // ---------------------------------------------------------------- SVG output

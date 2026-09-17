@@ -28,6 +28,11 @@ import {
   LUGGAGE_TAG_SHAPES,
   luggageTagShapePoints,
   luggageTagHole,
+  BOOKMARK_SIZES,
+  BOOKMARK_SHAPES,
+  bookmarkShapePoints,
+  bookmarkHole,
+  isBookmarkShape,
   CAKE_TOPPER_SIZES,
   CAKE_TOPPER_STYLES,
   cakeTopperBarRect,
@@ -41,14 +46,17 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the ten distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper"]);
+test("the shared engine exposes the eleven distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "cake-topper", "bookmark"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
   assert.equal(getProductProfile("name-keychain").hasHardware, true);
   assert.equal(getProductProfile("ornament").hasHardware, true);
   assert.equal(getProductProfile("ornament").exportSvg, true);
+  assert.equal(getProductProfile("bookmark").exportSvg, true);
+  assert.equal(getProductProfile("bookmark").hasHardware, false);
+  assert.equal(getProductProfile("bookmark").sizes.length, 3);
   assert.equal(getProductProfile("block").exportSvg, false);
   assert.equal(getProductProfile("block").sizes.length, 4);
   assert.equal(getProductProfile("luggage-tag").exportSvg, true);
@@ -417,4 +425,35 @@ test("a picture that already carries transparency is never re-keyed", () => {
   const stripped = stripFlatBackground(picture, 40, 30);
   assert.equal(stripped.applied, false);
   assert.equal(stripped.pixels, picture);
+});
+
+test("every bookmark silhouette fills its box and keeps the tassel hole on solid material", () => {
+  const width = 290, height = 1000;
+  for (const shape of BOOKMARK_SHAPES) {
+    const points = bookmarkShapePoints(shape, width, height);
+    const bounds = boundsOfContours([points]);
+    assert.ok(Math.abs(bounds.minX) <= 0.6, shape + " left edge " + bounds.minX);
+    assert.ok(Math.abs(bounds.maxX - width) <= 0.6, shape + " right edge " + bounds.maxX);
+    assert.ok(Math.abs(bounds.minY) <= 0.6, shape + " top edge " + bounds.minY);
+    assert.ok(Math.abs(bounds.maxY - height) <= 0.6, shape + " bottom edge " + bounds.maxY);
+    const hole = bookmarkHole(shape, width, height);
+    assert.ok(hole.r >= 3.4, shape + " hole radius " + hole.r);
+    assert.ok(
+      circleInsidePolygon(hole.cx, hole.cy, hole.r, points),
+      shape + " tassel hole pokes outside the outline",
+    );
+  }
+});
+
+test("an unknown bookmark shape falls back to the classic slab", () => {
+  assert.equal(isBookmarkShape("teardrop"), false);
+  assert.equal(isBookmarkShape("classic"), true);
+  assert.deepEqual(bookmarkShapePoints("teardrop", 200, 800), bookmarkShapePoints("classic", 200, 800));
+});
+
+test("bookmark sizes map to the documented print pixels", () => {
+  assert.deepEqual([...BOOKMARK_SIZES], [15, 18, 20]);
+  assert.equal(physicalPixels(15, PRINT_DPI), 1772);
+  assert.equal(physicalPixels(18, PRINT_DPI), 2126);
+  assert.equal(physicalPixels(20, PRINT_DPI), 2362);
 });
