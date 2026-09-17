@@ -32,6 +32,12 @@ import {
   tableNumberSize,
   tableNumberShape,
   tableNumberPaperHex,
+  placeCardSheet,
+  placeCardStyle,
+  placeCardPaperHex,
+  placeCardGrid,
+  placeCardGuests,
+  PLACE_CARD_LIMIT,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -58,6 +64,7 @@ const TOPPER_INK = "#1d2420";
 const DEFAULT_STRIP_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
 const STRIP_MAX_PHOTOS = 4;
 const DEFAULT_TABLE_NUMBER_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
+const DEFAULT_PLACE_CARD_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
 
 const root = document.querySelector("[data-maker]");
 const profile = getProductProfile(root.dataset.maker);
@@ -98,6 +105,13 @@ const tableNumberNames = document.querySelector("#tableName");
 const tableNumberFont = document.querySelector("#tableFont");
 const tableNumberPaper = document.querySelector("#tablePaper");
 const tableNumberClear = document.querySelector("#tableClear");
+const placeCardList = document.querySelector("#placeList");
+const placeCardFont = document.querySelector("#placeFont");
+const placeCardPaper = document.querySelector("#placePaper");
+const placeCardPager = document.querySelector("#placePager");
+const placeCardPagePrev = document.querySelector("#placePagePrev");
+const placeCardPageNext = document.querySelector("#placePageNext");
+const placeCardPageLabel = document.querySelector("#placePageLabel");
 
 let image = null;
 let imageDataUrl = "";
@@ -106,6 +120,7 @@ let topperPhoto = null;
 let plateLogo = null;
 let stripPhotos = [];
 let tablePhoto = null;
+let placeCardPage = 0;
 let rawContours = null;
 let backgroundLifted = false;
 let liftedCanvas = null;
@@ -126,7 +141,7 @@ function boot() {
     if (smoothingControl) smoothingControl.hidden = true;
   }
   setDownloadsEnabled(false);
-  upload.addEventListener("change", onUpload);
+  upload?.addEventListener("change", onUpload);
   sizeSelect.addEventListener("change", schedule);
   shapeSelect?.addEventListener("change", schedule);
   if (profile.id === "name-keychain") {
@@ -179,11 +194,27 @@ function boot() {
     render();
     document.fonts?.ready?.then?.(() => schedule());
   }
+  if (profile.id === "place-card") {
+    placeCardList?.addEventListener("input", () => { placeCardPage = 0; schedule(); });
+    placeCardFont?.addEventListener("change", schedule);
+    placeCardPaper?.addEventListener("input", schedule);
+    placeCardPagePrev?.addEventListener("click", () => { placeCardPage -= 1; render(); });
+    placeCardPageNext?.addEventListener("click", () => { placeCardPage += 1; render(); });
+    // A place card is typed rather than uploaded, so a blank canvas stands in for the artwork and
+    // the shared preview and download plumbing works before a single name is typed.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
   offsetInput?.addEventListener("input", schedule);
   borderColorInput?.addEventListener("input", schedule);
   wireHexPresets(borderColorInput, "#borderPresets", "data-border", schedule);
   wireHexPresets(stripPaperInput, "#stripPaperPresets", "data-paper", schedule);
   wireHexPresets(tableNumberPaper, "#tableNumberPaperPresets", "data-paper", schedule);
+  wireHexPresets(placeCardPaper, "#placePaperPresets", "data-paper", schedule);
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
   contactInput?.addEventListener("input", schedule);
@@ -596,6 +627,16 @@ function layout() {
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: spec.heightCm, dpi: workDpi(h, spec.heightCm), spec, shape: tableNumberShape(shapeSelect?.value) };
   }
+  if (profile.id === "place-card") {
+    // A place card is sold as a sheet the couple prints themselves, so the paper decides the box
+    // and the card grid is worked out from the sheet and the chosen card style.
+    const spec = placeCardSheet(sizeSelect.value);
+    const h = WORK_LONG_SIDE;
+    const w = Math.round(h * (spec.widthCm / spec.heightCm));
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: spec.heightCm, dpi: workDpi(h, spec.heightCm), spec };
+  }
   const longest = Math.max(image.naturalWidth, image.naturalHeight);
   const ratio = WORK_LONG_SIDE / longest;
   let w = image.naturalWidth * ratio;
@@ -786,6 +827,26 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawTableNumber(ctx, scene, true);
+  } else if (profile.id === "place-card") {
+    const guests = placeCardGuests(placeCardList?.value || "", PLACE_CARD_LIMIT);
+    const grid = placeCardGrid(sizeSelect.value, shapeSelect?.value);
+    const pages = Math.max(1, Math.ceil(guests.length / grid.perSheet));
+    if (placeCardPage > pages - 1) placeCardPage = pages - 1;
+    if (placeCardPage < 0) placeCardPage = 0;
+    scene = {
+      kind: "place-card",
+      spec: L.spec,
+      grid,
+      guests,
+      page: placeCardPage,
+      pages,
+      paper: placeCardPaperHex(placeCardPaper?.value),
+      font: placeCardFont?.value || DEFAULT_PLACE_CARD_FONT,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawPlaceCardSheet(ctx, scene, true);
   } else if (profile.id === "photo-keychain") {
     const geometry = photoKeychainGeometry(L);
     scene = {
@@ -937,7 +998,7 @@ function buildStickerContours(L) {
 
 function readout(L) {
   sizeLabel.textContent = scene.spec
-    ? profile.id === "table-number" && scene.spec.short
+    ? (profile.id === "table-number" || profile.id === "place-card") && scene.spec.short
       ? scene.spec.short
       : scene.spec.id.split("x").join(" x ") + " in"
     : L.longSideCm + " cm";
@@ -998,6 +1059,23 @@ function readout(L) {
     return;
   }
 
+  if (profile.id === "place-card") {
+    // The sheet is the product, so the readout leads with the paper and then says what is on it.
+    const grid = scene.grid;
+    if (placeCardPager) placeCardPager.hidden = !scene.guests.length;
+    if (placeCardPageLabel) placeCardPageLabel.textContent = "Sheet " + (scene.page + 1) + " of " + scene.pages;
+    if (placeCardPagePrev) placeCardPagePrev.disabled = scene.page <= 0;
+    if (placeCardPageNext) placeCardPageNext.disabled = scene.page >= scene.pages - 1;
+    const filled = Math.min(grid.perSheet, Math.max(0, scene.guests.length - scene.page * grid.perSheet));
+    dimensions.textContent = scene.spec.short + " sheet of " + (grid.style === "tent" ? "folded tent" : "flat")
+      + " place cards at " + PRINT_DPI + " DPI (" + physicalPixels(scene.spec.widthCm, PRINT_DPI) + " x "
+      + physicalPixels(scene.spec.heightCm, PRINT_DPI) + " px) - " + grid.perSheet + " cards a sheet, "
+      + filled + " filled on this one" + (scene.pages > 1 ? " of " + scene.pages + " sheets" : "") + "."
+      + " The download is a print-ready PNG of the whole sheet, light cut lines and all."
+      + (scene.guests.length ? "" : " Type a guest list on the left to fill the first card.")
+      + " No watermark, and nothing you type leaves your device.";
+    return;
+  }
   if (profile.id === "jigsaw") {
     // The puzzle is the only tool whose readout is about the piece count as much as the size.
     const grid = scene.grid;
@@ -1284,6 +1362,197 @@ function drawTableNumber(c, s, guides) {
   c.restore();
 }
 
+/**
+ * A printable sheet of place cards. The sheet size sets the paper, the card style decides how
+ * many cards fit and whether each one folds, and the guest list fills them in the order it was
+ * typed. The preview adds a drop shadow; the export never does.
+ */
+function drawPlaceCardSheet(c, s, guides) {
+  const r = s.rect;
+  const grid = s.grid;
+  const pxPerCm = r.w / grid.sheet.widthCm;
+  const margin = grid.marginCm * pxPerCm;
+  const cardW = grid.card.widthCm * pxPerCm;
+  const cardH = grid.card.heightCm * pxPerCm;
+  const ink = readableInk(s.paper);
+  const family = s.font || DEFAULT_PLACE_CARD_FONT;
+  const hair = ink === "#ffffff" ? "rgba(255,255,255,.24)" : "rgba(29,36,32,.16)";
+  const fold = ink === "#ffffff" ? "rgba(255,255,255,.38)" : "rgba(29,36,32,.3)";
+
+  c.save();
+  if (guides) {
+    c.shadowColor = "rgba(29,36,32,.22)";
+    c.shadowBlur = 28;
+    c.shadowOffsetY = 12;
+  }
+  c.fillStyle = s.paper;
+  c.fillRect(r.x, r.y, r.w, r.h);
+  c.restore();
+
+  // Cut lines. Every card shares an edge with its neighbour, so one trimmer pass down each line
+  // separates the whole sheet.
+  c.save();
+  c.strokeStyle = hair;
+  c.lineWidth = Math.max(1, r.w * 0.0016);
+  for (let col = 0; col <= grid.cols; col += 1) {
+    const x = r.x + margin + col * cardW;
+    c.beginPath();
+    c.moveTo(x, r.y + margin);
+    c.lineTo(x, r.y + margin + grid.rows * cardH);
+    c.stroke();
+  }
+  for (let row = 0; row <= grid.rows; row += 1) {
+    const y = r.y + margin + row * cardH;
+    c.beginPath();
+    c.moveTo(r.x + margin, y);
+    c.lineTo(r.x + margin + grid.cols * cardW, y);
+    c.stroke();
+  }
+  c.restore();
+
+  const start = s.page * grid.perSheet;
+  let printed = 0;
+  for (let row = 0; row < grid.rows; row += 1) {
+    for (let col = 0; col < grid.cols; col += 1) {
+      const guest = s.guests[start + row * grid.cols + col];
+      if (!guest) continue;
+      printed += 1;
+      const x = r.x + margin + col * cardW;
+      const y = r.y + margin + row * cardH;
+      if (grid.style === "tent") {
+        // A tent card prints both halves of the fold, the lower one turned a half turn, so the
+        // name reads the right way up from either side of the table once it is folded.
+        const halfH = cardH / 2;
+        drawPlaceCardFace(c, x + cardW / 2, y + halfH / 2, cardW, halfH, guest, family, ink, false);
+        drawPlaceCardFace(c, x + cardW / 2, y + halfH * 1.5, cardW, halfH, guest, family, ink, true);
+        c.save();
+        c.strokeStyle = fold;
+        c.lineWidth = Math.max(1, cardW * 0.006);
+        c.setLineDash([cardW * 0.05, cardW * 0.04]);
+        c.beginPath();
+        c.moveTo(x + cardW * 0.07, y + halfH);
+        c.lineTo(x + cardW * 0.93, y + halfH);
+        c.stroke();
+        c.restore();
+      } else {
+        drawPlaceCardFace(c, x + cardW / 2, y + cardH / 2, cardW, cardH, guest, family, ink, false);
+      }
+    }
+  }
+
+  if (!printed) {
+    // An empty sheet still shows the stock and the cut lines, so the first thing a visitor sees
+    // is the paper they picked rather than a blank canvas.
+    const head = s.guests.length
+      ? "Every card on this sheet is full"
+      : "Type a guest name to fill the first card";
+    c.save();
+    c.fillStyle = ink;
+    c.globalAlpha = 0.42;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.font = "600 " + Math.max(11, Math.min(r.w, r.h) * 0.032) + "px " + family;
+    c.fillText(head, r.x + r.w / 2, r.y + r.h / 2);
+    c.restore();
+  }
+}
+
+/** One side of a place card: the guest's name, with the meal mark underneath when asked for. */
+function drawPlaceCardFace(c, cx, cy, w, h, guest, family, ink, rotated) {
+  const name = guest && guest.name ? guest.name.trim() : "";
+  if (!name) return;
+  const meal = guest.meal || "";
+  const inner = w * 0.86;
+  c.save();
+  c.translate(cx, cy);
+  if (rotated) c.rotate(Math.PI);
+  c.fillStyle = ink;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  const size = fitFont(c, name, inner, h * (meal ? 0.44 : 0.54), family, 600);
+  c.font = "600 " + size + "px " + family;
+  c.fillText(name, 0, meal ? -h * 0.12 : 0, inner);
+  if (meal) drawMealGlyph(c, meal, 0, h * 0.26, Math.min(w * 0.13, h * 0.22), ink);
+  c.restore();
+}
+
+/**
+ * The line-art meal mark printed under a guest's name. Five simple drawings cover the choices
+ * couples actually offer, and they stay legible at the size a 3.5 in card can carry.
+ */
+function drawMealGlyph(c, meal, cx, cy, size, ink) {
+  const radius = size / 2;
+  const u = size * 0.62;
+  c.save();
+  c.translate(cx, cy);
+  c.strokeStyle = ink;
+  c.lineWidth = Math.max(1, size * 0.09);
+  c.lineCap = "round";
+  c.lineJoin = "round";
+  c.globalAlpha = 0.34;
+  c.beginPath();
+  c.arc(0, 0, radius, 0, Math.PI * 2);
+  c.stroke();
+  c.globalAlpha = 1;
+  if (meal === "beef") {
+    roundRect(c, -u * 0.5, -u * 0.28, u, u * 0.56, u * 0.2);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(-u * 0.18, 0);
+    c.quadraticCurveTo(0, -u * 0.15, u * 0.18, 0);
+    c.stroke();
+  } else if (meal === "chicken") {
+    // A drumstick, not a magnifier: the meat sits up and to the left, the bone points away.
+    c.beginPath();
+    c.arc(-u * 0.24, -u * 0.22, u * 0.34, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(u * 0.02, u * 0.04);
+    c.lineTo(u * 0.38, u * 0.36);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(u * 0.38, u * 0.36);
+    c.lineTo(u * 0.54, u * 0.24);
+    c.moveTo(u * 0.38, u * 0.36);
+    c.lineTo(u * 0.5, u * 0.5);
+    c.stroke();
+  } else if (meal === "fish") {
+    c.beginPath();
+    c.moveTo(-u * 0.5, 0);
+    c.quadraticCurveTo(-u * 0.05, -u * 0.46, u * 0.28, 0);
+    c.quadraticCurveTo(-u * 0.05, u * 0.46, -u * 0.5, 0);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(u * 0.24, 0);
+    c.lineTo(u * 0.52, -u * 0.26);
+    c.lineTo(u * 0.52, u * 0.26);
+    c.closePath();
+    c.stroke();
+  } else if (meal === "veg") {
+    c.beginPath();
+    c.moveTo(0, -u * 0.48);
+    c.quadraticCurveTo(u * 0.5, -u * 0.08, 0, u * 0.48);
+    c.quadraticCurveTo(-u * 0.5, -u * 0.08, 0, -u * 0.48);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(0, -u * 0.4);
+    c.lineTo(0, u * 0.4);
+    c.stroke();
+  } else {
+    // Anything else the list asks for, kids included, gets the star a venue would print.
+    c.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+      const step = i % 2 ? u * 0.2 : u * 0.5;
+      const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+      const px = Math.cos(angle) * step;
+      const py = Math.sin(angle) * step;
+      if (i) c.lineTo(px, py); else c.moveTo(px, py);
+    }
+    c.closePath();
+    c.stroke();
+  }
+  c.restore();
+}
 /**
  * A printed photo booth strip. The paper, the frame gutters and the caption band all move with
  * the product size, so the same painter draws a single 2 x 6 in strip and the 4 x 6 in sheet
@@ -2267,7 +2536,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -2312,6 +2581,7 @@ function renderScene(scale) {
   else if (scene.kind === "jigsaw") drawJigsaw(c, scene, false);
   else if (scene.kind === "photo-strip") drawPhotoStrip(c, scene, false);
   else if (scene.kind === "table-number") drawTableNumber(c, scene, false);
+  else if (scene.kind === "place-card") drawPlaceCardSheet(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -2337,7 +2607,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -2363,8 +2633,10 @@ function exportScale() {
 function exportName(extension) {
   const stem = scene.kind === "table-number" && scene.spec
     ? "table-number-" + scene.spec.id
-    : scene.spec
-      ? scene.spec.id + "in-" + profile.id
+    : scene.kind === "place-card" && scene.spec
+      ? "place-cards-" + scene.spec.id + "-sheet-" + (scene.page + 1)
+      : scene.spec
+        ? scene.spec.id + "in-" + profile.id
       : scene.kind === "jigsaw" && scene.grid
         ? profile.id + "-" + scene.grid.id + "-" + scene.longSideCm + "cm"
         : profile.id + "-" + scene.longSideCm + "cm";
@@ -2868,6 +3140,27 @@ async function loadSample() {
     if (!stripPhotos.length) return note("The sample could not load. Please upload photos instead.");
     if (stripCaptionInput && !stripCaptionInput.value.trim()) stripCaptionInput.value = "Tiny County Makers";
     setDownloadsEnabled(true);
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "place-card") {
+    // The sample is a short guest list with the meal choices filled in, which is what a finished
+    // sheet of place cards looks like once it is printed and cut.
+    if (placeCardList && !placeCardList.value.trim()) {
+      placeCardList.value = [
+        "Sarah Chen, chicken",
+        "Michael Ross, beef",
+        "Priya Raman, vegetarian",
+        "Tom Whitfield, fish",
+        "Grace Okafor, kids",
+        "Daniel & Elise Moreau, beef",
+        "Hannah Blake, chicken",
+        "Omar Haddad, vegetarian",
+      ].join("\n");
+    }
+    placeCardPage = 0;
     adoptSource("sample");
     render();
     track("sample_loaded", { product: profile.id });

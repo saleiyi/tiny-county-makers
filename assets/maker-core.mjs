@@ -128,6 +128,49 @@ export const TABLE_NUMBER_PAPERS = Object.freeze([
   { id: "black", label: "black", hex: "#14181a" },
 ]);
 
+/**
+ * A place card is the small card beside each guest's plate, and couples print a whole sheet of
+them at home, so the sheet of paper - not a single card - is the product this tool works in. The
+card footprint stays fixed so a long guest list prints on identical cards.
+ */
+export const PLACE_CARD_SHEETS = Object.freeze([
+  { id: "letter", widthCm: 21.59, heightCm: 27.94, shorter: "US Letter", label: "US Letter, 10 cards a sheet", short: "US Letter (8.5 x 11 in)" },
+  { id: "a4", widthCm: 21, heightCm: 29.7, shorter: "A4", label: "A4, 10 cards a sheet", short: "A4 (21 x 30 cm)" },
+]);
+
+/** The two cards a place card can be: a folded tent that stands on its own, or a flat card. */
+export const PLACE_CARD_STYLES = Object.freeze(["tent", "flat"]);
+
+/** The card stock a place card is normally printed on, in the order the tool lists them. */
+export const PLACE_CARD_PAPERS = Object.freeze([
+  { id: "white", label: "white", hex: "#ffffff" },
+  { id: "ivory", label: "ivory", hex: "#f7f1e4" },
+  { id: "blush", label: "blush", hex: "#f3dede" },
+  { id: "sage", label: "sage", hex: "#dce5d8" },
+  { id: "black", label: "black", hex: "#14181a" },
+]);
+
+/** The card footprint in centimetres; a tent card prints as the unfolded 3.5 x 4 in panel. */
+export const PLACE_CARD_FOOTPRINTS = Object.freeze({
+  flat: Object.freeze({ widthCm: 8.89, heightCm: 5.08 }),
+  tent: Object.freeze({ widthCm: 8.89, heightCm: 10.16 }),
+});
+
+/** The border every home printer leaves unprinted, used to seat the card grid on the sheet. */
+export const PLACE_CARD_MARGIN_CM = 1.27;
+
+/** The most names one sheet of paper is allowed to carry, so a huge list cannot stall a phone. */
+export const PLACE_CARD_LIMIT = 120;
+
+/** The meal choices a guest line can carry, with the words the parser looks for. */
+export const PLACE_CARD_MEALS = Object.freeze([
+  { id: "beef", label: "Beef", words: ["beef", "steak", "red meat", "lamb", "pork"] },
+  { id: "chicken", label: "Chicken", words: ["chicken", "poultry", "turkey"] },
+  { id: "fish", label: "Fish", words: ["fish", "salmon", "seafood", "prawn", "shrimp"] },
+  { id: "veg", label: "Vegetarian", words: ["veg", "vegetarian", "vegan", "plant"] },
+  { id: "kids", label: "Kids", words: ["kid", "child", "children", "junior"] },
+]);
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -147,6 +190,7 @@ const PROFILES = Object.freeze([
   { id: "sticker-outline", name: "Sticker Outline Maker", product: "Sticker with a printed border", hasHardware: false, hasBase: false, exportSvg: true, sizes: STICKER_OUTLINE_SIZES },
   { id: "photo-strip", name: "Photo Strip Maker", product: "Photo booth strip", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_STRIP_SIZES.map((size) => size.widthCm), sizeLabels: PHOTO_STRIP_SIZES.map((size) => size.label) },
   { id: "table-number", name: "Table Number Maker", product: "Wedding table number", hasHardware: false, hasBase: false, exportSvg: false, sizes: TABLE_NUMBER_SIZES.map((size) => size.widthCm), sizeLabels: TABLE_NUMBER_SIZES.map((size) => size.label) },
+  { id: "place-card", name: "Place Card Maker", product: "Printable place card", hasHardware: false, hasBase: false, exportSvg: false, sizes: PLACE_CARD_SHEETS.map((sheet) => sheet.widthCm), sizeLabels: PLACE_CARD_SHEETS.map((sheet) => sheet.label) },
 ]);
 
 export const PRINT_DPI = 300;
@@ -195,6 +239,68 @@ export function tableNumberShape(value) {
 /** A usable hex colour for the printed card stock, falling back to white. */
 export function tableNumberPaperHex(value) {
   return readHexColour(value, TABLE_NUMBER_PAPERS, "#ffffff");
+}
+
+/** The sheet a place card is printed on, looked up by the width the size picker stores. */
+export function placeCardSheet(value) {
+  const cm = Number(value);
+  return PLACE_CARD_SHEETS.find((sheet) => Math.abs(sheet.widthCm - cm) < 0.02) || PLACE_CARD_SHEETS[0];
+}
+
+/** The card style, falling back to the folded tent that most place cards are. */
+export function placeCardStyle(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return PLACE_CARD_STYLES.includes(raw) ? raw : PLACE_CARD_STYLES[0];
+}
+
+/** A usable hex colour for the printed card stock, falling back to white. */
+export function placeCardPaperHex(value) {
+  return readHexColour(value, PLACE_CARD_PAPERS, "#ffffff");
+}
+
+/** The meal a guest line asked for, matched on the words people actually type after a comma. */
+export function placeCardMeal(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  if (!raw) return "";
+  const meal = PLACE_CARD_MEALS.find((entry) => entry.words.some((word) => raw.includes(word)));
+  return meal ? meal.id : "";
+}
+
+/**
+ * The card grid for a sheet. The preview and the print both read it, so the number of cards on
+the page and where the cut lines fall can never drift apart.
+ */
+export function placeCardGrid(sheetValue, styleValue) {
+  const sheet = placeCardSheet(sheetValue);
+  const style = placeCardStyle(styleValue);
+  const card = PLACE_CARD_FOOTPRINTS[style];
+  const usableW = Math.max(card.widthCm, sheet.widthCm - PLACE_CARD_MARGIN_CM * 2);
+  const usableH = Math.max(card.heightCm, sheet.heightCm - PLACE_CARD_MARGIN_CM * 2);
+  const cols = Math.max(1, Math.floor((usableW + 0.02) / card.widthCm));
+  const rows = Math.max(1, Math.floor((usableH + 0.02) / card.heightCm));
+  return Object.freeze({ sheet, style, card, cols, rows, perSheet: cols * rows, marginCm: PLACE_CARD_MARGIN_CM });
+}
+
+/**
+ * Splits a pasted guest list into the names and the meal each line asked for. Blank lines drop
+out, a trailing ", beef" or "| beef" becomes that guest's meal, and the order is kept so the
+printed sheet reads exactly like the list the couple typed.
+ */
+export function placeCardGuests(value, limit = PLACE_CARD_LIMIT) {
+  const asked = Number(limit);
+  const cap = Number.isFinite(asked) && asked > 0 ? Math.floor(asked) : PLACE_CARD_LIMIT;
+  const guests = [];
+  const lines = String(value === undefined || value === null ? "" : value).split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.replace(/\s+/g, " ").trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split(/\s*[,|]\s*/);
+    const name = (parts.shift() || "").trim().slice(0, 36);
+    if (!name) continue;
+    guests.push({ name, meal: placeCardMeal(parts.join(" ")) });
+    if (guests.length >= cap) break;
+  }
+  return guests;
 }
 
 /** The desk name plate sizes, looked up by the long side the size picker stores. */

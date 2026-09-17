@@ -78,11 +78,20 @@ import {
   tableNumberShape,
   tableNumberPaperHex,
   readableInk,
+  PLACE_CARD_SHEETS,
+  PLACE_CARD_STYLES,
+  PLACE_CARD_PAPERS,
+  placeCardSheet,
+  placeCardStyle,
+  placeCardPaperHex,
+  placeCardMeal,
+  placeCardGrid,
+  placeCardGuests,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the eighteen distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number"]);
+test("the shared engine exposes the nineteen distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "place-card"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -172,7 +181,7 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html", "table-number-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html", "table-number-maker.html", "place-card-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
 });
@@ -761,4 +770,68 @@ test("table number card colours take a hex value, a short hex value or a preset 
   assert.equal(tableNumberPaperHex("blush"), "#f3dede");
   assert.equal(tableNumberPaperHex("no-such-paper"), "#ffffff");
   assert.equal(tableNumberPaperHex(undefined), "#ffffff");
+});
+
+test("place card sheets expose US Letter and A4 at print size", () => {
+  assert.equal(PLACE_CARD_SHEETS.length, 2);
+  assert.equal(placeCardSheet("21.59").id, "letter");
+  assert.equal(placeCardSheet(21).id, "a4");
+  assert.equal(placeCardSheet("21.59").widthCm, 21.59);
+  assert.equal(placeCardSheet("21.59").heightCm, 27.94);
+  assert.equal(placeCardSheet(21).heightCm, 29.7);
+  assert.equal(physicalPixels(placeCardSheet("21.59").widthCm, PRINT_DPI), 2550);
+  assert.equal(physicalPixels(placeCardSheet(21).widthCm, PRINT_DPI), 2480);
+  assert.equal(placeCardSheet("999").id, "letter", "an unknown sheet should fall back to US Letter");
+  assert.equal(placeCardSheet(undefined).id, "letter");
+});
+
+test("place card grids fit 10 flat cards or 4 tent cards on a sheet", () => {
+  const flat = placeCardGrid("21.59", "flat");
+  assert.equal(flat.cols, 2);
+  assert.equal(flat.rows, 5);
+  assert.equal(flat.perSheet, 10);
+  assert.equal(flat.card.widthCm, 8.89);
+  assert.equal(flat.card.heightCm, 5.08);
+  const tent = placeCardGrid("21.59", "tent");
+  assert.equal(tent.cols, 2);
+  assert.equal(tent.rows, 2);
+  assert.equal(tent.perSheet, 4);
+  assert.equal(tent.card.heightCm, 10.16);
+  assert.equal(placeCardGrid(21, "flat").perSheet, 10, "A4 takes the same grid");
+  assert.equal(placeCardGrid(21, "tent").perSheet, 4);
+  assert.equal(placeCardGrid("21.59", "junk").style, "tent", "an unknown style falls back to the folded tent");
+  assert.equal(placeCardGrid("21.59", undefined).style, "tent");
+});
+
+test("place card styles and paper colours resolve with safe fallbacks", () => {
+  assert.deepEqual([...PLACE_CARD_STYLES], ["tent", "flat"]);
+  assert.equal(placeCardStyle("TENT"), "tent");
+  assert.equal(placeCardStyle("flat"), "flat");
+  assert.equal(placeCardStyle("zzz"), "tent");
+  assert.equal(placeCardStyle(undefined), "tent");
+  assert.equal(PLACE_CARD_PAPERS.length, 5);
+  assert.equal(placeCardPaperHex("#ABC"), "#aabbcc");
+  assert.equal(placeCardPaperHex("ivory"), "#f7f1e4");
+  assert.equal(placeCardPaperHex("sage"), "#dce5d8");
+  assert.equal(placeCardPaperHex("black"), "#14181a");
+  assert.equal(placeCardPaperHex("no-such-paper"), "#ffffff");
+  assert.equal(placeCardPaperHex(undefined), "#ffffff");
+});
+
+test("place card guest parsing splits names from meal choices", () => {
+  assert.deepEqual(placeCardGuests("Sarah Chen, chicken\n\nMichael Ross | beef\n  Tom  ,  fish \nGrace, unknown\nx"), [
+    { name: "Sarah Chen", meal: "chicken" },
+    { name: "Michael Ross", meal: "beef" },
+    { name: "Tom", meal: "fish" },
+    { name: "Grace", meal: "" },
+    { name: "x", meal: "" },
+  ]);
+  assert.deepEqual(placeCardGuests(""), []);
+  assert.equal(placeCardMeal("steak"), "beef");
+  assert.equal(placeCardMeal("salmon"), "fish");
+  assert.equal(placeCardMeal("veggie"), "veg");
+  assert.equal(placeCardMeal("child"), "kids");
+  assert.equal(placeCardMeal("nonsense"), "");
+  assert.equal(placeCardGuests(Array.from({ length: 130 }, (_, i) => "G" + i).join("\n"), 5).length, 5);
+  assert.equal(placeCardGuests(Array.from({ length: 130 }, (_, i) => "G" + i).join("\n")).length, 120);
 });
