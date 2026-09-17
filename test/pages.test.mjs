@@ -315,4 +315,5 @@ test("the analytics helpers stay quiet when a page is opened with ?qa, and only 
     assert.ok(/"qa"/.test(source), file + " would record analytics for a ?qa testing page");
     assert.ok(/"qa"[^]{0,220}?return/.test(source), file + " no longer returns early for a ?qa testing page");
   }
+  assert.ok(read("maker-app.js").includes('has("qa")'), "maker-app.js must treat a bare ?qa link as a testing view instead of opting in");
 });
