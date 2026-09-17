@@ -213,6 +213,40 @@ export const POLAROID_SHEETS = Object.freeze([
 /** The border a home printer leaves unprinted, and the gap left between two tiled frames. */
 export const POLAROID_MARGIN_CM = 1.27;
 export const POLAROID_GUTTER_CM = 0.4;
+
+/**
+ * Printed cupcake topper sizes. These are the three round cutters people search for, kept in
+ * centimetres next to the inch name so the printer maths and the label agree.
+ */
+export const CUPCAKE_TOPPER_SIZES = Object.freeze([
+  { id: "2in", inches: 2, widthCm: 5.08, heightCm: 5.08, short: "2 in", label: "2 inch toppers (5.1 cm)" },
+  { id: "2-5in", inches: 2.5, widthCm: 6.35, heightCm: 6.35, short: "2.5 in", label: "2.5 inch toppers (6.4 cm)" },
+  { id: "3in", inches: 3, widthCm: 7.62, heightCm: 7.62, short: "3 in", label: "3 inch toppers (7.6 cm)" },
+]);
+
+/** Every silhouette the cupcake topper tool can draw, in the order the UI offers them. */
+export const CUPCAKE_SHAPES = Object.freeze(["circle", "scallop", "rounded", "square"]);
+
+/** The paper a whole run of cupcake toppers is tiled onto for printing. */
+export const CUPCAKE_SHEETS = Object.freeze([
+  { id: "letter", widthCm: 21.59, heightCm: 27.94, short: "US Letter", label: "US Letter sheet" },
+  { id: "a4", widthCm: 21, heightCm: 29.7, short: "A4", label: "A4 sheet" },
+]);
+
+/** Card colours sold for party toppers, in the order the tool lists them. */
+export const CUPCAKE_PAPERS = Object.freeze([
+  { id: "white", label: "white", hex: "#ffffff" },
+  { id: "ivory", label: "ivory", hex: "#f7f1e4" },
+  { id: "blush", label: "blush", hex: "#f3dede" },
+  { id: "sage", label: "sage", hex: "#dce5d8" },
+  { id: "kraft", label: "kraft", hex: "#c9a978" },
+  { id: "black", label: "black", hex: "#14181a" },
+]);
+
+/** The safe printer border and the gap between toppers on a printable sheet. */
+export const CUPCAKE_MARGIN_CM = 0.8;
+export const CUPCAKE_GUTTER_CM = 0.25;
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -225,6 +259,7 @@ const PROFILES = Object.freeze([
   { id: "luggage-tag", name: "Luggage Tag Maker", product: "Acrylic luggage tag", hasHardware: false, hasBase: false, exportSvg: true, sizes: LUGGAGE_TAG_SIZES },
   { id: "pet-tag", name: "Pet ID Tag Maker", product: "Acrylic pet ID tag", hasHardware: false, hasBase: false, exportSvg: true, sizes: PET_TAG_SIZES, sizeLabels: ["Small (3 cm)", "Medium (4 cm)", "Large (5 cm)"] },
   { id: "cake-topper", name: "Cake Topper Maker", product: "Acrylic cake topper", hasHardware: false, hasBase: false, exportSvg: true, sizes: CAKE_TOPPER_SIZES },
+  { id: "cupcake", name: "Cupcake Topper Maker", product: "Printable cupcake topper", hasHardware: false, hasBase: false, exportSvg: false, sizes: CUPCAKE_TOPPER_SIZES.map((size) => size.widthCm), sizeLabels: CUPCAKE_TOPPER_SIZES.map((size) => size.label) },
   { id: "bookmark", name: "Bookmark Maker", product: "Acrylic bookmark", hasHardware: false, hasBase: false, exportSvg: true, sizes: BOOKMARK_SIZES },
   { id: "coaster", name: "Acrylic Coaster Maker", product: "Acrylic coaster", hasHardware: false, hasBase: false, exportSvg: true, sizes: COASTER_SIZES },
   { id: "name-plate", name: "Desk Name Plate Maker", product: "Acrylic desk name plate", hasHardware: false, hasBase: false, exportSvg: true, sizes: DESK_NAME_PLATE_SIZES.map((size) => size.widthCm), sizeLabels: DESK_NAME_PLATE_SIZES.map((size) => size.label) },
@@ -381,6 +416,43 @@ export function polaroidGrid(sheetValue, frameValue) {
   const cols = Math.max(1, Math.floor((usableW + POLAROID_GUTTER_CM) / (frame.widthCm + POLAROID_GUTTER_CM)));
   const rows = Math.max(1, Math.floor((usableH + POLAROID_GUTTER_CM) / (frame.heightCm + POLAROID_GUTTER_CM)));
   return Object.freeze({ sheet, frame, cols, rows, perSheet: cols * rows, marginCm: POLAROID_MARGIN_CM, gutterCm: POLAROID_GUTTER_CM });
+}
+
+/** The round topper diameter, looked up by the centimetre value the size picker stores. */
+export function cupcakeTopper(value) {
+  const cm = Number(value);
+  return CUPCAKE_TOPPER_SIZES.find((size) => Math.abs(size.widthCm - cm) < 0.02) || CUPCAKE_TOPPER_SIZES[0];
+}
+
+/** The craft-knife silhouette, falling back to the classic circle. */
+export function cupcakeShape(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return CUPCAKE_SHAPES.includes(raw) ? raw : CUPCAKE_SHAPES[0];
+}
+
+/** The printable sheet a run of toppers is tiled onto, or null for one standalone topper. */
+export function cupcakeSheet(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return CUPCAKE_SHEETS.find((sheet) => sheet.id === raw) || null;
+}
+
+/** A usable card colour for the topper itself, falling back to clean white. */
+export function cupcakePaperHex(value) {
+  return readHexColour(value, CUPCAKE_PAPERS, "#ffffff");
+}
+
+/**
+ * How many toppers fit on one sheet. The same function drives the on-screen sheet and the
+ * download, so the cut line and the printer output cannot drift apart.
+ */
+export function cupcakeGrid(sheetValue, topperValue) {
+  const sheet = cupcakeSheet(sheetValue) || CUPCAKE_SHEETS[0];
+  const topper = cupcakeTopper(topperValue);
+  const usableW = Math.max(topper.widthCm, sheet.widthCm - CUPCAKE_MARGIN_CM * 2);
+  const usableH = Math.max(topper.heightCm, sheet.heightCm - CUPCAKE_MARGIN_CM * 2);
+  const cols = Math.max(1, Math.floor((usableW + CUPCAKE_GUTTER_CM) / (topper.widthCm + CUPCAKE_GUTTER_CM)));
+  const rows = Math.max(1, Math.floor((usableH + CUPCAKE_GUTTER_CM) / (topper.heightCm + CUPCAKE_GUTTER_CM)));
+  return Object.freeze({ sheet, topper, cols, rows, perSheet: cols * rows, marginCm: CUPCAKE_MARGIN_CM, gutterCm: CUPCAKE_GUTTER_CM });
 }
 
 /** The desk name plate sizes, looked up by the long side the size picker stores. */

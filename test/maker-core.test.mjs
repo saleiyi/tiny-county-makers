@@ -96,11 +96,20 @@ import {
   polaroidFinish,
   polaroidSheet,
   polaroidGrid,
+  CUPCAKE_TOPPER_SIZES,
+  CUPCAKE_SHAPES,
+  CUPCAKE_SHEETS,
+  CUPCAKE_PAPERS,
+  cupcakeTopper,
+  cupcakeShape,
+  cupcakeSheet,
+  cupcakePaperHex,
+  cupcakeGrid,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card"]);
+test("the shared engine exposes the twenty-one distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -124,6 +133,12 @@ test("the shared engine exposes the twenty distinct maker profiles", () => {
   assert.equal(getProductProfile("cake-topper").hasHardware, false);
   assert.equal(getProductProfile("cake-topper").hasBase, false);
   assert.equal(getProductProfile("cake-topper").sizes.length, 3);
+  assert.equal(getProductProfile("cupcake").exportSvg, false);
+  assert.equal(getProductProfile("cupcake").hasHardware, false);
+  assert.equal(getProductProfile("cupcake").hasBase, false);
+  assert.equal(getProductProfile("cupcake").sizes.length, 3);
+  assert.equal(getProductProfile("cupcake").sizeLabels.length, 3);
+  assert.equal(getProductProfile("cupcake").sizeLabels[0], "2 inch toppers (5.1 cm)");
   assert.equal(getProductProfile("coaster").exportSvg, true);
   assert.equal(getProductProfile("coaster").hasHardware, false);
   assert.equal(getProductProfile("coaster").hasBase, false);
@@ -893,4 +908,50 @@ test("polaroid film colours and looks resolve with safe fallbacks", () => {
   assert.equal(polaroidFinish("nope").id, "original");
   assert.equal(polaroidFinish(undefined).id, "original");
   assert.equal(polaroidFinish("warm").op, "overlay", "each look is one canvas blend so preview and print agree");
+});
+
+test("cupcake toppers ship the three printed sizes with matching labels", () => {
+  assert.equal(CUPCAKE_TOPPER_SIZES.length, 3);
+  assert.equal(cupcakeTopper(5.08).id, "2in");
+  assert.equal(cupcakeTopper("6.35").id, "2-5in");
+  assert.equal(cupcakeTopper(7.62).id, "3in");
+  assert.equal(cupcakeTopper("999").id, "2in", "an unknown size should fall back to the smallest topper");
+  assert.equal(cupcakeTopper(undefined).id, "2in");
+  assert.ok(CUPCAKE_TOPPER_SIZES.every((size) => size.widthCm === size.heightCm), "toppers are round, so each size stays square");
+  assert.equal(CUPCAKE_TOPPER_SIZES[1].label, "2.5 inch toppers (6.4 cm)");
+});
+
+test("cupcake shapes and card colours resolve with safe fallbacks", () => {
+  assert.deepEqual([...CUPCAKE_SHAPES], ["circle", "scallop", "rounded", "square"]);
+  assert.equal(cupcakeShape("SCALLOP"), "scallop");
+  assert.equal(cupcakeShape("square"), "square");
+  assert.equal(cupcakeShape("zzz"), "circle");
+  assert.equal(cupcakeShape(undefined), "circle");
+  assert.equal(CUPCAKE_PAPERS.length, 6);
+  assert.equal(cupcakePaperHex("#ABC"), "#aabbcc");
+  assert.equal(cupcakePaperHex("ivory"), "#f7f1e4");
+  assert.equal(cupcakePaperHex("kraft"), "#c9a978");
+  assert.equal(cupcakePaperHex("black"), "#14181a");
+  assert.equal(cupcakePaperHex("no-such-paper"), "#ffffff");
+  assert.equal(cupcakePaperHex(undefined), "#ffffff");
+});
+
+test("cupcake sheet grids tile a batch of toppers with a printable margin", () => {
+  assert.equal(CUPCAKE_SHEETS.length, 2);
+  assert.equal(cupcakeSheet("letter").widthCm, 21.59);
+  assert.equal(cupcakeSheet("A4").id, "a4");
+  assert.equal(cupcakeSheet("single"), null, "a single topper is not a sheet");
+  assert.equal(cupcakeSheet(undefined), null);
+  assert.equal(cupcakeSheet("nonsense"), null);
+  const small = cupcakeGrid("letter", 5.08);
+  assert.equal(small.cols, 3);
+  assert.equal(small.rows, 4);
+  assert.equal(small.perSheet, 12);
+  assert.equal(cupcakeGrid("a4", 5.08).perSheet, 15, "A4 is taller, so it takes one more row");
+  assert.equal(cupcakeGrid("letter", 6.35).perSheet, 12);
+  assert.equal(cupcakeGrid("a4", 6.35).perSheet, 8);
+  assert.equal(cupcakeGrid("letter", 7.62).perSheet, 6);
+  assert.equal(cupcakeGrid("a4", 7.62).perSheet, 6);
+  assert.equal(cupcakeGrid("letter", 5.08).gutterCm, 0.25, "toppers leave a gutter so scissors can pass between them");
+  assert.equal(cupcakeGrid("letter", 5.08).marginCm, 0.8, "the grid stays clear of the unprintable border");
 });

@@ -43,6 +43,11 @@ import {
   polaroidPaperHex,
   polaroidFinish,
   polaroidSheet,
+  cupcakeTopper,
+  cupcakeShape,
+  cupcakeSheet,
+  cupcakePaperHex,
+  cupcakeGrid,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -71,6 +76,8 @@ const STRIP_MAX_PHOTOS = 4;
 const DEFAULT_TABLE_NUMBER_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
 const DEFAULT_PLACE_CARD_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
 const DEFAULT_POLAROID_FONT = "'Brush Script MT', 'Segoe Script', cursive";
+const DEFAULT_CUPCAKE_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
+const CUPCAKE_MAX_CHARS = 40;
 
 const root = document.querySelector("[data-maker]");
 const profile = getProductProfile(root.dataset.maker);
@@ -122,6 +129,10 @@ const polaroidCaption = document.querySelector("#polaroidCaption");
 const polaroidFontSelect = document.querySelector("#polaroidFont");
 const polaroidPaper = document.querySelector("#polaroidPaper");
 const polaroidFinishSelect = document.querySelector("#polaroidFinish");
+const cupcakeText = document.querySelector("#cupcakeText");
+const cupcakeFontSelect = document.querySelector("#cupcakeFont");
+const cupcakePaper = document.querySelector("#cupcakePaper");
+const cupcakeSheetSelect = document.querySelector("#cupcakeSheet");
 
 let image = null;
 let imageDataUrl = "";
@@ -134,6 +145,8 @@ let placeCardPage = 0;
 // A polaroid can be downloaded as a blank film frame, so the upload lives beside the shared
 // artwork slot instead of replacing the placeholder the shared export path expects.
 let polaroidPhoto = null;
+// A cupcake topper can be printed blank, so the upload lives beside the placeholder artwork.
+let cupcakePhoto = null;
 let rawContours = null;
 let backgroundLifted = false;
 let liftedCanvas = null;
@@ -236,6 +249,20 @@ function boot() {
     render();
     document.fonts?.ready?.then?.(() => schedule());
   }
+  if (profile.id === "cupcake") {
+    cupcakeText?.addEventListener("input", () => schedule());
+    cupcakeFontSelect?.addEventListener("change", schedule);
+    cupcakePaper?.addEventListener("input", schedule);
+    cupcakeSheetSelect?.addEventListener("change", schedule);
+    // A topper is cut from card stock, so a blank placeholder stands in for the artwork and
+    // the shared preview and download plumbing works before a single photo is added.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
   offsetInput?.addEventListener("input", schedule);
   borderColorInput?.addEventListener("input", schedule);
   wireHexPresets(borderColorInput, "#borderPresets", "data-border", schedule);
@@ -243,6 +270,7 @@ function boot() {
   wireHexPresets(tableNumberPaper, "#tableNumberPaperPresets", "data-paper", schedule);
   wireHexPresets(placeCardPaper, "#placePaperPresets", "data-paper", schedule);
   wireHexPresets(polaroidPaper, "#polaroidPaperPresets", "data-paper", schedule);
+  wireHexPresets(cupcakePaper, "#cupcakePaperPresets", "data-paper", schedule);
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
   contactInput?.addEventListener("input", schedule);
@@ -554,12 +582,15 @@ async function adoptImage(dataUrl) {
   } catch (error) {
     image = null;
     if (profile.id === "table-number") tablePhoto = null;
+    if (profile.id === "cupcake") cupcakePhoto = null;
     setDownloadsEnabled(false);
     note("We could not read that image. Please try another file.");
     return false;
   }
   // A polaroid can be downloaded blank, so the photo is kept beside the placeholder artwork.
   if (profile.id === "polaroid") polaroidPhoto = image;
+  // A cupcake topper can be printed blank, so the photo is kept beside the placeholder artwork.
+  if (profile.id === "cupcake") cupcakePhoto = image;
   // A table number keeps its photo beside the typed number, so it is remembered here rather
   // than read back off the shared artwork slot.
   if (profile.id === "table-number") tablePhoto = image;
@@ -650,6 +681,20 @@ function layout() {
     const x = (CANVAS - w) / 2;
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), frame, sheet };
+  }
+  if (profile.id === "cupcake") {
+    // A topper is cut from card stock, so the disc decides the box and the sheet only decides
+    // how many of them are tiled onto one printable page.
+    const topper = cupcakeTopper(sizeSelect.value);
+    const sheet = cupcakeSheet(cupcakeSheetSelect?.value);
+    const spec = sheet || topper;
+    const longCm = Math.max(spec.widthCm, spec.heightCm);
+    const scale = WORK_LONG_SIDE / longCm;
+    const w = Math.round(spec.widthCm * scale);
+    const h = Math.round(spec.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), topper, sheet };
   }
   if (profile.id === "photo-strip") {
     // A strip is a fixed 2 in wide column of photos, so the product size decides the box
@@ -908,6 +953,23 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawPolaroid(ctx, scene, true);
+  } else if (profile.id === "cupcake") {
+    scene = {
+      kind: "cupcake",
+      topper: L.topper,
+      spec: L.topper,
+      sheet: L.sheet,
+      grid: L.sheet ? cupcakeGrid(L.sheet.id, sizeSelect.value) : null,
+      shape: cupcakeShape(shapeSelect?.value),
+      paper: cupcakePaperHex(cupcakePaper?.value),
+      text: (cupcakeText?.value || "").trim().replace(/\s+/g, " ").slice(0, CUPCAKE_MAX_CHARS),
+      font: cupcakeFontSelect?.value || DEFAULT_CUPCAKE_FONT,
+      image: cupcakePhoto,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawCupcake(ctx, scene, true);
   } else if (profile.id === "photo-keychain") {
     const geometry = photoKeychainGeometry(L);
     scene = {
@@ -1059,7 +1121,7 @@ function buildStickerContours(L) {
 
 function readout(L) {
   sizeLabel.textContent = scene.spec
-    ? (profile.id === "table-number" || profile.id === "place-card" || profile.id === "polaroid") && scene.spec.short
+    ? (profile.id === "table-number" || profile.id === "place-card" || profile.id === "polaroid" || profile.id === "cupcake") && scene.spec.short
       ? scene.spec.short
       : scene.spec.id.split("x").join(" x ") + " in"
     : L.longSideCm + " cm";
@@ -1135,6 +1197,33 @@ function readout(L) {
       + " The download is a print-ready PNG of the whole sheet, light cut lines and all."
       + (scene.guests.length ? "" : " Type a guest list on the left to fill the first card.")
       + " No watermark, and nothing you type leaves your device.";
+    return;
+  }
+  if (profile.id === "cupcake") {
+    // A topper is a round print, so the readout leads with the diameter and the batch count.
+    const topper = scene.topper;
+    const inches = (cm) => round2(cm / 2.54);
+    const shapeName = { circle: "round", scallop: "scalloped", rounded: "rounded corner", square: "square" }[scene.shape] || "round";
+    sizeLabel.textContent = topper.short;
+    if (scene.sheet) {
+      const grid = scene.grid;
+      dimensions.textContent = topper.short + " " + shapeName + " toppers tiled " + grid.cols + " across and "
+        + grid.rows + " down on " + (scene.sheet.short === "A4" ? "an " : "a ") + scene.sheet.short + " sheet at "
+        + PRINT_DPI + " DPI (" + physicalPixels(scene.sheet.widthCm, PRINT_DPI) + " x "
+        + physicalPixels(scene.sheet.heightCm, PRINT_DPI) + " px) - " + grid.perSheet
+        + " toppers a sheet, with light cut lines you can trim along."
+        + (scene.image ? " Your photo is cover-fitted into every disc." : " Upload a photo to fill the discs.")
+        + (scene.text ? " The message prints on a band across the foot of each one." : "")
+        + " No watermark, and your photo never leaves your device.";
+      return;
+    }
+    dimensions.textContent = topper.short + " " + shapeName + " topper at " + PRINT_DPI + " DPI ("
+      + physicalPixels(topper.widthCm, PRINT_DPI) + " x " + physicalPixels(topper.heightCm, PRINT_DPI)
+      + " px, " + inches(topper.widthCm) + " x " + inches(topper.heightCm)
+      + " in) - a print-ready PNG of the whole topper, card and cut line included."
+      + (scene.image ? " Your photo is cover-fitted into the disc." : " Upload a photo to fill the disc, or print the blank card as a template.")
+      + (scene.text ? " The message prints on a band across the foot." : "")
+      + " No watermark, and your photo never leaves your device.";
     return;
   }
   if (profile.id === "polaroid") {
@@ -1773,6 +1862,183 @@ function drawPolaroidFinish(c, finish, x, y, w, h) {
   c.fillStyle = finish.hex;
   c.fillRect(x, y, w, h);
   c.restore();
+}
+
+/**
+ * A printed cupcake topper. The disc is cut from card stock, so the silhouette decides the
+ * shape, the card colour shows around the photo, and the message sits on a band at the foot.
+ * A single topper and a whole tiled sheet share the same disc painter, so the preview and the
+ * download can never disagree about where the cut line falls.
+ */
+function drawCupcake(c, s, guides) {
+  const r = s.rect;
+  if (s.sheet) {
+    // A print sheet of toppers: the paper is blank stock and the discs are seated in a grid with
+    // a small gutter, so a trimmer pass down each gutter separates the whole run.
+    const grid = s.grid;
+    const pxPerCm = r.w / grid.sheet.widthCm;
+    const disc = grid.topper.widthCm * pxPerCm;
+    const gutter = grid.gutterCm * pxPerCm;
+    const blockW = grid.cols * disc + (grid.cols - 1) * gutter;
+    const blockH = grid.rows * disc + (grid.rows - 1) * gutter;
+    const originX = r.x + (r.w - blockW) / 2;
+    const originY = r.y + (r.h - blockH) / 2;
+    c.save();
+    if (guides) {
+      c.shadowColor = "rgba(29,36,32,.22)";
+      c.shadowBlur = 28;
+      c.shadowOffsetY = 12;
+    }
+    c.fillStyle = "#ffffff";
+    c.fillRect(r.x, r.y, r.w, r.h);
+    c.restore();
+    c.save();
+    c.strokeStyle = "rgba(29,36,32,.18)";
+    c.lineWidth = Math.max(1, r.w * 0.0016);
+    c.setLineDash([Math.max(2, gutter * 0.34), Math.max(2, gutter * 0.3)]);
+    for (let col = 1; col < grid.cols; col += 1) {
+      const x = originX + col * disc + (col - 0.5) * gutter;
+      c.beginPath();
+      c.moveTo(x, originY - gutter * 0.5);
+      c.lineTo(x, originY + blockH + gutter * 0.5);
+      c.stroke();
+    }
+    for (let row = 1; row < grid.rows; row += 1) {
+      const y = originY + row * disc + (row - 0.5) * gutter;
+      c.beginPath();
+      c.moveTo(originX - gutter * 0.5, y);
+      c.lineTo(originX + blockW + gutter * 0.5, y);
+      c.stroke();
+    }
+    c.restore();
+    for (let row = 0; row < grid.rows; row += 1) {
+      for (let col = 0; col < grid.cols; col += 1) {
+        const x = originX + col * (disc + gutter);
+        const y = originY + row * (disc + gutter);
+        drawCupcakeTopper(c, x, y, disc, disc, s, guides);
+      }
+    }
+    return;
+  }
+  drawCupcakeTopper(c, r.x, r.y, r.w, r.h, s, guides);
+}
+
+/** One topper: the card silhouette, the photo inside it, the message band and the cut line. */
+function drawCupcakeTopper(c, x, y, w, h, s, guides) {
+  const ink = readableInk(s.paper);
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const family = s.font || DEFAULT_CUPCAKE_FONT;
+  const pad = Math.min(w, h) * 0.035;
+  const inner = Math.min(w, h) - pad * 2;
+  const round = s.shape === "circle" || s.shape === "scallop";
+  const message = (s.text || "").trim();
+  // A round card narrows as it falls away from its waist, so the message band sitting at the
+  // foot can only be as wide as the card is there. The type is sized against that chord, which
+  // keeps every glyph on the card instead of running past the cut line.
+  const radius = inner * (s.shape === "scallop" ? 0.475 : 0.5);
+  const bandH = message ? inner * (round ? 0.3 : 0.34) : 0;
+  const bandTop = y + pad + inner - bandH;
+  const bandMid = bandTop + bandH * 0.54;
+  const chordHalf = (dy) => (round
+    ? Math.sqrt(Math.max(0, radius * radius - Math.min(Math.abs(dy), radius) * Math.min(Math.abs(dy), radius)))
+    : inner / 2);
+  const messageW = (size) => chordHalf(Math.abs(bandMid - cy) + size * 0.42) * 1.7;
+
+  c.save();
+  if (guides) {
+    c.shadowColor = "rgba(29,36,32,.26)";
+    c.shadowBlur = Math.max(6, w * 0.03);
+    c.shadowOffsetY = Math.max(2, h * 0.012);
+  }
+  cupcakeShapePath(c, s.shape, x + pad, y + pad, inner, inner);
+  c.fillStyle = s.paper;
+  c.fill();
+  c.restore();
+
+  c.save();
+  cupcakeShapePath(c, s.shape, x + pad, y + pad, inner, inner);
+  c.clip();
+  if (s.image) {
+    drawCover(c, s.image, x + pad, y + pad, inner, inner);
+  } else {
+    c.fillStyle = "rgba(29,36,32,.05)";
+    c.fillRect(x, y, w, h);
+    c.fillStyle = "rgba(29,36,32,.34)";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.font = "600 " + Math.max(9, inner * 0.075) + "px " + family;
+    c.fillText("Add your photo", cx, cy - inner * 0.12);
+  }
+  if (message) {
+    // The band is the card showing through, so the message stays readable over any photo.
+    c.save();
+    c.fillStyle = s.paper;
+    c.globalAlpha = 0.9;
+    c.fillRect(x + pad - 1, bandTop, inner + 2, bandH + 1);
+    c.restore();
+    c.save();
+    c.fillStyle = ink;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    let size = Math.min(bandH * 0.62, inner * 0.26);
+    for (; size > 8; size -= 1) {
+      c.font = "600 " + size + "px " + family;
+      if (c.measureText(message).width <= messageW(size)) break;
+    }
+    c.font = "600 " + size + "px " + family;
+    c.fillText(message, cx, bandMid, messageW(size));
+    c.restore();
+  }
+  c.restore();
+
+  // A hairline keeps the silhouette reading as card stock; the dashed ring is the cut line.
+  c.save();
+  c.strokeStyle = "rgba(29,36,32,.16)";
+  c.lineWidth = Math.max(0.8, inner * 0.004);
+  cupcakeShapePath(c, s.shape, x + pad, y + pad, inner, inner);
+  c.stroke();
+  c.setLineDash([Math.max(2, inner * 0.055), Math.max(2, inner * 0.04)]);
+  c.strokeStyle = "rgba(29,36,32,.34)";
+  c.lineWidth = Math.max(0.9, inner * 0.005);
+  cupcakeShapePath(c, s.shape, x + pad * 0.5, y + pad * 0.5, inner + pad, inner + pad);
+  c.stroke();
+  c.restore();
+}
+
+/** Builds one of the four topper silhouettes inside the given square box. */
+function cupcakeShapePath(c, shape, x, y, w, h) {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  if (shape === "square") {
+    c.beginPath();
+    c.rect(x, y, w, h);
+    return;
+  }
+  if (shape === "rounded") {
+    roundRect(c, x, y, w, h, Math.min(w, h) * 0.16);
+    return;
+  }
+  const radius = Math.min(w, h) / 2;
+  c.beginPath();
+  if (shape === "scallop") {
+    // Sixteen shallow lobes give the edge a frilled look without changing the cut size.
+    const lobes = 16;
+    const steps = lobes * 12;
+    for (let i = 0; i <= steps; i += 1) {
+      const t = (i / steps) * Math.PI * 2 - Math.PI / 2;
+      const rr = radius * 0.955 + radius * 0.045 * Math.cos(lobes * t);
+      const px = cx + Math.cos(t) * rr;
+      const py = cy + Math.sin(t) * rr;
+      if (i) c.lineTo(px, py);
+      else c.moveTo(px, py);
+    }
+    c.closePath();
+    return;
+  }
+  // The classic circle is also the fallback for an unknown value.
+  c.arc(cx, cy, radius, 0, Math.PI * 2);
+  c.closePath();
 }
 
 /**
@@ -2758,7 +3024,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -2805,6 +3071,7 @@ function renderScene(scale) {
   else if (scene.kind === "table-number") drawTableNumber(c, scene, false);
   else if (scene.kind === "place-card") drawPlaceCardSheet(c, scene, false);
   else if (scene.kind === "polaroid") drawPolaroid(c, scene, false);
+  else if (scene.kind === "cupcake") drawCupcake(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -2830,7 +3097,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -2854,7 +3121,9 @@ function exportScale() {
 
 /** Download name: photo blocks read as inches, everything else as a long side in cm. */
 function exportName(extension) {
-  const stem = scene.kind === "polaroid" && scene.frame
+  const stem = scene.kind === "cupcake" && scene.topper
+    ? "cupcake-topper-" + scene.topper.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
+    : scene.kind === "polaroid" && scene.frame
     ? "polaroid-" + scene.frame.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
     : scene.kind === "table-number" && scene.spec
     ? "table-number-" + scene.spec.id
@@ -3162,7 +3431,7 @@ function exportTopperSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw" || profile.id === "polaroid") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw" || profile.id === "polaroid" || profile.id === "cupcake") return photoSampleArtwork();
   if (profile.id === "table-number") return photoSampleArtwork();
   if (profile.id === "sticker-outline") return stickerOutlineSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
@@ -3388,6 +3657,16 @@ async function loadSample() {
     placeCardPage = 0;
     adoptSource("sample");
     render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "cupcake") {
+    // A finished topper is the best demo, so the sample fills the disc and leaves a message.
+    note("Loading a sample photo so you can try the tool...");
+    if (cupcakeText && !cupcakeText.value.trim()) cupcakeText.value = "Happy Birthday";
+    const ok = await adoptImage(sampleArtwork().toDataURL("image/png"));
+    if (!ok) return note("The sample could not load. Please upload a photo instead.");
+    adoptSource("sample");
     track("sample_loaded", { product: profile.id });
     return;
   }
