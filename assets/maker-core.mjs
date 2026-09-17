@@ -171,6 +171,48 @@ export const PLACE_CARD_MEALS = Object.freeze([
   { id: "kids", label: "Kids", words: ["kid", "child", "children", "junior"] },
 ]);
 
+/**
+ * The instant-film frames people actually buy refills for. Each one carries the real film
+ * footprint and the photo window measured from the top-left corner, so the printed frame drops
+ * straight into the plastic one it is going into instead of a generic white border.
+ */
+export const POLAROID_FRAMES = Object.freeze([
+  { id: "classic", label: "Classic Polaroid, 3.5 x 4.2 in", short: "Classic Polaroid", widthCm: 8.8, heightCm: 10.7, window: Object.freeze({ x: 0.45, y: 0.45, w: 7.9, h: 7.9 }) },
+  { id: "mini", label: "Instax Mini, 2.1 x 3.4 in", short: "Instax Mini", widthCm: 5.4, heightCm: 8.6, window: Object.freeze({ x: 0.4, y: 0.4, w: 4.6, h: 6.2 }) },
+  { id: "square", label: "Instax Square, 3.4 x 2.8 in", short: "Instax Square", widthCm: 8.6, heightCm: 7.2, window: Object.freeze({ x: 1.2, y: 0.45, w: 6.2, h: 6.2 }) },
+  { id: "wide", label: "Instax Wide, 4.3 x 3.4 in", short: "Instax Wide", widthCm: 10.8, heightCm: 8.6, window: Object.freeze({ x: 0.45, y: 0.4, w: 9.9, h: 6.2 }) },
+]);
+
+/** The frame colours instant film is actually sold in, in the order the tool lists them. */
+export const POLAROID_PAPERS = Object.freeze([
+  { id: "white", label: "white", hex: "#ffffff" },
+  { id: "cream", label: "cream", hex: "#f7f1e4" },
+  { id: "black", label: "black", hex: "#14181a" },
+  { id: "kraft", label: "kraft", hex: "#c9a978" },
+  { id: "blush", label: "blush", hex: "#f3dede" },
+]);
+
+/**
+ * The looks an instant photo is graded with. Each one is a single canvas blend painted over the
+ * photo window, so the same recipe paints the preview and the download and no phone browser has
+ * to implement a filter the desktop one refuses.
+ */
+export const POLAROID_FINISHES = Object.freeze([
+  { id: "original", label: "Original colours", op: "", hex: "#ffffff", alpha: 0 },
+  { id: "warm", label: "Warm film", op: "overlay", hex: "#ff9e57", alpha: 0.22 },
+  { id: "faded", label: "Faded", op: "lighten", hex: "#efe2cf", alpha: 0.26 },
+  { id: "mono", label: "Black and white", op: "saturation", hex: "#8a8a8a", alpha: 1 },
+]);
+
+/** The paper a whole run of frames is tiled onto for printing, in the order the tool lists them. */
+export const POLAROID_SHEETS = Object.freeze([
+  { id: "letter", widthCm: 21.59, heightCm: 27.94, short: "US Letter", label: "US Letter sheet" },
+  { id: "a4", widthCm: 21, heightCm: 29.7, short: "A4", label: "A4 sheet" },
+]);
+
+/** The border a home printer leaves unprinted, and the gap left between two tiled frames. */
+export const POLAROID_MARGIN_CM = 1.27;
+export const POLAROID_GUTTER_CM = 0.4;
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -190,6 +232,7 @@ const PROFILES = Object.freeze([
   { id: "sticker-outline", name: "Sticker Outline Maker", product: "Sticker with a printed border", hasHardware: false, hasBase: false, exportSvg: true, sizes: STICKER_OUTLINE_SIZES },
   { id: "photo-strip", name: "Photo Strip Maker", product: "Photo booth strip", hasHardware: false, hasBase: false, exportSvg: false, sizes: PHOTO_STRIP_SIZES.map((size) => size.widthCm), sizeLabels: PHOTO_STRIP_SIZES.map((size) => size.label) },
   { id: "table-number", name: "Table Number Maker", product: "Wedding table number", hasHardware: false, hasBase: false, exportSvg: false, sizes: TABLE_NUMBER_SIZES.map((size) => size.widthCm), sizeLabels: TABLE_NUMBER_SIZES.map((size) => size.label) },
+  { id: "polaroid", name: "Polaroid Frame Maker", product: "Polaroid photo frame", hasHardware: false, hasBase: false, exportSvg: false, sizes: POLAROID_FRAMES.map((frame) => frame.widthCm), sizeLabels: POLAROID_FRAMES.map((frame) => frame.label) },
   { id: "place-card", name: "Place Card Maker", product: "Printable place card", hasHardware: false, hasBase: false, exportSvg: false, sizes: PLACE_CARD_SHEETS.map((sheet) => sheet.widthCm), sizeLabels: PLACE_CARD_SHEETS.map((sheet) => sheet.label) },
 ]);
 
@@ -301,6 +344,43 @@ export function placeCardGuests(value, limit = PLACE_CARD_LIMIT) {
     if (guests.length >= cap) break;
   }
   return guests;
+}
+
+/** The instant film format, looked up by the width the size picker stores. */
+export function polaroidFrame(value) {
+  const cm = Number(value);
+  return POLAROID_FRAMES.find((frame) => Math.abs(frame.widthCm - cm) < 0.02) || POLAROID_FRAMES[0];
+}
+
+/** A usable hex colour for the film itself, falling back to the classic white frame. */
+export function polaroidPaperHex(value) {
+  return readHexColour(value, POLAROID_PAPERS, "#ffffff");
+}
+
+/** The look the photo is graded with, falling back to the untouched original. */
+export function polaroidFinish(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return POLAROID_FINISHES.find((finish) => finish.id === raw) || POLAROID_FINISHES[0];
+}
+
+/** The printable sheet a run of frames is tiled onto, or null when the download is one frame. */
+export function polaroidSheet(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return POLAROID_SHEETS.find((sheet) => sheet.id === raw) || null;
+}
+
+/**
+ * How many frames tile onto one sheet. The preview and the print both read this, so the grid on
+ * screen and the frames that come off the printer can never drift apart.
+ */
+export function polaroidGrid(sheetValue, frameValue) {
+  const sheet = polaroidSheet(sheetValue) || POLAROID_SHEETS[0];
+  const frame = polaroidFrame(frameValue);
+  const usableW = Math.max(frame.widthCm, sheet.widthCm - POLAROID_MARGIN_CM * 2);
+  const usableH = Math.max(frame.heightCm, sheet.heightCm - POLAROID_MARGIN_CM * 2);
+  const cols = Math.max(1, Math.floor((usableW + POLAROID_GUTTER_CM) / (frame.widthCm + POLAROID_GUTTER_CM)));
+  const rows = Math.max(1, Math.floor((usableH + POLAROID_GUTTER_CM) / (frame.heightCm + POLAROID_GUTTER_CM)));
+  return Object.freeze({ sheet, frame, cols, rows, perSheet: cols * rows, marginCm: POLAROID_MARGIN_CM, gutterCm: POLAROID_GUTTER_CM });
 }
 
 /** The desk name plate sizes, looked up by the long side the size picker stores. */

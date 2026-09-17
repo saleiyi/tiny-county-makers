@@ -87,11 +87,20 @@ import {
   placeCardMeal,
   placeCardGrid,
   placeCardGuests,
+  POLAROID_FRAMES,
+  POLAROID_PAPERS,
+  POLAROID_FINISHES,
+  POLAROID_SHEETS,
+  polaroidFrame,
+  polaroidPaperHex,
+  polaroidFinish,
+  polaroidSheet,
+  polaroidGrid,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the nineteen distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "place-card"]);
+test("the shared engine exposes the twenty distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -136,6 +145,12 @@ test("the shared engine exposes the nineteen distinct maker profiles", () => {
   assert.equal(getProductProfile("photo-strip").hasBase, false);
   assert.equal(getProductProfile("photo-strip").sizes.length, 2);
   assert.equal(getProductProfile("photo-strip").sizeLabels.length, 2);
+  assert.equal(getProductProfile("polaroid").exportSvg, false);
+  assert.equal(getProductProfile("polaroid").hasHardware, false);
+  assert.equal(getProductProfile("polaroid").hasBase, false);
+  assert.equal(getProductProfile("polaroid").sizes.length, 4);
+  assert.equal(getProductProfile("polaroid").sizeLabels.length, 4);
+  assert.equal(getProductProfile("polaroid").sizeLabels[0], "Classic Polaroid, 3.5 x 4.2 in");
 });
 
 test("the photo block sizes keep the inch label next to the centimetre print maths", () => {
@@ -181,7 +196,7 @@ test("print math stays consistent between physical pixels and working DPI", () =
 });
 
 test("each search-intent maker has a standalone crawlable entry page", () => {
-  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html", "table-number-maker.html", "place-card-maker.html"]) {
+  for (const page of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "photo-jigsaw-puzzle-maker.html", "table-number-maker.html", "polaroid-frame-maker.html", "place-card-maker.html"]) {
     assert.equal(fs.existsSync(new URL(`../${page}`, import.meta.url)), true, `${page} is missing`);
   }
 });
@@ -834,4 +849,48 @@ test("place card guest parsing splits names from meal choices", () => {
   assert.equal(placeCardMeal("nonsense"), "");
   assert.equal(placeCardGuests(Array.from({ length: 130 }, (_, i) => "G" + i).join("\n"), 5).length, 5);
   assert.equal(placeCardGuests(Array.from({ length: 130 }, (_, i) => "G" + i).join("\n")).length, 120);
+});
+
+test("polaroid frames offer the four instant film formats at print size", () => {
+  assert.equal(POLAROID_FRAMES.length, 4);
+  assert.equal(polaroidFrame(8.8).id, "classic");
+  assert.equal(polaroidFrame("5.4").id, "mini");
+  assert.equal(polaroidFrame(8.6).id, "square");
+  assert.equal(polaroidFrame(10.8).id, "wide");
+  assert.equal(polaroidFrame("999").id, "classic", "an unknown width should fall back to the classic frame");
+  assert.equal(physicalPixels(polaroidFrame(8.8).widthCm, PRINT_DPI), 1039);
+  assert.equal(physicalPixels(polaroidFrame(8.8).heightCm, PRINT_DPI), 1264);
+  assert.equal(polaroidFrame(8.8).window.w, 7.9, "the photo window stays inside the film border");
+});
+
+test("polaroid sheet grids tile the frames with a printable margin", () => {
+  assert.equal(POLAROID_SHEETS.length, 2);
+  assert.equal(polaroidSheet("letter").widthCm, 21.59);
+  assert.equal(polaroidSheet("A4").id, "a4");
+  assert.equal(polaroidSheet("single"), null, "a single frame is not a sheet");
+  assert.equal(polaroidSheet(undefined), null);
+  assert.equal(polaroidSheet("nonsense"), null);
+  assert.equal(polaroidGrid("letter", 8.8).perSheet, 4);
+  assert.equal(polaroidGrid("a4", 8.8).perSheet, 4);
+  assert.equal(polaroidGrid("letter", 5.4).perSheet, 6);
+  assert.equal(polaroidGrid("a4", 5.4).perSheet, 9);
+  assert.equal(polaroidGrid("letter", 8.6).perSheet, 6);
+  assert.equal(polaroidGrid("a4", 8.6).perSheet, 6);
+  assert.equal(polaroidGrid("letter", 10.8).perSheet, 2);
+  assert.equal(polaroidGrid("a4", 10.8).perSheet, 3);
+  assert.equal(polaroidGrid("letter", 8.8).gutterCm, 0.4, "frames leave a gutter so a trimmer can pass between them");
+});
+
+test("polaroid film colours and looks resolve with safe fallbacks", () => {
+  assert.equal(POLAROID_PAPERS.length, 5);
+  assert.equal(polaroidPaperHex("#ABC"), "#aabbcc");
+  assert.equal(polaroidPaperHex("cream"), "#f7f1e4");
+  assert.equal(polaroidPaperHex("kraft"), "#c9a978");
+  assert.equal(polaroidPaperHex("no-such-paper"), "#ffffff");
+  assert.equal(POLAROID_FINISHES.length, 4);
+  assert.equal(polaroidFinish("warm").id, "warm");
+  assert.equal(polaroidFinish("MONO").id, "mono", "lookups are case-insensitive");
+  assert.equal(polaroidFinish("nope").id, "original");
+  assert.equal(polaroidFinish(undefined).id, "original");
+  assert.equal(polaroidFinish("warm").op, "overlay", "each look is one canvas blend so preview and print agree");
 });

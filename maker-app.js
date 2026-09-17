@@ -38,6 +38,11 @@ import {
   placeCardGrid,
   placeCardGuests,
   PLACE_CARD_LIMIT,
+  polaroidFrame,
+  polaroidGrid,
+  polaroidPaperHex,
+  polaroidFinish,
+  polaroidSheet,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -65,6 +70,7 @@ const DEFAULT_STRIP_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
 const STRIP_MAX_PHOTOS = 4;
 const DEFAULT_TABLE_NUMBER_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
 const DEFAULT_PLACE_CARD_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
+const DEFAULT_POLAROID_FONT = "'Brush Script MT', 'Segoe Script', cursive";
 
 const root = document.querySelector("[data-maker]");
 const profile = getProductProfile(root.dataset.maker);
@@ -112,6 +118,10 @@ const placeCardPager = document.querySelector("#placePager");
 const placeCardPagePrev = document.querySelector("#placePagePrev");
 const placeCardPageNext = document.querySelector("#placePageNext");
 const placeCardPageLabel = document.querySelector("#placePageLabel");
+const polaroidCaption = document.querySelector("#polaroidCaption");
+const polaroidFontSelect = document.querySelector("#polaroidFont");
+const polaroidPaper = document.querySelector("#polaroidPaper");
+const polaroidFinishSelect = document.querySelector("#polaroidFinish");
 
 let image = null;
 let imageDataUrl = "";
@@ -121,6 +131,9 @@ let plateLogo = null;
 let stripPhotos = [];
 let tablePhoto = null;
 let placeCardPage = 0;
+// A polaroid can be downloaded as a blank film frame, so the upload lives beside the shared
+// artwork slot instead of replacing the placeholder the shared export path expects.
+let polaroidPhoto = null;
 let rawContours = null;
 let backgroundLifted = false;
 let liftedCanvas = null;
@@ -209,12 +222,27 @@ function boot() {
     render();
     document.fonts?.ready?.then?.(() => schedule());
   }
+  if (profile.id === "polaroid") {
+    polaroidCaption?.addEventListener("input", schedule);
+    polaroidFontSelect?.addEventListener("change", schedule);
+    polaroidPaper?.addEventListener("input", schedule);
+    polaroidFinishSelect?.addEventListener("change", schedule);
+    // The film frame is a fixed shape, so a blank placeholder stands in for the artwork and the
+    // shared preview and download plumbing works before a single photo is added.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
   offsetInput?.addEventListener("input", schedule);
   borderColorInput?.addEventListener("input", schedule);
   wireHexPresets(borderColorInput, "#borderPresets", "data-border", schedule);
   wireHexPresets(stripPaperInput, "#stripPaperPresets", "data-paper", schedule);
   wireHexPresets(tableNumberPaper, "#tableNumberPaperPresets", "data-paper", schedule);
   wireHexPresets(placeCardPaper, "#placePaperPresets", "data-paper", schedule);
+  wireHexPresets(polaroidPaper, "#polaroidPaperPresets", "data-paper", schedule);
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
   contactInput?.addEventListener("input", schedule);
@@ -530,6 +558,8 @@ async function adoptImage(dataUrl) {
     note("We could not read that image. Please try another file.");
     return false;
   }
+  // A polaroid can be downloaded blank, so the photo is kept beside the placeholder artwork.
+  if (profile.id === "polaroid") polaroidPhoto = image;
   // A table number keeps its photo beside the typed number, so it is remembered here rather
   // than read back off the shared artwork slot.
   if (profile.id === "table-number") tablePhoto = image;
@@ -607,6 +637,20 @@ function extractContours() {
 // ------------------------------------------------------------------ layout + render
 
 function layout() {
+  if (profile.id === "polaroid") {
+    // A polaroid is bought as film, so the frame decides the shape of the box and the sheet
+    // only decides how many of them are tiled onto one printable page.
+    const frame = polaroidFrame(sizeSelect.value);
+    const sheet = polaroidSheet(shapeSelect?.value);
+    const spec = sheet || frame;
+    const longCm = Math.max(spec.widthCm, spec.heightCm);
+    const scale = WORK_LONG_SIDE / longCm;
+    const w = Math.round(spec.widthCm * scale);
+    const h = Math.round(spec.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), frame, sheet };
+  }
   if (profile.id === "photo-strip") {
     // A strip is a fixed 2 in wide column of photos, so the product size decides the box
     // instead of the uploads. The scene carries the strip height as its print long side.
@@ -847,6 +891,23 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawPlaceCardSheet(ctx, scene, true);
+  } else if (profile.id === "polaroid") {
+    scene = {
+      kind: "polaroid",
+      frame: L.frame,
+      spec: L.frame,
+      sheet: L.sheet,
+      grid: L.sheet ? polaroidGrid(L.sheet.id, sizeSelect.value) : null,
+      paper: polaroidPaperHex(polaroidPaper?.value),
+      finish: polaroidFinish(polaroidFinishSelect?.value),
+      caption: (polaroidCaption?.value || "").trim().replace(/\s+/g, " ").slice(0, 48),
+      font: polaroidFontSelect?.value || DEFAULT_POLAROID_FONT,
+      image: polaroidPhoto,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawPolaroid(ctx, scene, true);
   } else if (profile.id === "photo-keychain") {
     const geometry = photoKeychainGeometry(L);
     scene = {
@@ -998,7 +1059,7 @@ function buildStickerContours(L) {
 
 function readout(L) {
   sizeLabel.textContent = scene.spec
-    ? (profile.id === "table-number" || profile.id === "place-card") && scene.spec.short
+    ? (profile.id === "table-number" || profile.id === "place-card" || profile.id === "polaroid") && scene.spec.short
       ? scene.spec.short
       : scene.spec.id.split("x").join(" x ") + " in"
     : L.longSideCm + " cm";
@@ -1074,6 +1135,31 @@ function readout(L) {
       + " The download is a print-ready PNG of the whole sheet, light cut lines and all."
       + (scene.guests.length ? "" : " Type a guest list on the left to fill the first card.")
       + " No watermark, and nothing you type leaves your device.";
+    return;
+  }
+  if (profile.id === "polaroid") {
+    // The film is the product, so the readout leads with the frame and then says whether the
+    // download is one frame or a whole sheet of them.
+    const frame = scene.frame;
+    const inches = (cm) => round2(cm / 2.54);
+    const finishNote = scene.finish && scene.finish.id !== "original" ? " with a " + scene.finish.label.toLowerCase() + " over it" : "";
+    if (scene.sheet) {
+      const grid = scene.grid;
+      dimensions.textContent = frame.short + " frames tiled " + grid.cols + " across and " + grid.rows
+        + " down on " + (scene.sheet.short === "A4" ? "an " : "a ") + scene.sheet.short + " sheet at " + PRINT_DPI + " DPI ("
+        + physicalPixels(scene.sheet.widthCm, PRINT_DPI) + " x " + physicalPixels(scene.sheet.heightCm, PRINT_DPI)
+        + " px) - " + grid.perSheet + " frames a sheet with light trim lines."
+        + (scene.image ? " Your photo is cover-fitted into every frame" + finishNote + "." : " Upload a photo to fill the frames.")
+        + (scene.caption ? " The caption prints in the bottom border of each one." : "")
+        + " No watermark, and your photo never leaves your device.";
+      return;
+    }
+    dimensions.textContent = frame.short + " frame at " + PRINT_DPI + " DPI (" + physicalPixels(frame.widthCm, PRINT_DPI)
+      + " x " + physicalPixels(frame.heightCm, PRINT_DPI) + " px, " + inches(frame.widthCm) + " x " + inches(frame.heightCm)
+      + " in) - a print-ready PNG of the whole film frame, border and all."
+      + (scene.image ? " Your photo is cover-fitted into the window" + finishNote + "." : " Upload a photo to fill the window, or download the blank frame as a template.")
+      + (scene.caption ? " The caption prints in the bottom border." : "")
+      + " No watermark, and your photo never leaves your device.";
     return;
   }
   if (profile.id === "jigsaw") {
@@ -1553,6 +1639,142 @@ function drawMealGlyph(c, meal, cx, cy, size, ink) {
   }
   c.restore();
 }
+/**
+ * An instant-film frame. The film footprint and the photo window are fixed, so the photo is
+ * cover-fitted into a window instead of setting the shape of the piece the way an upload does.
+ * A single frame and a whole tiled sheet share the same card painter, so the preview and the
+ * download can never disagree about where the border falls.
+ */
+function drawPolaroid(c, s, guides) {
+  const r = s.rect;
+  if (s.sheet) {
+    // A print sheet of frames: the paper is blank stock and the frames are seated in a grid with
+    // a small gutter, so a trimmer pass down each gutter separates the whole run.
+    const grid = s.grid;
+    const pxPerCm = r.w / grid.sheet.widthCm;
+    const frameW = grid.frame.widthCm * pxPerCm;
+    const frameH = grid.frame.heightCm * pxPerCm;
+    const gutter = grid.gutterCm * pxPerCm;
+    const blockW = grid.cols * frameW + (grid.cols - 1) * gutter;
+    const blockH = grid.rows * frameH + (grid.rows - 1) * gutter;
+    const originX = r.x + (r.w - blockW) / 2;
+    const originY = r.y + (r.h - blockH) / 2;
+    c.save();
+    if (guides) {
+      c.shadowColor = "rgba(29,36,32,.22)";
+      c.shadowBlur = 28;
+      c.shadowOffsetY = 12;
+    }
+    c.fillStyle = "#ffffff";
+    c.fillRect(r.x, r.y, r.w, r.h);
+    c.restore();
+    c.save();
+    c.strokeStyle = "rgba(29,36,32,.16)";
+    c.lineWidth = Math.max(1, r.w * 0.0016);
+    c.setLineDash([Math.max(2, gutter * 0.34), Math.max(2, gutter * 0.3)]);
+    for (let col = 1; col < grid.cols; col += 1) {
+      const x = originX + col * frameW + (col - 0.5) * gutter;
+      c.beginPath();
+      c.moveTo(x, originY - gutter * 0.45);
+      c.lineTo(x, originY + blockH + gutter * 0.45);
+      c.stroke();
+    }
+    for (let row = 1; row < grid.rows; row += 1) {
+      const y = originY + row * frameH + (row - 0.5) * gutter;
+      c.beginPath();
+      c.moveTo(originX - gutter * 0.45, y);
+      c.lineTo(originX + blockW + gutter * 0.45, y);
+      c.stroke();
+    }
+    c.restore();
+    for (let row = 0; row < grid.rows; row += 1) {
+      for (let col = 0; col < grid.cols; col += 1) {
+        const x = originX + col * (frameW + gutter);
+        const y = originY + row * (frameH + gutter);
+        drawPolaroidCard(c, x, y, frameW, frameH, s, guides);
+      }
+    }
+    return;
+  }
+  drawPolaroidCard(c, r.x, r.y, r.w, r.h, s, guides);
+}
+
+/** One instant photo: the film border, the window, the graded photo and the caption. */
+function drawPolaroidCard(c, x, y, w, h, s, guides) {
+  const frame = s.frame;
+  const ink = readableInk(s.paper);
+  const pxPerCm = w / frame.widthCm;
+  const radius = Math.max(2, Math.min(w, h) * 0.02);
+  c.save();
+  if (guides) {
+    c.shadowColor = "rgba(29,36,32,.26)";
+    c.shadowBlur = Math.max(6, w * 0.03);
+    c.shadowOffsetY = Math.max(2, h * 0.012);
+  }
+  c.fillStyle = s.paper;
+  roundRect(c, x, y, w, h, radius);
+  c.fill();
+  c.restore();
+
+  const win = frame.window;
+  const wx = x + win.x * pxPerCm;
+  const wy = y + win.y * pxPerCm;
+  const ww = win.w * pxPerCm;
+  const wh = win.h * pxPerCm;
+
+  c.save();
+  roundRect(c, wx, wy, ww, wh, Math.max(1, radius * 0.5));
+  c.clip();
+  c.fillStyle = "#ffffff";
+  c.fillRect(wx, wy, ww, wh);
+  if (s.image) {
+    drawCover(c, s.image, wx, wy, ww, wh);
+    drawPolaroidFinish(c, s.finish, wx, wy, ww, wh);
+  } else {
+    // The blank frame is a real download, so the empty window has to look deliberate.
+    c.fillStyle = "rgba(29,36,32,.32)";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.font = "600 " + Math.max(9, ww * 0.08) + "px " + (s.font || DEFAULT_POLAROID_FONT);
+    c.fillText("Add your photo", wx + ww / 2, wy + wh / 2);
+  }
+  c.restore();
+
+  // A hairline keeps the window reading as film, even against a white sheet.
+  c.save();
+  c.strokeStyle = "rgba(29,36,32,.2)";
+  c.lineWidth = Math.max(1, w * 0.004);
+  roundRect(c, wx, wy, ww, wh, Math.max(1, radius * 0.5));
+  c.stroke();
+  c.restore();
+
+  const caption = (s.caption || "").trim();
+  const bandTop = wy + wh;
+  const bandH = y + h - bandTop;
+  if (caption && bandH > 4) {
+    c.save();
+    c.fillStyle = ink;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    const family = s.font || DEFAULT_POLAROID_FONT;
+    const size = fitFont(c, caption, ww, Math.min(bandH * 0.6, ww * 0.26), family, 600);
+    c.font = "600 " + size + "px " + family;
+    c.fillText(caption, x + w / 2, bandTop + bandH * 0.52, ww);
+    c.restore();
+  }
+}
+
+/** The one blend that gives a photo its instant-film look. */
+function drawPolaroidFinish(c, finish, x, y, w, h) {
+  if (!finish || !finish.op || !(finish.alpha > 0)) return;
+  c.save();
+  c.globalCompositeOperation = finish.op;
+  c.globalAlpha = finish.alpha;
+  c.fillStyle = finish.hex;
+  c.fillRect(x, y, w, h);
+  c.restore();
+}
+
 /**
  * A printed photo booth strip. The paper, the frame gutters and the caption band all move with
  * the product size, so the same painter draws a single 2 x 6 in strip and the 4 x 6 in sheet
@@ -2536,7 +2758,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -2582,6 +2804,7 @@ function renderScene(scale) {
   else if (scene.kind === "photo-strip") drawPhotoStrip(c, scene, false);
   else if (scene.kind === "table-number") drawTableNumber(c, scene, false);
   else if (scene.kind === "place-card") drawPlaceCardSheet(c, scene, false);
+  else if (scene.kind === "polaroid") drawPolaroid(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -2607,7 +2830,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -2631,7 +2854,9 @@ function exportScale() {
 
 /** Download name: photo blocks read as inches, everything else as a long side in cm. */
 function exportName(extension) {
-  const stem = scene.kind === "table-number" && scene.spec
+  const stem = scene.kind === "polaroid" && scene.frame
+    ? "polaroid-" + scene.frame.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
+    : scene.kind === "table-number" && scene.spec
     ? "table-number-" + scene.spec.id
     : scene.kind === "place-card" && scene.spec
       ? "place-cards-" + scene.spec.id + "-sheet-" + (scene.page + 1)
@@ -2937,7 +3162,7 @@ function exportTopperSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw" || profile.id === "polaroid") return photoSampleArtwork();
   if (profile.id === "table-number") return photoSampleArtwork();
   if (profile.id === "sticker-outline") return stickerOutlineSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
@@ -3163,6 +3388,17 @@ async function loadSample() {
     placeCardPage = 0;
     adoptSource("sample");
     render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "polaroid") {
+    // A finished frame is the best demo, so the sample fills the window and leaves a caption in
+    // the border the way a real instant photo would.
+    note("Loading a sample photo so you can try the tool...");
+    if (polaroidCaption && !polaroidCaption.value.trim()) polaroidCaption.value = "Summer, 2026";
+    const ok = await adoptImage(sampleArtwork().toDataURL("image/png"));
+    if (!ok) return note("The sample could not load. Please upload a photo instead.");
+    adoptSource("sample");
     track("sample_loaded", { product: profile.id });
     return;
   }
