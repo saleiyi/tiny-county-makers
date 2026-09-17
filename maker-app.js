@@ -1802,3 +1802,45 @@ function track(event, metadata = {}) {
     }),
   }).catch(() => {});
 }
+
+/* Mobile tools menu: the long nav collapses behind one button on small screens. */
+(() => {
+  const header = document.querySelector("header.top");
+  const nav = header && header.querySelector("nav");
+  if (!header || !nav || header.querySelector(".nav-toggle")) return;
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "nav-toggle";
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.setAttribute("aria-label", "Open the tools menu");
+  toggle.innerHTML = "<i></i><i></i><i></i>";
+  if (!nav.id) nav.id = "site-nav";
+  toggle.setAttribute("aria-controls", nav.id);
+  header.append(toggle);
+  header.classList.add("nav-ready");
+
+  const setOpen = (open) => {
+    header.classList.toggle("nav-open", open);
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-label", open ? "Close the tools menu" : "Open the tools menu");
+  };
+  const isOpen = () => header.classList.contains("nav-open");
+
+  toggle.addEventListener("click", () => setOpen(!isOpen()));
+  nav.addEventListener("click", (event) => {
+    if (event.target.closest("a")) setOpen(false);
+  });
+  document.addEventListener("click", (event) => {
+    if (isOpen() && !header.contains(event.target)) setOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && isOpen()) {
+      setOpen(false);
+      toggle.focus();
+    }
+  });
+  addEventListener("resize", () => {
+    if (isOpen() && innerWidth > 860) setOpen(false);
+  });
+})();

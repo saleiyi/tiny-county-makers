@@ -266,3 +266,27 @@ test("every published page keeps a title and description that fit in a search re
     assert.ok(desc[1].length <= 158, file + " description is " + desc[1].length + " characters");
   }
 });
+
+test("the small-screen tool menu ships in every page shell", () => {
+  for (const css of ["maker.css", "create.css"]) {
+    const text = read(css);
+    assert.ok(text.includes(".nav-toggle"), css + " lost the menu button styles");
+    assert.ok(text.includes(".top.nav-ready"), css + " lost the nav-ready positioning rules");
+  }
+  assert.ok(read("guide.css").includes(".top-actions .pill { display: inline-flex; }"), "guide.css must keep the header button on a phone");
+});
+
+test("every runtime script can build the small-screen menu", () => {
+  for (const file of ["maker-app.js", "create.js", "custom-acrylic-keychains.html"]) {
+    const text = read(file);
+    assert.ok(text.includes("site-nav"), file + " no longer labels the nav for the menu button");
+    assert.ok(text.includes("aria-expanded"), file + " no longer reports the menu state to assistive tech");
+    assert.ok(text.includes("nav-open"), file + " no longer toggles the open menu state");
+  }
+});
+
+test("the create hero keeps its call to action above the fold on a phone", () => {
+  const css = read("create.css");
+  assert.ok(!css.includes("font-size: 54px") && !css.includes("font-size:54px"), "create.css regressed to the oversized hero headline");
+  assert.ok(css.includes("flex-wrap: wrap") && css.includes("gap: 10px 22px"), "create.css lost the desktop header wrapping rules");
+});

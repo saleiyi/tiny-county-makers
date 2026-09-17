@@ -8,3 +8,8 @@
 .more-grid a[aria-current="page"] { border-color: #ef694c; background: #fff7f4; }
 .more-grid b { display: block; font-size: 15px; margin-bottom: 6px; color: #1d2420; }
 .more-grid span { display: block; color: #68716b; font-size: 13px; line-height: 1.55; }
+
+/* Keep the guide's header call to action reachable on a phone. */
+@media (max-width: 520px) {
+  .top-actions .pill { display: inline-flex; }
+}
