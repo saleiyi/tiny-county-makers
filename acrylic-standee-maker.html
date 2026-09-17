@@ -1,1 +1,250 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Free acrylic standee maker: upload a photo, preview a base and download your standee artwork. No signup."><link rel="canonical" href="https://saleiyi.github.io/tiny-county-makers/acrylic-standee-maker.html"><title>Free Acrylic Standee Maker | Tiny County Makers</title><link rel="stylesheet" href="./maker.css"></head><body><header class="top"><a class="brand" href="./"><i>TC</i>Tiny County Makers</a><nav><a href="./">Keychains</a><a href="./sticker-cutline-generator.html">Sticker cutline</a><a href="./fridge-magnet-maker.html">Magnets</a></nav></header><main data-maker="standee"><section class="hero"><div class="shell"><p class="eyebrow">Free photo-to-standee tool</p><h1>Make a little scene that <em>stands up.</em></h1><p>Upload an original photo or illustration, preview a simple acrylic base and download your artwork in the browser. No account, no watermark.</p></div></section><section class="maker shell"><aside class="panel"><h2>Build your standee</h2><label class="upload">Choose an image<input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><strong>Upload JPG, PNG or WEBP</strong><small>Processed locally in your browser</small></label><label>Finished long side <output id="sizeLabel">8 cm</output><select id="size"></select></label><div class="downloads"><button class="button coral" id="pngDownload">Download PNG</button><button class="button" disabled>Request proof soon</button></div><p class="tip">This MVP previews the artwork and base. You can download it now; physical production remains manual until demand is validated.</p></aside><section class="preview"><div class="preview-top"><strong>LIVE PREVIEW</strong><span id="productName"></span></div><div class="stage"><canvas id="preview" width="900" height="900"></canvas></div><p class="tip" id="dimensions">Upload an image to see finished dimensions.</p></section></section><section class="seo"><div class="shell"><p class="eyebrow">How it works</p><h2>A simple acrylic standee preview from your photo.</h2><div class="seo-grid"><article><h3>1. Upload</h3><p>Choose artwork you own or can use.</p></article><article><h3>2. Pick a size</h3><p>The long-side measurement updates the preview details.</p></article><article><h3>3. Download</h3><p>Keep the PNG free, or use it to discuss a custom order.</p></article></div></div></section></main><footer class="shell">Tiny County Makers · Free design tools · Physical orders are reviewed by humans.</footer><script src="./config.js"></script><script type="module" src="./maker-app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Free Acrylic Standee Maker — Photo to Standee Preview (8–15 cm)</title>
+<meta name="description" content="Free acrylic standee maker: upload a photo or illustration, preview a slot base, choose an 8, 10 or 15 cm long side and download a transparent 300 DPI PNG. No signup, no watermark.">
+<link rel="canonical" href="https://saleiyi.github.io/tiny-county-makers/acrylic-standee-maker.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tiny County Makers">
+<meta property="og:title" content="Free Acrylic Standee Maker — Photo to Standee Preview">
+<meta property="og:description" content="Preview a photo standee with a slot base and download a transparent 300 DPI PNG. Free, in your browser.">
+<meta property="og:url" content="https://saleiyi.github.io/tiny-county-makers/acrylic-standee-maker.html">
+<meta property="og:image" content="https://saleiyi.github.io/tiny-county-makers/assets/keychain-template-800.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Free Acrylic Standee Maker">
+<meta name="twitter:description" content="Turn a photo into an acrylic standee design and download a 300 DPI PNG.">
+<meta name="twitter:image" content="https://saleiyi.github.io/tiny-county-makers/assets/keychain-template-800.png">
+<link rel="stylesheet" href="./maker.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "Acrylic Standee Maker",
+      "url": "https://saleiyi.github.io/tiny-county-makers/acrylic-standee-maker.html",
+      "applicationCategory": "DesignApplication",
+      "operatingSystem": "Any modern browser",
+      "browserRequirements": "Requires JavaScript. Runs entirely on your device.",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "featureList": [
+        "Photo to standee preview",
+        "Slot base mock-up",
+        "8 cm, 10 cm and 15 cm long side",
+        "Transparent PNG at 300 DPI"
+      ],
+      "publisher": { "@type": "Organization", "name": "Tiny County Makers", "url": "https://saleiyi.github.io/tiny-county-makers/" }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Tiny County Makers", "item": "https://saleiyi.github.io/tiny-county-makers/" },
+        { "@type": "ListItem", "position": 2, "name": "Acrylic Standee Maker", "item": "https://saleiyi.github.io/tiny-county-makers/acrylic-standee-maker.html" }
+      ]
+    },
+    {
+      "@type": "HowTo",
+      "name": "How to design an acrylic standee from a photo",
+      "totalTime": "PT3M",
+      "tool": [{ "@type": "HowToTool", "name": "Acrylic Standee Maker" }],
+      "step": [
+        { "@type": "HowToStep", "position": 1, "name": "Upload the photo you want standing up", "text": "Choose a JPG, PNG or WEBP file. A cut-out PNG gives a shaped standee instead of a rectangle." },
+        { "@type": "HowToStep", "position": 2, "name": "Pick the finished long side", "text": "Choose 8, 10 or 15 cm. The tool keeps your aspect ratio and draws the slot base underneath at the same scale." },
+        { "@type": "HowToStep", "position": 3, "name": "Download the layout", "text": "Save a transparent PNG at 300 DPI for printing, or send it to us through the quote form for a physical standee." }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is an acrylic standee?",
+          "acceptedAnswer": { "@type": "Answer", "text": "An acrylic standee is a flat printed acrylic cut-out that slots into a small base so it stands upright on a desk or shelf. The artwork is printed on one side of the acrylic and the outline is cut to the shape of the design." }
+        },
+        {
+          "@type": "Question",
+          "name": "What size acrylic standee should I order?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Measure the longest side of the finished piece. 8 cm suits a single small character, 10 cm is the most versatile size for a portrait or pet photo, and 15 cm works for couples, groups or wide scenes but needs a wider base so it does not tip." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is the standee maker really free?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The maker and the PNG download are free and need no account, no email and no watermark. Your image is decoded and rendered inside your own browser and is not uploaded to us." }
+        },
+        {
+          "@type": "Question",
+          "name": "Will my printed standee look exactly like the preview?",
+          "acceptedAnswer": { "@type": "Answer", "text": "The preview shows proportions, crop and where the base sits, so use it to check the layout. It does not show acrylic thickness, edge polish or final print colour. If you order, a person checks the file and sends a proof before anything is paid." }
+        },
+        {
+          "@type": "Question",
+          "name": "Do you actually make acrylic standees?",
+          "acceptedAnswer": { "@type": "Answer", "text": "We make small custom acrylic runs by hand. Send the design through the quote form on this page and a person replies with sizes, options and a price. No card is taken on this site." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><i>TC</i>Tiny County Makers</a>
+  <nav>
+    <a href="./pet-keychain-maker.html">Pet keychains</a>
+    <a href="./acrylic-standee-maker.html" aria-current="page">Standees</a>
+    <a href="./sticker-cutline-generator.html">Sticker cutline</a>
+    <a href="./fridge-magnet-maker.html">Magnets</a>
+    <a href="./custom-acrylic-keychains.html">Custom acrylic</a>
+  </nav>
+</header>
+<main data-maker="standee">
+<section class="hero">
+  <div class="shell">
+    <p class="eyebrow">Free photo-to-standee preview · runs in your browser</p>
+    <h1>Make a little scene that <em>stands up.</em></h1>
+    <p>Upload an original photo or illustration, pick the finished long side and see the artwork sitting in a slot base. Download a transparent 300 DPI PNG, or send the same design for a physical acrylic standee. No account, no watermark.</p>
+    <div class="trust">
+      <span>8, 10 and 15 cm long side</span>
+      <span>Base and shadow previewed to scale</span>
+      <span>Your file never leaves your device</span>
+    </div>
+  </div>
+</section>
+<section class="maker shell">
+  <aside class="panel">
+    <h2>Build your standee</h2>
+    <label class="upload">Choose standee artwork
+      <input id="photo" type="file" accept="image/png,image/jpeg,image/webp">
+      <strong>Upload JPG, PNG or WEBP</strong>
+      <small>Up to 12 MB · a cut-out PNG gives a shaped standee</small>
+    </label>
+    <label>Finished long side <output id="sizeLabel">10 cm</output>
+      <select id="size"></select>
+    </label>
+    <button class="button ghost wide" type="button" id="sampleArtwork">Try a sample star</button>
+    <div class="downloads">
+      <button class="button coral" id="pngDownload" disabled>Download PNG</button>
+      <a class="button" href="#quote">Get one made</a>
+    </div>
+    <p class="tip">The PNG is the print layout at 300 DPI: your artwork plus the slot base shown below it. Print dimensions are listed under the preview.</p>
+  </aside>
+  <section class="preview">
+    <div class="preview-top">
+      <strong>LIVE STANDEE PREVIEW</strong>
+      <span id="productName"></span>
+    </div>
+    <div class="stage"><canvas id="preview" width="900" height="900"></canvas></div>
+    <p class="tip" id="sourceBadge"></p>
+    <p class="tip" id="dimensions">Upload an image to see the finished size and the print resolution.</p>
+  </section>
+</section>
+
+<section class="seo alt">
+  <div class="shell">
+    <p class="eyebrow">Three steps</p>
+    <h2>How to design an acrylic standee from a photo</h2>
+    <div class="steps">
+      <article class="step">
+        <h3>Upload the photo you want standing up</h3>
+        <p>A PNG with the background already removed gives you a shaped standee that follows the subject. A JPG is treated as a full rectangle, which is fine for a framed or polaroid-style standee.</p>
+      </article>
+      <article class="step">
+        <h3>Pick the finished long side</h3>
+        <p>Choose 8, 10 or 15 cm. The maker keeps your aspect ratio, so a tall portrait stays tall, and it draws the base at the same scale so the proportions you see are the proportions you get.</p>
+      </article>
+      <article class="step">
+        <h3>Download it or send it to us</h3>
+        <p>The download is a transparent 300 DPI PNG you can take to any acrylic printer. If you would rather have it made, use the quote form and a person replies with options and a price.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="seo">
+  <div class="shell">
+    <p class="eyebrow">Reference</p>
+    <h2>Acrylic standee size guide</h2>
+    <p>Standee sizes are given as the longest finished side, not the height. A wide landscape design and a tall portrait can share the same long side and still feel completely different on a desk.</p>
+    <table>
+      <thead><tr><th>Long side</th><th>Works well for</th><th>Watch out for</th></tr></thead>
+      <tbody>
+        <tr><td>8 cm</td><td>One small character, a pet head, a simple logo</td><td>Fine detail disappears; crop tight to the subject</td></tr>
+        <tr><td>10 cm</td><td>Portraits, pet photos, the most versatile desk size</td><td>Neck and limb gaps get fragile if they are very thin</td></tr>
+        <tr><td>15 cm</td><td>Couples, groups, wide scenes, gift sets</td><td>Top-heavy designs need a wider base or they tip</td></tr>
+      </tbody>
+    </table>
+    <h3>What the download contains</h3>
+    <ul>
+      <li>The artwork placed at its exact crop, so what you see in the preview is what gets printed.</li>
+      <li>A slot base drawn underneath at the same scale, as a layout reference for the printer.</li>
+      <li>A 300 DPI transparent PNG — no watermark, no background, ready to drop into a print job.</li>
+    </ul>
+    <h3>Small design rules that save a reprint</h3>
+    <ul>
+      <li>Leave a few millimetres of empty space at the bottom so the slot never cuts through the subject.</li>
+      <li>Thin necks, antennae and whiskers are where acrylic breaks. Thicken them or bridge them to the body.</li>
+      <li>Send the artwork at the largest size you have. Upscaling a small photo is the fastest way to a soft print.</li>
+      <li><a href="./sticker-cutline-generator.html">Add a real cutline offset</a> first if you want a shaped outline with a consistent white edge.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="seo alt" id="quote">
+  <div class="shell">
+    <div class="quote">
+      <div>
+        <p class="eyebrow">Human follow-up, not a checkout</p>
+        <h2>Want your standee made for real?</h2>
+        <p>We run small acrylic batches by hand: keychains, standees and fridge magnets. Send us the design you just built and we will reply with sizes, options and a price before anything is paid.</p>
+        <p class="tip">No card is taken here. Proof first, PayPal invoice only after you approve it.</p>
+        <p class="tip">Not sure about the size? Send the file anyway and ask — that is what the reply is for.</p>
+      </div>
+      <form class="quote-form" data-source="acrylic-standee-maker" novalidate>
+        <div class="form-grid">
+          <label class="field"><span>Name</span><input type="text" name="name" required autocomplete="name"></label>
+          <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="email"></label>
+          <label class="field"><span>What do you need?</span>
+            <select name="service">
+              <option>Acrylic standee</option>
+              <option>Acrylic keychain</option>
+              <option>Fridge magnet</option>
+              <option>Custom sticker run</option>
+              <option>Something else</option>
+            </select>
+          </label>
+          <label class="field"><span>Quantity (rough)</span><input type="text" name="budget" placeholder="e.g. 2 standees, 10 keychains"></label>
+          <label class="field full"><span>Tell us about the job</span><textarea name="message" required placeholder="Finished size, how many, deadline, and whether the design is already finished."></textarea></label>
+        </div>
+        <input class="honeypot" type="text" name="website_url" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <label class="consent"><input type="checkbox" name="consent" required> I agree that Tiny County Makers may store this message to reply to my request. No newsletter, no resale.</label>
+        <button class="button coral wide" type="submit">Request a quote</button>
+        <p class="form-note" role="status"></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="seo">
+  <div class="shell">
+    <p class="eyebrow">Questions</p>
+    <h2>Acrylic standee FAQ</h2>
+    <details class="faq"><summary>What is an acrylic standee?</summary><p>An acrylic standee is a flat printed acrylic cut-out that slots into a small base so it stands upright on a desk or shelf. The artwork is printed on one side of the acrylic and the outline is cut to the shape of the design.</p></details>
+    <details class="faq"><summary>What size acrylic standee should I order?</summary><p>Measure the longest side of the finished piece. 8 cm suits a single small character, 10 cm is the most versatile size for a portrait or pet photo, and 15 cm works for couples, groups or wide scenes but needs a wider base so it does not tip.</p></details>
+    <details class="faq"><summary>Is the standee maker really free?</summary><p>Yes. The maker and the PNG download are free and need no account, no email and no watermark. Your image is decoded and rendered inside your own browser and is not uploaded to us.</p></details>
+    <details class="faq"><summary>Will my printed standee look exactly like the preview?</summary><p>The preview shows proportions, crop and where the base sits, so use it to check the layout. It does not show acrylic thickness, edge polish or final print colour. If you order, a person checks the file and sends a proof before anything is paid.</p></details>
+    <details class="faq"><summary>Do you actually make acrylic standees?</summary><p>We make small custom acrylic runs by hand. Send the design through the <a href="#quote">quote form</a> on this page and a person replies with sizes, options and a price. No card is taken on this site.</p></details>
+  </div>
+</section>
+</main>
+<footer class="shell">
+  Tiny County Makers · Free design tools for small custom runs · <a href="./custom-acrylic-keychains.html">Custom acrylic keychains</a> · <a href="./">Keychain studio</a>
+</footer>
+<script src="./config.js"></script>
+<script type="module" src="./maker-app.js"></script>
+<script type="module" src="./assets/quote-form.js"></script>
+</body>
+</html>

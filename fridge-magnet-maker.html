@@ -1,1 +1,250 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Free fridge magnet maker: turn a photo into a magnet preview and download your design without signup."><link rel="canonical" href="https://saleiyi.github.io/tiny-county-makers/fridge-magnet-maker.html"><title>Free Fridge Magnet Maker | Tiny County Makers</title><link rel="stylesheet" href="./maker.css"></head><body><header class="top"><a class="brand" href="./"><i>TC</i>Tiny County Makers</a><nav><a href="./">Keychains</a><a href="./acrylic-standee-maker.html">Standees</a><a href="./sticker-cutline-generator.html">Sticker cutline</a></nav></header><main data-maker="magnet"><section class="hero"><div class="shell"><p class="eyebrow">Free photo magnet preview</p><h1>Turn a memory into a <em>fridge magnet.</em></h1><p>Upload a photo, choose a finished size and keep a clean PNG design. Free to use, with no signup or watermark.</p></div></section><section class="maker shell"><aside class="panel"><h2>Make your magnet</h2><label class="upload">Choose an image<input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><strong>Upload JPG, PNG or WEBP</strong><small>Your browser makes the preview</small></label><label>Finished long side <output id="sizeLabel">5 cm</output><select id="size"></select></label><div class="downloads"><button class="button coral" id="pngDownload">Download PNG</button><a class="button" href="./#create">Try keychains</a></div><p class="tip">This early magnet maker reuses the same image engine as the keychain tool. It is deliberately simple while search demand is being tested.</p></aside><section class="preview"><div class="preview-top"><strong>LIVE PREVIEW</strong><span id="productName"></span></div><div class="stage"><canvas id="preview" width="900" height="900"></canvas></div><p class="tip" id="dimensions">Upload an image to see finished dimensions.</p></section></section><section class="seo"><div class="shell"><p class="eyebrow">A simple starting point</p><h2>Preview a custom fridge magnet from your photo.</h2><div class="seo-grid"><article><h3>Upload locally</h3><p>Your photo is rendered in your own browser.</p></article><article><h3>Choose a size</h3><p>Use the long-side estimate as a design reference.</p></article><article><h3>Keep the file</h3><p>Download your PNG without placing an order.</p></article></div></div></section></main><footer class="shell">Tiny County Makers · Free design tools · Made for validation, not unnecessary complexity.</footer><script src="./config.js"></script><script type="module" src="./maker-app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Free Fridge Magnet Maker — Photo Magnet Design (5 to 9 cm)</title>
+<meta name="description" content="Free fridge magnet maker: upload a photo, choose a 5, 7 or 9 cm size, preview rounded corners and download a transparent 300 DPI PNG. No signup, no watermark.">
+<link rel="canonical" href="https://saleiyi.github.io/tiny-county-makers/fridge-magnet-maker.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tiny County Makers">
+<meta property="og:title" content="Free Fridge Magnet Maker — Photo Magnet Design">
+<meta property="og:description" content="Turn a photo into a fridge magnet design and download a transparent 300 DPI PNG. Free, in your browser.">
+<meta property="og:url" content="https://saleiyi.github.io/tiny-county-makers/fridge-magnet-maker.html">
+<meta property="og:image" content="https://saleiyi.github.io/tiny-county-makers/assets/keychain-template-800.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Free Fridge Magnet Maker">
+<meta name="twitter:description" content="Upload a photo, pick a size, download a 300 DPI magnet design.">
+<meta name="twitter:image" content="https://saleiyi.github.io/tiny-county-makers/assets/keychain-template-800.png">
+<link rel="stylesheet" href="./maker.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "Fridge Magnet Maker",
+      "url": "https://saleiyi.github.io/tiny-county-makers/fridge-magnet-maker.html",
+      "applicationCategory": "DesignApplication",
+      "operatingSystem": "Any modern browser",
+      "browserRequirements": "Requires JavaScript. Runs entirely on your device.",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "featureList": [
+        "Photo to fridge magnet preview",
+        "Rounded corner mock-up",
+        "5 cm, 7 cm and 9 cm long side",
+        "Transparent PNG at 300 DPI"
+      ],
+      "publisher": { "@type": "Organization", "name": "Tiny County Makers", "url": "https://saleiyi.github.io/tiny-county-makers/" }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Tiny County Makers", "item": "https://saleiyi.github.io/tiny-county-makers/" },
+        { "@type": "ListItem", "position": 2, "name": "Fridge Magnet Maker", "item": "https://saleiyi.github.io/tiny-county-makers/fridge-magnet-maker.html" }
+      ]
+    },
+    {
+      "@type": "HowTo",
+      "name": "How to make a photo fridge magnet",
+      "totalTime": "PT2M",
+      "tool": [{ "@type": "HowToTool", "name": "Fridge Magnet Maker" }],
+      "step": [
+        { "@type": "HowToStep", "position": 1, "name": "Upload a photo", "text": "Choose a JPG, PNG or WEBP file. Square or slightly landscape photos crop most comfortably into a magnet." },
+        { "@type": "HowToStep", "position": 2, "name": "Choose the finished size", "text": "Pick a 5, 7 or 9 cm long side. The maker keeps your aspect ratio and shows the rounded corners you get on the finished piece." },
+        { "@type": "HowToStep", "position": 3, "name": "Download the design", "text": "Save a transparent 300 DPI PNG for printing, or send the design to us through the quote form for a physical magnet." }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How do I make a fridge magnet from a photo?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Upload the photo, choose the finished long side, check the crop against the rounded corner preview, then download the 300 DPI PNG. The file is what a printer or magnet supplier needs to produce the piece." }
+        },
+        {
+          "@type": "Question",
+          "name": "What size should a photo fridge magnet be?",
+          "acceptedAnswer": { "@type": "Answer", "text": "A 5 cm magnet is a small keepsake, often used for announcements and party favours. 7 cm is the most useful size for a single photo because faces stay readable from a distance. 9 cm suits group shots, recipes and artwork." }
+        },
+        {
+          "@type": "Question",
+          "name": "Why do fridge magnets use rounded corners?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Sharp corners on a printed magnet peel and fray first because that is where the surface film lifts. A small corner radius spreads that wear and looks neater, so most photo magnets are produced with rounded or circular corners." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is the fridge magnet maker free?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The preview and the PNG download are free, with no account, no email and no watermark. Your photo is processed in your own browser and is not uploaded to us." }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use these designs as a small business?",
+          "acceptedAnswer": { "@type": "Answer", "text": "You can use the download however you like for your own artwork. If you plan to sell the printed magnets, keep the final size, corner radius and file resolution consistent, and consider keeping a resolved copy of each design so a reprint matches the original." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><i>TC</i>Tiny County Makers</a>
+  <nav>
+    <a href="./pet-keychain-maker.html">Pet keychains</a>
+    <a href="./acrylic-standee-maker.html">Standees</a>
+    <a href="./sticker-cutline-generator.html">Sticker cutline</a>
+    <a href="./fridge-magnet-maker.html" aria-current="page">Magnets</a>
+    <a href="./custom-acrylic-keychains.html">Custom acrylic</a>
+  </nav>
+</header>
+<main data-maker="magnet">
+<section class="hero">
+  <div class="shell">
+    <p class="eyebrow">Free photo magnet preview · runs in your browser</p>
+    <h1>Turn a memory into a <em>fridge magnet.</em></h1>
+    <p>Upload a photo, pick the finished size and see the rounded corners before you print anything. Download a transparent 300 DPI PNG for free, or ask us to make a batch. No signup, no watermark.</p>
+    <div class="trust">
+      <span>5, 7 and 9 cm long side</span>
+      <span>Rounded-corner preview</span>
+      <span>Print-ready 300 DPI PNG</span>
+    </div>
+  </div>
+</section>
+<section class="maker shell">
+  <aside class="panel">
+    <h2>Make your magnet</h2>
+    <label class="upload">Choose a photo
+      <input id="photo" type="file" accept="image/png,image/jpeg,image/webp">
+      <strong>Upload JPG, PNG or WEBP</strong>
+      <small>Up to 12 MB · square photos crop best</small>
+    </label>
+    <label>Finished long side <output id="sizeLabel">5 cm</output>
+      <select id="size"></select>
+    </label>
+    <button class="button ghost wide" type="button" id="sampleArtwork">Try a sample star</button>
+    <div class="downloads">
+      <button class="button coral" id="pngDownload" disabled>Download PNG</button>
+      <a class="button" href="#quote">Order a batch</a>
+    </div>
+    <p class="tip">The PNG is a transparent 300 DPI layout: your photo inside the rounded shape, with the finished size shown under the preview.</p>
+  </aside>
+  <section class="preview">
+    <div class="preview-top">
+      <strong>LIVE MAGNET PREVIEW</strong>
+      <span id="productName"></span>
+    </div>
+    <div class="stage"><canvas id="preview" width="900" height="900"></canvas></div>
+    <p class="tip" id="sourceBadge"></p>
+    <p class="tip" id="dimensions">Upload a photo to see the finished size and the print resolution.</p>
+  </section>
+</section>
+
+<section class="seo alt">
+  <div class="shell">
+    <p class="eyebrow">Three steps</p>
+    <h2>How to make a photo fridge magnet</h2>
+    <div class="steps">
+      <article class="step">
+        <h3>Upload the photo you want on the fridge</h3>
+        <p>Faces need to be visible at arm's length, so crop close rather than leaving a wide scene. A square or slightly landscape photo fills a magnet shape with the least waste.</p>
+      </article>
+      <article class="step">
+        <h3>Choose the finished size</h3>
+        <p>5, 7 or 9 cm on the longest side. The preview keeps your aspect ratio and rounds the corners, so you can see exactly how much of the photo survives the crop.</p>
+      </article>
+      <article class="step">
+        <h3>Download or order a batch</h3>
+        <p>Take the free 300 DPI PNG anywhere you like, or send it through the quote form if you want a set made — useful for weddings, new babies, teams or small shops.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="seo">
+  <div class="shell">
+    <p class="eyebrow">Reference</p>
+    <h2>Photo magnet size guide</h2>
+    <p>Magnet sizes are given as the longest finished side. Two designs with the same long side can look very different — a square magnet feels much larger than a wide strip.</p>
+    <table>
+      <thead><tr><th>Long side</th><th>Works well for</th><th>Watch out for</th></tr></thead>
+      <tbody>
+        <tr><td>5 cm</td><td>Party favours, birth announcements, save-the-dates</td><td>Only one face fits comfortably; skip any text</td></tr>
+        <tr><td>7 cm</td><td>A single portrait, a pet, one strong memory</td><td>Very wide photos lose their edges to the crop</td></tr>
+        <tr><td>9 cm</td><td>Group shots, recipes, illustrations, shop logos</td><td>Heavier on the door; needs a full-coverage magnet back</td></tr>
+      </tbody>
+    </table>
+    <h3>What the download contains</h3>
+    <ul>
+      <li>Your photo placed inside the rounded magnet shape, at the crop you approved in the preview.</li>
+      <li>A transparent 300 DPI PNG — the resolution print suppliers expect for a sharp result.</li>
+      <li>No watermark and no background, so the file can go straight into a print job.</li>
+    </ul>
+    <h3>Getting a good print</h3>
+    <ul>
+      <li>Keep faces away from the rounded corners; that is where heads get clipped.</li>
+      <li>Magnet material is printed on a white base, so very dark photos print muddy. Brighten slightly before sending.</li>
+      <li>For a set, reuse the same size and corner radius so the magnets look like a family.</li>
+      <li>Want it shaped instead of rounded? <a href="./sticker-cutline-generator.html">Generate a cutline</a> from a cut-out PNG first.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="seo alt" id="quote">
+  <div class="shell">
+    <div class="quote">
+      <div>
+        <p class="eyebrow">Human follow-up, not a checkout</p>
+        <h2>Need a set of magnets made?</h2>
+        <p>We run small custom acrylic and magnet batches by hand. Send us the design and the quantity and we will reply with sizes, options and a price before anything is paid.</p>
+        <p class="tip">No card is taken here. Proof first, PayPal invoice only after you approve it.</p>
+        <p class="tip">Sets for events are welcome — tell us the date so we can be honest about whether the timing is realistic.</p>
+      </div>
+      <form class="quote-form" data-source="fridge-magnet-maker" novalidate>
+        <div class="form-grid">
+          <label class="field"><span>Name</span><input type="text" name="name" required autocomplete="name"></label>
+          <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="email"></label>
+          <label class="field"><span>What do you need?</span>
+            <select name="service">
+              <option>Fridge magnets</option>
+              <option>Acrylic keychain</option>
+              <option>Acrylic standee</option>
+              <option>Custom sticker run</option>
+              <option>Something else</option>
+            </select>
+          </label>
+          <label class="field"><span>Quantity (rough)</span><input type="text" name="budget" placeholder="e.g. 30 magnets"></label>
+          <label class="field full"><span>Tell us about the job</span><textarea name="message" required placeholder="Finished size, how many, deadline, and whether the design is already finished."></textarea></label>
+        </div>
+        <input class="honeypot" type="text" name="website_url" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <label class="consent"><input type="checkbox" name="consent" required> I agree that Tiny County Makers may store this message to reply to my request. No newsletter, no resale.</label>
+        <button class="button coral wide" type="submit">Request a quote</button>
+        <p class="form-note" role="status"></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="seo">
+  <div class="shell">
+    <p class="eyebrow">Questions</p>
+    <h2>Fridge magnet FAQ</h2>
+    <details class="faq"><summary>How do I make a fridge magnet from a photo?</summary><p>Upload the photo, choose the finished long side, check the crop against the rounded corner preview, then download the 300 DPI PNG. The file is what a printer or magnet supplier needs to produce the piece.</p></details>
+    <details class="faq"><summary>What size should a photo fridge magnet be?</summary><p>A 5 cm magnet is a small keepsake, often used for announcements and party favours. 7 cm is the most useful size for a single photo because faces stay readable from a distance. 9 cm suits group shots, recipes and artwork.</p></details>
+    <details class="faq"><summary>Why do fridge magnets use rounded corners?</summary><p>Sharp corners on a printed magnet peel and fray first because that is where the surface film lifts. A small corner radius spreads that wear and looks neater, so most photo magnets are produced with rounded or circular corners.</p></details>
+    <details class="faq"><summary>Is the fridge magnet maker free?</summary><p>Yes. The preview and the PNG download are free, with no account, no email and no watermark. Your photo is processed in your own browser and is not uploaded to us.</p></details>
+    <details class="faq"><summary>Can I use these designs as a small business?</summary><p>You can use the download however you like for your own artwork. If you plan to sell the printed magnets, keep the final size, corner radius and file resolution consistent, and consider keeping a resolved copy of each design so a reprint matches the original.</p></details>
+  </div>
+</section>
+</main>
+<footer class="shell">
+  Tiny County Makers · Free design tools for small custom runs · <a href="./custom-acrylic-keychains.html">Custom acrylic keychains</a> · <a href="./">Keychain studio</a>
+</footer>
+<script src="./config.js"></script>
+<script type="module" src="./maker-app.js"></script>
+<script type="module" src="./assets/quote-form.js"></script>
+</body>
+</html>

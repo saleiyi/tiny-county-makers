@@ -1,1 +1,258 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Free sticker cutline generator. Upload artwork, set a 1–5 mm white border and download PNG or SVG cutline artwork."><link rel="canonical" href="https://saleiyi.github.io/tiny-county-makers/sticker-cutline-generator.html"><title>Free Sticker Cutline Generator | Tiny County Makers</title><link rel="stylesheet" href="./maker.css"></head><body><header class="top"><a class="brand" href="./"><i>TC</i>Tiny County Makers</a><nav><a href="./">Keychains</a><a href="./acrylic-standee-maker.html">Standees</a><a href="./fridge-magnet-maker.html">Magnets</a></nav></header><main data-maker="sticker"><section class="hero"><div class="shell"><p class="eyebrow">Free print-prep tool</p><h1>Give your sticker artwork a <em>clean cutline.</em></h1><p>Upload an image, choose a white border from 1–5 mm, smooth the edge, preview it, then download PNG or SVG. Your image stays in your browser.</p></div></section><section class="maker shell"><aside class="panel"><h2>Generate your cutline</h2><label class="upload">Choose sticker artwork<input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><strong>Upload JPG, PNG or WEBP</strong><small>Up to 12 MB · no signup</small></label><label>Print long side <output id="sizeLabel">5 cm</output><select id="size"></select></label><label id="offsetControl">White border / cutline offset <output id="offsetLabel">2 mm</output><input id="offset" type="range" min="1" max="5" value="2"></label><label>Edge smoothing <output id="smoothingLabel">3</output><input id="smoothing" type="range" min="0" max="10" value="3"></label><div class="downloads"><button class="button coral" id="pngDownload">Download PNG</button><button class="button" id="svgDownload">Download SVG</button></div><p class="tip">The SVG contains your image plus a white contour reference. Confirm final cutting requirements with your printer.</p></aside><section class="preview"><div class="preview-top"><strong>LIVE CUTLINE PREVIEW</strong><span id="productName"></span></div><div class="stage"><canvas id="preview" width="900" height="900"></canvas></div><p class="tip" id="dimensions">Upload artwork to calculate its print size.</p></section></section><section class="seo"><div class="shell"><p class="eyebrow">Useful, not gated</p><h2>Make a sticker border before sending a file to print.</h2><div class="seo-grid"><article><h3>1–5 mm offset</h3><p>Choose the visual margin around your image.</p></article><article><h3>PNG + SVG</h3><p>Download a raster preview or editable vector container.</p></article><article><h3>Private by default</h3><p>No upload to our server or required account.</p></article></div></div></section></main><footer class="shell">Tiny County Makers · Free design tools · Verify printer requirements before production.</footer><script src="./config.js"></script><script type="module" src="./maker-app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Free Sticker Cutline Generator — 1–5 mm Die-Cut Lines (PNG + SVG)</title>
+<meta name="description" content="Trace a real die-cut cutline around your artwork. Set a 1–5 mm offset, smooth the edge and download a print-ready transparent PNG or a vector SVG cutline. Free, in your browser, no signup.">
+<link rel="canonical" href="https://saleiyi.github.io/tiny-county-makers/sticker-cutline-generator.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tiny County Makers">
+<meta property="og:title" content="Free Sticker Cutline Generator — 1–5 mm Die-Cut Lines">
+<meta property="og:description" content="Upload artwork and download a real cutline: transparent PNG at 300 DPI plus a true vector SVG path.">
+<meta property="og:url" content="https://saleiyi.github.io/tiny-county-makers/sticker-cutline-generator.html">
+<meta property="og:image" content="https://saleiyi.github.io/tiny-county-makers/assets/keychain-template-800.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Free Sticker Cutline Generator">
+<meta name="twitter:description" content="Set a 1–5 mm cutline offset and download a 300 DPI PNG or a real vector SVG.">
+<meta name="twitter:image" content="https://saleiyi.github.io/tiny-county-makers/assets/keychain-template-800.png">
+<link rel="stylesheet" href="./maker.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "Sticker Cutline Generator",
+      "url": "https://saleiyi.github.io/tiny-county-makers/sticker-cutline-generator.html",
+      "applicationCategory": "DesignApplication",
+      "operatingSystem": "Any modern browser",
+      "browserRequirements": "Requires JavaScript. Runs entirely on your device.",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "featureList": [
+        "Alpha-channel cutline tracing",
+        "1 mm to 5 mm cutline offset",
+        "Edge smoothing",
+        "Transparent PNG at 300 DPI",
+        "Vector SVG cutline path"
+      ],
+      "publisher": { "@type": "Organization", "name": "Tiny County Makers", "url": "https://saleiyi.github.io/tiny-county-makers/" }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Tiny County Makers", "item": "https://saleiyi.github.io/tiny-county-makers/" },
+        { "@type": "ListItem", "position": 2, "name": "Sticker Cutline Generator", "item": "https://saleiyi.github.io/tiny-county-makers/sticker-cutline-generator.html" }
+      ]
+    },
+    {
+      "@type": "HowTo",
+      "name": "How to make a sticker cutline",
+      "totalTime": "PT2M",
+      "tool": [{ "@type": "HowToTool", "name": "Sticker Cutline Generator" }],
+      "step": [
+        { "@type": "HowToStep", "position": 1, "name": "Upload transparent artwork", "text": "Choose a PNG, JPG or WEBP file. A PNG with a transparent background gives the most accurate cutline." },
+        { "@type": "HowToStep", "position": 2, "name": "Set the offset and smoothing", "text": "Pick a finished long side, choose a 1–5 mm white border and smooth the edge if your artwork is noisy." },
+        { "@type": "HowToStep", "position": 3, "name": "Download the cutline", "text": "Save a transparent PNG at 300 DPI, or an SVG that contains a real vector cutline path." }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is a sticker cutline?",
+          "acceptedAnswer": { "@type": "Answer", "text": "A cutline (or die-cut line) is the path a cutting machine follows to release a sticker from its backing sheet. It usually sits a small distance outside the artwork so the finished sticker keeps a white border." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does this tool give me a real vector cutline?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The SVG download contains an editable path element traced from your image alpha channel, named Cutline, alongside the placed artwork and the white border. The PNG download is rasterised at 300 DPI." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is my image uploaded to a server?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. Uploaded artwork is decoded and traced in your own browser and is never sent to us. Downloads are generated on your device." }
+        },
+        {
+          "@type": "Question",
+          "name": "Which offset should I choose for a white border?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Two millimetres is a safe default for a clean white border. Use 1 mm for a tight border that risks cutter drift, and 3–5 mm for handheld scissors or a deliberately chunky sticker." }
+        },
+        {
+          "@type": "Question",
+          "name": "What size file should I send to a print shop?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Send the SVG for cutting and the 300 DPI PNG for printing. Confirm the final cut path and bleed with your printer, because machine calibration differs between cutters." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><i>TC</i>Tiny County Makers</a>
+  <nav>
+    <a href="./pet-keychain-maker.html">Pet keychains</a>
+    <a href="./acrylic-standee-maker.html">Standees</a>
+    <a href="./sticker-cutline-generator.html" aria-current="page">Sticker cutline</a>
+    <a href="./fridge-magnet-maker.html">Magnets</a>
+    <a href="./custom-acrylic-keychains.html">Custom acrylic</a>
+  </nav>
+</header>
+<main data-maker="sticker">
+<section class="hero">
+  <div class="shell">
+    <p class="eyebrow">Free print-prep tool · runs in your browser</p>
+    <h1>Give your artwork a <em>real cutline.</em></h1>
+    <p>Upload a PNG or JPG, set a white border from 1–5 mm, smooth the edge, then download a transparent 300 DPI PNG or an SVG that contains an actual vector cutline path. Your file never leaves your device.</p>
+    <div class="trust">
+      <span>Traced from the alpha channel</span>
+      <span>300 DPI print sizes</span>
+      <span>No signup, no watermark</span>
+    </div>
+  </div>
+</section>
+<section class="maker shell">
+  <aside class="panel">
+    <h2>Generate your cutline</h2>
+    <label class="upload">Choose sticker artwork
+      <input id="photo" type="file" accept="image/png,image/jpeg,image/webp">
+      <strong>Upload PNG, JPG or WEBP</strong>
+      <small>Up to 12 MB · transparent PNG recommended</small>
+    </label>
+    <label>Finished long side <output id="sizeLabel">5 cm</output>
+      <select id="size"></select>
+    </label>
+    <button class="button ghost wide" type="button" id="sampleArtwork">Try a sample star</button>
+    <label id="offsetControl">White border / cutline offset <output id="offsetLabel">2 mm</output>
+      <input id="offset" type="range" min="1" max="5" step="0.5" value="2">
+    </label>
+    <label id="smoothingControl">Edge smoothing <output id="smoothingLabel">3</output>
+      <input id="smoothing" type="range" min="0" max="10" value="3">
+    </label>
+    <div class="downloads">
+      <button class="button coral" id="pngDownload" disabled>Download PNG</button>
+      <button class="button" id="svgDownload" disabled>Download SVG</button>
+    </div>
+    <a class="button ghost wide" href="#quote">Get these printed and cut</a>
+    <p class="tip">PNG is the printable sticker with its white border. SVG contains the artwork plus a real cutline path named <code>Cutline</code> for cutting machines.</p>
+  </aside>
+  <section class="preview">
+    <div class="preview-top">
+      <strong>LIVE CUTLINE PREVIEW</strong>
+      <span id="productName"></span>
+    </div>
+    <div class="stage"><canvas id="preview" width="900" height="900"></canvas></div>
+    <p class="tip" id="sourceBadge"></p>
+    <p class="tip" id="dimensions">Upload artwork to trace its outline and calculate the print size.</p>
+  </section>
+</section>
+
+<section class="seo alt">
+  <div class="shell">
+    <p class="eyebrow">Three steps</p>
+    <h2>How to make a sticker cutline</h2>
+    <div class="steps">
+      <article class="step">
+        <h3>Upload artwork that already has a shape</h3>
+        <p>A transparent PNG gives the sharpest trace, because the tool follows the alpha channel. JPGs and WEBPs are traced as a full rectangle with a border.</p>
+      </article>
+      <article class="step">
+        <h3>Choose the offset and smoothing</h3>
+        <p>The offset is the white border you keep outside the artwork. Smoothing removes pixel noise so the traced path is a clean curve instead of a staircase.</p>
+      </article>
+      <article class="step">
+        <h3>Download PNG and SVG</h3>
+        <p>Send the PNG to whoever prints and the SVG to whoever cuts. Both files describe the same geometry, so the printed sticker and the cut path line up.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="seo">
+  <div class="shell">
+    <p class="eyebrow">Reference</p>
+    <h2>Cutline offsets, output specs and file formats</h2>
+    <div class="prose">
+      <p>The exported PNG is a transparent raster file sized at 300 DPI for the finished long side you selected. The SVG keeps the same proportions but stores the outline as editable path geometry, which is what a vinyl cutter, laser or print shop actually needs.</p>
+      <table>
+        <thead><tr><th>Offset</th><th>Best for</th><th>Trade-off</th></tr></thead>
+        <tbody>
+          <tr><td>1 mm</td><td>Small kiss-cut stickers</td><td>Any cutter drift cuts into the artwork</td></tr>
+          <tr><td>2 mm</td><td>Default white border</td><td>Balanced and safe for most shops</td></tr>
+          <tr><td>3–5 mm</td><td>Hand-cut or chunky stickers</td><td>Uses more sheet area</td></tr>
+        </tbody>
+      </table>
+      <h3>What the SVG contains</h3>
+      <ul>
+        <li><code>Artwork</code> — your image placed at its exact position, embedded at print resolution.</li>
+        <li><code>WhiteBorder</code> — the filled shape that produces the border around the art.</li>
+        <li><code>Cutline</code> — the stroked vector path a cutting machine follows. Offset, smooth or recolor it in any vector editor.</li>
+      </ul>
+      <h3>Better results in three minutes</h3>
+      <ul>
+        <li>Cut the background out first if you want a shaped sticker rather than a rectangle.</li>
+        <li>Use smoothing 3–6 for photographed artwork and 0–2 for clean vector-style art.</li>
+        <li>Always ask your printer for their preferred stroke colour and bleed before a production run.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="seo alt" id="quote">
+  <div class="shell">
+    <div class="quote">
+      <div>
+        <p class="eyebrow">Human follow-up, not a checkout</p>
+        <h2>Want this artwork cut for real?</h2>
+        <p>We run small acrylic batches by hand: keychains, standees and fridge magnets. Send us what you are trying to make and we will reply with options, sizes and a price before anything is paid.</p>
+        <p class="tip">No card is taken here. Proof first, PayPal invoice only after you approve it.</p>
+      </div>
+      <form class="quote-form" data-source="sticker-cutline-generator" novalidate>
+        <div class="form-grid">
+          <label class="field"><span>Name</span><input type="text" name="name" required autocomplete="name"></label>
+          <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="email"></label>
+          <label class="field"><span>What do you need?</span>
+            <select name="service">
+              <option>Custom sticker run</option>
+              <option>Acrylic keychain</option>
+              <option>Acrylic standee</option>
+              <option>Fridge magnet</option>
+              <option>Something else</option>
+            </select>
+          </label>
+          <label class="field"><span>Quantity (rough)</span><input type="text" name="budget" placeholder="e.g. 25 stickers, 3 keychains"></label>
+          <label class="field full"><span>Tell us about the job</span><textarea name="message" required placeholder="Artwork link or description, finished size, deadline, and whether you already have a cutline."></textarea></label>
+        </div>
+        <input class="honeypot" type="text" name="website_url" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <label class="consent"><input type="checkbox" name="consent" required> I agree that Tiny County Makers may store this message to reply to my request. No newsletter, no resale.</label>
+        <button class="button coral wide" type="submit">Request a quote</button>
+        <p class="form-note" role="status"></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="seo">
+  <div class="shell">
+    <p class="eyebrow">Questions</p>
+    <h2>Sticker cutline FAQ</h2>
+    <details class="faq"><summary>What is a sticker cutline?</summary><p>A cutline (or die-cut line) is the path a cutting machine follows to release a sticker from its backing sheet. It usually sits a small distance outside the artwork so the finished sticker keeps a white border.</p></details>
+    <details class="faq"><summary>Does this tool give me a real vector cutline?</summary><p>Yes. The SVG download contains an editable path element traced from your image alpha channel, named <code>Cutline</code>, alongside the placed artwork and the white border. The PNG download is rasterised at 300 DPI.</p></details>
+    <details class="faq"><summary>Is my image uploaded to a server?</summary><p>No. Uploaded artwork is decoded and traced in your own browser and is never sent to us. Downloads are generated on your device.</p></details>
+    <details class="faq"><summary>Which offset should I choose for a white border?</summary><p>Two millimetres is a safe default for a clean white border. Use 1 mm for a tight border that risks cutter drift, and 3–5 mm for handheld scissors or a deliberately chunky sticker.</p></details>
+    <details class="faq"><summary>What size file should I send to a print shop?</summary><p>Send the SVG for cutting and the 300 DPI PNG for printing. Confirm the final cut path and bleed with your printer, because machine calibration differs between cutters.</p></details>
+  </div>
+</section>
+</main>
+<footer class="shell">
+  Tiny County Makers · Free design tools for small custom runs · <a href="./custom-acrylic-keychains.html">Custom acrylic keychains</a> · <a href="./">Keychain studio</a>
+</footer>
+<script src="./config.js"></script>
+<script type="module" src="./maker-app.js"></script>
+<script type="module" src="./assets/quote-form.js"></script>
+</body>
+</html>
