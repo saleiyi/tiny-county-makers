@@ -537,6 +537,62 @@ export const CHART_SAMPLE = Object.freeze([
 ]);
 
 
+/**
+ * A printable multiplication chart. One grid of products covers the whole family of requests -
+ * the 1 to 10 chart that stops at 100, the 1 to 12 chart every classroom uses, the 1 to 20 poster -
+ * and the same geometry draws the preview and the 300 DPI download.
+ */
+export const MUL_TYPES = Object.freeze([
+  { id: "grid", label: "Multiplication chart grid" },
+  { id: "tables", label: "Times tables, written out" },
+]);
+
+/** How far the chart runs. The 1 to 10 grid is the chart whose answers stop at 100. */
+export const MUL_RANGES = Object.freeze([
+  { id: "10", max: 10, label: "1 to 10 - answers up to 100" },
+  { id: "12", max: 12, label: "1 to 12" },
+  { id: "15", max: 15, label: "1 to 15" },
+  { id: "20", max: 20, label: "1 to 20" },
+]);
+
+/** How much of the answer key is printed, so one sheet covers both a chart and its practice copy. */
+export const MUL_FILLS = Object.freeze([
+  { id: "full", label: "Print every answer" },
+  { id: "partial", label: "Half printed - fill in the rest" },
+  { id: "blank", label: "Blank - no answers" },
+]);
+
+/** The diagonal of square numbers is the first shortcut most children are taught. */
+export const MUL_SQUARES = Object.freeze([
+  { id: "on", label: "Highlight square numbers" },
+  { id: "off", label: "Plain squares" },
+]);
+
+export const MUL_ORIENTS = Object.freeze([
+  { id: "portrait", label: "Portrait" },
+  { id: "landscape", label: "Landscape" },
+]);
+
+/** The safe printer border, and the longest a printed title or name may run. */
+export const MUL_MARGIN_CM = 1.1;
+export const MUL_TITLE_MAX = 34;
+export const MUL_NAME_MAX = 18;
+/** A written-out times table stops here, because 400 facts on one sheet stop being readable. */
+export const MUL_TABLES_MAX = 12;
+/** A digit is read at arm's length, so no cell is ever allowed to print smaller than this. */
+export const MUL_MIN_CELL_CM = 0.6;
+
+/** A ready-made chart, so a useful sheet is already on screen before anything is typed. */
+export const MUL_SAMPLE = Object.freeze({
+  title: "My times tables",
+  name: "Alex",
+  max: "12",
+  type: "grid",
+  fill: "full",
+  squares: "on",
+});
+
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -564,6 +620,7 @@ const PROFILES = Object.freeze([
   { id: "name-tracing", name: "Name Tracing Worksheet Maker", product: "Name tracing worksheet", hasHardware: false, hasBase: false, exportSvg: false, sizes: NAME_TRACING_PAPERS.map((paper) => paper.widthCm), sizeLabels: NAME_TRACING_PAPERS.map((paper) => paper.label) },
   { id: "bingo", name: "Bingo Card Maker", product: "Printable bingo cards", hasHardware: false, hasBase: false, exportSvg: false, sizes: BINGO_PAPERS.map((paper) => paper.widthCm), sizeLabels: BINGO_PAPERS.map((paper) => paper.label) },
   { id: "chore-chart", name: "Chore Chart Maker", product: "Printable chore chart", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
+  { id: "multiplication-chart", name: "Multiplication Chart Maker", product: "Printable multiplication chart", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
   { id: "word-search", name: "Word Search Maker", product: "Printable word search puzzle", hasHardware: false, hasBase: false, exportSvg: false, sizes: WORD_SEARCH_PAPERS.map((paper) => paper.widthCm), sizeLabels: WORD_SEARCH_PAPERS.map((paper) => paper.label) },
 ]);
 
@@ -2934,5 +2991,79 @@ export function chartSheet(options) {
   return {
     paper, days, rows, marginCm, gapCm, usableW, usableH,
     titleCm, headCm, rewardCm, bodyCm, rowCm, labelW, colW, cols,
+  };
+}
+
+export function mulType(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return MUL_TYPES.find((type) => type.id === id) || MUL_TYPES[0];
+}
+
+export function mulRange(value) {
+  const raw = String(value == null ? "" : value).trim();
+  const max = Number(raw);
+  return MUL_RANGES.find((range) => range.id === raw
+    || (Number.isFinite(max) && max > 0 && range.max === max)) || MUL_RANGES[1];
+}
+
+export function mulFill(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return MUL_FILLS.find((fill) => fill.id === id) || MUL_FILLS[0];
+}
+
+export function mulSquares(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return MUL_SQUARES.find((mode) => mode.id === id) || MUL_SQUARES[0];
+}
+
+export function mulOrient(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return MUL_ORIENTS.find((orient) => orient.id === id) || MUL_ORIENTS[0];
+}
+
+/** True when the printed answer key should show this product at this row and column. */
+export function mulShowsAnswer(fill, row, col, max) {
+  const mode = mulFill(fill).id;
+  if (mode === "blank") return false;
+  if (mode === "partial") return col >= row;
+  return true;
+}
+
+/**
+ * One sheet recipe drives the preview and the print. The grid is n + 1 cells square, because the
+ * factors need a header row and a header column; the written-out times tables fall into blocks
+ * that are sized to the same paper. Every measurement is in centimetres so print matches screen.
+ */
+export function mulSheet(options) {
+  const opts = options || {};
+  const paper = chartPaper(opts.paper);
+  const orient = mulOrient(opts.orient);
+  const type = mulType(opts.type);
+  const range = mulRange(opts.max);
+  const marginCm = MUL_MARGIN_CM;
+  const widthCm = orient.id === "landscape" ? paper.heightCm : paper.widthCm;
+  const heightCm = orient.id === "landscape" ? paper.widthCm : paper.heightCm;
+  const usableW = widthCm - marginCm * 2;
+  const usableH = heightCm - marginCm * 2;
+  const titleCm = usableH * 0.105;
+  const gapCm = usableH * 0.016;
+  const bodyCm = usableH - titleCm - gapCm;
+  const max = type.id === "tables" ? Math.min(range.max, MUL_TABLES_MAX) : range.max;
+  const cols = max + 1;
+  const rows = max + 1;
+  const cellW = usableW / cols;
+  const cellH = bodyCm / rows;
+  const cellCm = Math.min(cellW, cellH);
+  const aspect = usableW / bodyCm;
+  const blockCols = Math.max(1, Math.min(max, Math.round(Math.sqrt(max * aspect * 1.6))));
+  const blockRows = Math.ceil(max / blockCols);
+  const blockW = usableW / blockCols;
+  const blockH = bodyCm / blockRows;
+  const lineCm = blockH / (max + 1);
+  return {
+    paper, orient, type, range, max, marginCm, gapCm,
+    widthCm, heightCm, usableW, usableH, titleCm, bodyCm,
+    cols, rows, cellW, cellH, cellCm,
+    blockCols, blockRows, blockW, blockH, lineCm,
   };
 }

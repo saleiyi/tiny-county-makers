@@ -194,6 +194,24 @@ import {
   chartChores,
   chartText,
   chartSheet,
+  MUL_TYPES,
+  MUL_RANGES,
+  MUL_FILLS,
+  MUL_SQUARES,
+  MUL_ORIENTS,
+  MUL_MARGIN_CM,
+  MUL_TITLE_MAX,
+  MUL_NAME_MAX,
+  MUL_TABLES_MAX,
+  MUL_MIN_CELL_CM,
+  MUL_SAMPLE,
+  mulType,
+  mulRange,
+  mulFill,
+  mulSquares,
+  mulOrient,
+  mulShowsAnswer,
+  mulSheet,
   COLORING_PAPERS,
   COLORING_MARGIN_CM,
   COLORING_STYLES,
@@ -222,8 +240,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-seven distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "chore-chart", "word-search"]);
+test("the shared engine exposes the twenty-eight distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "chore-chart", "multiplication-chart", "word-search"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -1790,4 +1808,94 @@ test("the chart profile carries a paper list and ships a usable sample week", ()
   assert.ok(CHART_SAMPLE.length >= 5, "the sample week is long enough to fill a chart");
   assert.equal(new Set(CHART_SAMPLE).size, CHART_SAMPLE.length, "the sample week repeats a job");
   for (const job of CHART_SAMPLE) assert.ok(job.length <= CHART_CHORE_MAX, "a sample job is longer than one row allows");
+});
+
+test("the multiplication chart maker exposes its ranges, fills, squares and orientations", () => {
+  assert.equal(mulType("tables").id, "tables");
+  assert.equal(mulType("nonsense").id, "grid", "the grid is the default chart");
+  assert.deepEqual(MUL_RANGES.map((range) => range.max), [10, 12, 15, 20]);
+  assert.equal(mulRange("20").max, 20);
+  assert.equal(mulRange(10).max, 10, "a bare number is matched to its range");
+  assert.equal(mulRange("nonsense").max, 12, "the 1 to 12 chart is the safe default");
+  assert.equal(mulFill("blank").id, "blank");
+  assert.equal(mulFill("nonsense").id, "full", "a full answer key is the default");
+  assert.equal(mulSquares("off").id, "off");
+  assert.equal(mulSquares("nonsense").id, "on", "the square diagonal is highlighted by default");
+  assert.equal(mulOrient("landscape").id, "landscape");
+  assert.equal(mulOrient("nonsense").id, "portrait", "portrait is the default orientation");
+  assert.equal(new Set(MUL_TYPES.map((type) => type.id)).size, MUL_TYPES.length, "two chart types share an id");
+  assert.equal(new Set(MUL_FILLS.map((fill) => fill.id)).size, MUL_FILLS.length, "two answer modes share an id");
+  assert.ok(MUL_MIN_CELL_CM > 0 && MUL_MIN_CELL_CM <= 1, "a printed cell keeps a readable floor");
+});
+
+test("mulShowsAnswer prints the answer key, half of it, or none at all", () => {
+  assert.equal(mulShowsAnswer("full", 3, 4, 12), true);
+  assert.equal(mulShowsAnswer("blank", 3, 4, 12), false);
+  assert.equal(mulShowsAnswer("partial", 4, 4, 12), true, "the square diagonal stays in the half that is printed");
+  assert.equal(mulShowsAnswer("partial", 4, 5, 12), true, "every answer above the diagonal is printed");
+  assert.equal(mulShowsAnswer("partial", 5, 4, 12), false, "everything below the diagonal is left to fill in");
+  assert.equal(mulShowsAnswer("nonsense", 5, 4, 12), true, "an unknown answer mode falls back to the full key");
+});
+
+test("the multiplication chart sheet keeps the grid inside the printable border", () => {
+  for (const paper of ["letter", "a4"]) {
+    for (const max of ["10", "12", "15", "20"]) {
+      const sheet = mulSheet({ paper, max, type: "grid" });
+      assert.equal(sheet.paper.id, paper);
+      assert.equal(sheet.type.id, "grid");
+      assert.equal(sheet.max, Number(max));
+      assert.equal(sheet.cols, sheet.max + 1, "the factors need a header row and a header column");
+      assert.equal(sheet.rows, sheet.max + 1);
+      assert.equal(sheet.marginCm, MUL_MARGIN_CM);
+      assert.ok(sheet.marginCm >= 1, "a printed sheet keeps a real printer margin");
+      assert.ok(Math.abs(sheet.usableW + sheet.marginCm * 2 - sheet.widthCm) < 1e-9, "the usable width honours the margin");
+      assert.ok(Math.abs(sheet.usableH + sheet.marginCm * 2 - sheet.heightCm) < 1e-9, "the usable height honours the margin");
+      assert.ok(Math.abs(sheet.titleCm + sheet.gapCm + sheet.bodyCm - sheet.usableH) < 1e-9, "the title band and the body fill the usable height");
+      assert.ok(Math.abs(sheet.cellW * sheet.cols - sheet.usableW) < 1e-9, "the columns fill the usable width");
+      assert.ok(Math.abs(sheet.cellH * sheet.rows - sheet.bodyCm) < 1e-9, "the rows fill the body exactly");
+      assert.ok(sheet.cellCm >= MUL_MIN_CELL_CM, "a printed cell never drops below the readable floor");
+    }
+  }
+  assert.equal(mulSheet().paper.id, "letter", "no paper choice prints US Letter");
+  assert.equal(mulSheet().max, 12, "no range choice prints the 1 to 12 chart");
+});
+
+test("the written-out times tables fall into blocks on the same paper", () => {
+  const sheet = mulSheet({ paper: "letter", max: "12", type: "tables" });
+  assert.equal(sheet.type.id, "tables");
+  assert.equal(sheet.max, 12);
+  assert.ok(sheet.blockCols >= 1 && sheet.blockRows >= 1);
+  assert.ok(sheet.blockCols * sheet.blockRows >= sheet.max, "every table gets a block");
+  assert.ok(Math.abs(sheet.blockW * sheet.blockCols - sheet.usableW) < 1e-9, "the blocks fill the usable width");
+  assert.ok(Math.abs(sheet.blockH * sheet.blockRows - sheet.bodyCm) < 1e-9, "the blocks fill the body height");
+  assert.ok(Math.abs(sheet.lineCm * (sheet.max + 1) - sheet.blockH) < 1e-9, "every block has one heading line and one line per fact");
+  assert.equal(mulSheet({ max: "20", type: "tables" }).max, MUL_TABLES_MAX, "400 facts on one sheet stop being readable, so the written-out tables stop at 1 to 12");
+});
+
+test("landscape turns the sheet on its side so a 1 to 20 grid still fits", () => {
+  const portrait = mulSheet({ paper: "letter", max: "20", orient: "portrait" });
+  const landscape = mulSheet({ paper: "letter", max: "20", orient: "landscape" });
+  assert.equal(portrait.orient.id, "portrait");
+  assert.equal(landscape.orient.id, "landscape");
+  assert.equal(portrait.widthCm, landscape.heightCm, "landscape turns the sheet on its side");
+  assert.equal(portrait.heightCm, landscape.widthCm);
+  assert.ok(Math.abs(portrait.widthCm * portrait.heightCm - landscape.widthCm * landscape.heightCm) < 1e-9, "the paper keeps its area");
+  assert.ok(landscape.usableW > portrait.usableW, "landscape gives the wide 1 to 20 grid more room across");
+  assert.ok(landscape.cellCm >= MUL_MIN_CELL_CM && portrait.cellCm >= MUL_MIN_CELL_CM, "the 1 to 20 grid still prints a readable cell either way");
+});
+
+test("the multiplication chart profile carries a paper list and ships a usable sample", () => {
+  const profile = getProductProfile("multiplication-chart");
+  assert.equal(profile.name, "Multiplication Chart Maker");
+  assert.equal(profile.exportSvg, false, "the chart is a printed sheet, so there is no cut path to export");
+  assert.equal(profile.hasHardware, false);
+  assert.equal(profile.hasBase, false);
+  assert.equal(profile.sizes.length, CHART_PAPERS.length);
+  assert.equal(profile.sizeLabels.length, CHART_PAPERS.length);
+  assert.equal(profile.sizeLabels[0], "US Letter (8.5 x 11 in)");
+  assert.equal(mulRange(MUL_SAMPLE.max).max, 12, "the sample is the 1 to 12 chart a classroom reaches for");
+  assert.equal(mulType(MUL_SAMPLE.type).id, "grid");
+  assert.equal(mulFill(MUL_SAMPLE.fill).id, "full");
+  assert.equal(mulSquares(MUL_SAMPLE.squares).id, "on");
+  assert.ok(MUL_SAMPLE.title.length <= MUL_TITLE_MAX && MUL_SAMPLE.name.length <= MUL_NAME_MAX, "the sample fits the printed bands");
 });

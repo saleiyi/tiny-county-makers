@@ -109,6 +109,14 @@ import {
   chartSheet,
   CHART_THEMES,
   CHART_SAMPLE,
+  mulType,
+  mulRange,
+  mulFill,
+  mulSquares,
+  mulOrient,
+  mulShowsAnswer,
+  mulSheet,
+  MUL_SAMPLE,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -271,6 +279,15 @@ const chartStyleSelect = document.querySelector("#chartStyle");
 const chartThemeSelect = document.querySelector("#chartTheme");
 const chartRewardInput = document.querySelector("#chartReward");
 const chartSizeLabel = document.querySelector("#chartSizeLabel");
+const mulTitleInput = document.querySelector("#mulTitle");
+const mulNameInput = document.querySelector("#mulName");
+const mulTypeSelect = document.querySelector("#mulType");
+const mulRangeSelect = document.querySelector("#mulRange");
+const mulFillSelect = document.querySelector("#mulFill");
+const mulSquaresSelect = document.querySelector("#mulSquares");
+const mulThemeSelect = document.querySelector("#mulTheme");
+const mulOrientSelect = document.querySelector("#mulOrient");
+const mulSizeLabel = document.querySelector("#mulSizeLabel");
 const coloringStyleSelect = document.querySelector("#coloringStyle");
 const coloringDetailSelect = document.querySelector("#coloringDetail");
 const coloringWeightSelect = document.querySelector("#coloringWeight");
@@ -517,6 +534,28 @@ function boot() {
     chartStyleSelect?.addEventListener("change", schedule);
     chartThemeSelect?.addEventListener("change", schedule);
     chartRewardInput?.addEventListener("input", schedule);
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
+  if (profile.id === "multiplication-chart") {
+    // The colour kits come from the same shared recipe as the chore chart, so the two printable
+    // sheets never drift apart. A chart is typed rather than uploaded, so a blank canvas stands in.
+    if (mulThemeSelect) {
+      mulThemeSelect.innerHTML = '<option value="">Choose a colour kit...</option>'
+        + CHART_THEMES.map((theme) => '<option value="' + theme.id + '">' + theme.label + "</option>").join("");
+    }
+    mulTitleInput?.addEventListener("input", schedule);
+    mulNameInput?.addEventListener("input", schedule);
+    mulTypeSelect?.addEventListener("change", schedule);
+    mulRangeSelect?.addEventListener("change", schedule);
+    mulFillSelect?.addEventListener("change", schedule);
+    mulSquaresSelect?.addEventListener("change", schedule);
+    mulThemeSelect?.addEventListener("change", schedule);
+    mulOrientSelect?.addEventListener("change", schedule);
     image = document.createElement("canvas");
     image.width = WORK_LONG_SIDE;
     image.height = WORK_LONG_SIDE;
@@ -1077,6 +1116,19 @@ function layout() {
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: paper.heightCm, dpi: workDpi(WORK_LONG_SIDE, paper.heightCm), paper, sheet };
   }
+  if (profile.id === "multiplication-chart") {
+    // The sheet is the product, so the paper and the orientation decide the box, and the grid
+    // recipe decides where every cell falls at both preview and print resolution.
+    const paper = chartPaper(sizeSelect.value);
+    const sheet = mulSheet({ paper, orient: mulOrientSelect?.value, type: mulTypeSelect?.value, max: mulRangeSelect?.value });
+    const longCm = Math.max(sheet.widthCm, sheet.heightCm);
+    const scale = WORK_LONG_SIDE / longCm;
+    const w = Math.round(sheet.widthCm * scale);
+    const h = Math.round(sheet.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), paper, sheet };
+  }
   if (profile.id === "word-search") {
     // The sheet is the product, so the paper decides the box and the grid recipe decides where
     // every cell falls at both preview and print resolution.
@@ -1494,6 +1546,33 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawChoreChart(ctx, scene, true);
+  } else if (profile.id === "multiplication-chart") {
+    // The chart is rebuilt from the same fields the layout sized, so a range, a fill or an
+    // orientation change lands on the same printed paper instead of reflowing the sheet.
+    const type = mulType(mulTypeSelect?.value);
+    const range = mulRange(mulRangeSelect?.value);
+    const fill = mulFill(mulFillSelect?.value);
+    const squares = mulSquares(mulSquaresSelect?.value);
+    const orient = mulOrient(mulOrientSelect?.value);
+    const theme = chartTheme(mulThemeSelect?.value);
+    scene = {
+      kind: "multiplication-chart",
+      paper: L.paper,
+      sheet: L.sheet,
+      type: type.id,
+      range: range.id,
+      max: L.sheet.max,
+      orient: orient.id,
+      title: chartText(mulTitleInput?.value, 34),
+      name: chartText(mulNameInput?.value, 18),
+      fillId: fill.id,
+      squaresId: squares.id,
+      themeId: theme.id,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawMultiplicationChart(ctx, scene, true);
   } else if (profile.id === "word-search") {
     // The puzzle is rebuilt from the same word list, level and seed the layout sized, so a shuffle
     // only changes where the words sit and never the sheet they print on.
@@ -1838,6 +1917,29 @@ function readout(L) {
       + (scene.free && scene.cells % 2 === 1 ? " with a free centre square" : "")
       + ", set in " + (scene.caseId === "lower" ? "lowercase" : "uppercase") + "." + listNote
       + " Print at 100 percent with no page scaling. No watermark, no sign-up, and nothing you type leaves your device.";
+    return;
+  }
+
+  if (profile.id === "multiplication-chart") {
+    // The paper and the range are the product, so the readout leads with both of them.
+    const paper = scene.paper;
+    const sheet = scene.sheet;
+    const wroteOut = scene.type === "tables";
+    const rangeNote = wroteOut
+      ? "the times tables from 1 to " + sheet.max + " written out one block at a time"
+      : "a " + sheet.max + " by " + sheet.max + " grid of products";
+    const fillNote = scene.fillId === "blank"
+      ? (wroteOut ? "every answer left blank to write in" : "a blank grid ready to fill in, with the factors already printed")
+      : scene.fillId === "partial"
+      ? (wroteOut ? "half the answers printed and the rest left blank" : "the answers above the diagonal printed and the rest left blank")
+      : "every answer printed";
+    sizeLabel.textContent = paper.short;
+    if (mulSizeLabel) mulSizeLabel.textContent = sheet.max + " x " + sheet.max;
+    dimensions.textContent = paper.short + " sheet in " + sheet.orient.label.toLowerCase() + " at " + PRINT_DPI + " DPI ("
+      + physicalPixels(sheet.widthCm, PRINT_DPI) + " x " + physicalPixels(sheet.heightCm, PRINT_DPI) + " px) - "
+      + rangeNote + ", with " + fillNote + " and the square numbers "
+      + (scene.squaresId === "on" ? "shaded along the diagonal" : "left plain")
+      + ". Print at 100 percent with no page scaling. No watermark, no sign-up, and nothing you type leaves your device.";
     return;
   }
 
@@ -4561,6 +4663,186 @@ function drawChoreChart(c, s, guides) {
     c.restore();
   }
 }
+function mulFitText(c, text, maxWidth, fontPx, weight) {
+  const start = Math.max(5, fontPx);
+  const label = String(text == null ? "" : text);
+  c.font = weight + " " + start + "px " + CHART_FONT;
+  let size = start;
+  while (size > 5 && c.measureText(label).width > maxWidth) {
+    size -= Math.max(0.25, size * 0.045);
+    c.font = weight + " " + size + "px " + CHART_FONT;
+  }
+  return size;
+}
+
+/** The grid half of the multiplication chart: factor headers, products, and the square diagonal. */
+function drawMulGrid(c, s, theme, x, bodyY, w, bodyH, pxPerCm, lineW) {
+  const max = s.sheet.max;
+  const cols = s.sheet.cols;
+  const rows = s.sheet.rows;
+  const cw = w / cols;
+  const ch = bodyH / rows;
+  const cellPx = Math.min(cw, ch);
+  const headPx = Math.min(cellPx * 0.46, ch * 0.56, pxPerCm * 0.62);
+  const bodyPx = Math.min(cellPx * 0.42, ch * 0.52, pxPerCm * 0.56);
+
+  // The header row and header column carry the two factors; the body carries the products.
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const cx = x + col * cw;
+      const cy = bodyY + row * ch;
+      const isHead = row === 0 || col === 0;
+      const square = s.squaresId === "on" && row > 0 && row === col;
+      c.fillStyle = isHead ? theme.band : square ? theme.row : "#ffffff";
+      c.fillRect(cx, cy, cw, ch);
+    }
+  }
+
+  c.strokeStyle = theme.accent;
+  c.lineWidth = lineW;
+  c.beginPath();
+  for (let row = 0; row <= rows; row += 1) {
+    const ly = bodyY + row * ch;
+    c.moveTo(x, ly);
+    c.lineTo(x + w, ly);
+  }
+  for (let col = 0; col <= cols; col += 1) {
+    const lx = x + col * cw;
+    c.moveTo(lx, bodyY);
+    c.lineTo(lx, bodyY + bodyH);
+  }
+  c.stroke();
+  c.strokeRect(x, bodyY, w, bodyH);
+
+  // The corner stays empty and the two edges run 1..max, so the table reads like a printed chart.
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillStyle = theme.head;
+  c.font = "800 " + headPx + "px " + CHART_FONT;
+  for (let col = 1; col < cols; col += 1) {
+    c.fillText(String(col), x + col * cw + cw / 2, bodyY + ch / 2, cw * 0.9);
+  }
+  for (let row = 1; row < rows; row += 1) {
+    c.fillText(String(row), x + cw / 2, bodyY + row * ch + ch / 2, cw * 0.9);
+  }
+
+  // mulShowsAnswer decides how much of the answer key is printed, so one sheet is both a chart
+  // and the practice copy that goes with it.
+  c.fillStyle = theme.accent;
+  c.font = "600 " + bodyPx + "px " + CHART_FONT;
+  for (let row = 1; row < rows; row += 1) {
+    for (let col = 1; col < cols; col += 1) {
+      if (!mulShowsAnswer(s.fillId, row, col, max)) continue;
+      c.fillText(String(row * col), x + col * cw + cw / 2, bodyY + row * ch + ch / 2, cw * 0.9);
+    }
+  }
+}
+
+/** The written-out half of the multiplication chart: one block per times table. */
+function drawMulTables(c, s, theme, x, bodyY, w, bodyH, pxPerCm, lineW) {
+  const sheet = s.sheet;
+  const max = sheet.max;
+  const bw = w / sheet.blockCols;
+  const bh = bodyH / sheet.blockRows;
+  const lineH = bh / (max + 1);
+  const padX = Math.max(2, bw * 0.045);
+  const headPx = Math.min(lineH * 0.5, pxPerCm * 0.5);
+  const bodyPx = Math.min(lineH * 0.44, pxPerCm * 0.42);
+
+  for (let t = 0; t < max; t += 1) {
+    const table = t + 1;
+    const bx = x + (t % sheet.blockCols) * bw;
+    const by = bodyY + Math.floor(t / sheet.blockCols) * bh;
+    c.save();
+    c.beginPath();
+    c.rect(bx, by, bw, bh);
+    c.clip();
+
+    // The heading names the table, then every fact is written out on its own line.
+    c.fillStyle = theme.band;
+    c.fillRect(bx, by, bw, lineH);
+    c.fillStyle = theme.head;
+    c.textAlign = "left";
+    c.textBaseline = "middle";
+    c.font = "800 " + headPx + "px " + CHART_FONT;
+    c.fillText(table + " times table", bx + padX, by + lineH * 0.56, bw - padX * 2);
+
+    c.font = "600 " + bodyPx + "px " + CHART_FONT;
+    for (let k = 1; k <= max; k += 1) {
+      const ly = by + k * lineH;
+      if (k % 2 === 1) {
+        c.fillStyle = theme.row;
+        c.fillRect(bx, ly, bw, lineH);
+      }
+      c.fillStyle = theme.accent;
+      const shown = mulShowsAnswer(s.fillId, table, k, max);
+      c.fillText(table + " x " + k + " = " + (shown ? String(table * k) : "____"), bx + padX, ly + lineH * 0.56, bw - padX * 2);
+    }
+
+    c.strokeStyle = theme.accent;
+    c.lineWidth = lineW;
+    c.strokeRect(bx, by, bw, bh);
+    c.restore();
+  }
+}
+
+/**
+ * A printable multiplication chart. One recipe draws the grid and the written-out tables, on
+ * either paper, in either orientation, so the preview and the 300 DPI download always agree.
+ */
+function drawMultiplicationChart(c, s, guides) {
+  const r = s.rect;
+  const sheet = s.sheet;
+  const theme = chartTheme(s.themeId);
+  const pxPerCm = r.w / sheet.widthCm;
+  const margin = sheet.marginCm * pxPerCm;
+  const x = r.x + margin;
+  const y = r.y + margin;
+  const w = r.w - margin * 2;
+  const h = r.h - margin * 2;
+  const titleH = sheet.titleCm * pxPerCm;
+  const gap = sheet.gapCm * pxPerCm;
+  const bodyY = y + titleH + gap;
+  const bodyH = h - titleH - gap;
+  const lineW = Math.max(0.7, pxPerCm * 0.035);
+
+  c.save();
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  c.strokeStyle = theme.band;
+  c.lineWidth = Math.max(0.8, pxPerCm * 0.05);
+  c.strokeRect(x, y, w, h);
+
+  // The title band names the chart and the child it belongs to, so a finished sheet is identifiable.
+  c.fillStyle = theme.head;
+  c.fillRect(x, y, w, titleH);
+  const nameW = s.name ? Math.min(w * 0.3, pxPerCm * 5.2) : 0;
+  const title = s.title || "Multiplication chart";
+  const titlePx = mulFitText(c, title, w - nameW - pxPerCm * 0.8, Math.min(titleH * 0.5, pxPerCm * 0.95), "800");
+  c.fillStyle = "#ffffff";
+  c.textAlign = "left";
+  c.textBaseline = "middle";
+  c.font = "800 " + titlePx + "px " + CHART_FONT;
+  c.fillText(title, x + pxPerCm * 0.35, y + titleH * 0.54, w - nameW - pxPerCm * 0.8);
+  if (s.name) {
+    c.textAlign = "right";
+    c.font = "600 " + Math.max(6, Math.min(titleH * 0.34, pxPerCm * 0.56)) + "px " + CHART_FONT;
+    c.fillText(s.name, x + w - pxPerCm * 0.35, y + titleH * 0.54, nameW - pxPerCm * 0.2);
+  }
+
+  if (s.type === "tables") drawMulTables(c, s, theme, x, bodyY, w, bodyH, pxPerCm, lineW);
+  else drawMulGrid(c, s, theme, x, bodyY, w, bodyH, pxPerCm, lineW);
+
+  c.restore();
+
+  if (guides) {
+    c.save();
+    c.strokeStyle = "rgba(0,0,0,.28)";
+    c.lineWidth = 1;
+    c.strokeRect(r.x, r.y, r.w, r.h);
+    c.restore();
+  }
+}
 function sceneBox() {
   if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
@@ -4586,7 +4868,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -4646,6 +4928,7 @@ function renderScene(scale) {
   else if (scene.kind === "word-search") drawWordSearch(c, scene, false);
   else if (scene.kind === "bingo") drawBingo(c, scene, false);
   else if (scene.kind === "chore-chart") drawChoreChart(c, scene, false);
+  else if (scene.kind === "multiplication-chart") drawMultiplicationChart(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -4671,7 +4954,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -4699,6 +4982,8 @@ function exportName(extension) {
     ? "coloring-page-" + scene.page.id + "-" + scene.page.orientation
     : scene.kind === "name-tracing" && scene.paper
     ? "name-tracing-" + (scene.text ? scene.text.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() : "worksheet") + "-" + scene.paper.id + "-sheet-" + (scene.page + 1)
+    : scene.kind === "multiplication-chart" && scene.paper
+    ? "multiplication-chart-" + scene.paper.id + "-" + scene.orient + "-1-to-" + scene.max
     : scene.kind === "chore-chart" && scene.paper
     ? "chore-chart-" + scene.paper.id + "-" + scene.days.id + "-sheet-1"
     : scene.kind === "bingo" && scene.paper
@@ -5361,6 +5646,20 @@ async function loadSample() {
     // names the way a parent or teacher would, then leaves the first sheet on screen.
     if (traceName && !traceName.value.trim()) traceName.value = "Amelia\nNoah\nSophie";
     tracePage = 0;
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "multiplication-chart") {
+    // A chart is typed rather than uploaded, so the sample loads the 1 to 12 grid a classroom
+    // reaches for and leaves a finished sheet on screen.
+    if (mulTitleInput && !mulTitleInput.value.trim()) mulTitleInput.value = MUL_SAMPLE.title;
+    if (mulNameInput && !mulNameInput.value.trim()) mulNameInput.value = MUL_SAMPLE.name;
+    if (mulRangeSelect) mulRangeSelect.value = MUL_SAMPLE.max;
+    if (mulTypeSelect) mulTypeSelect.value = MUL_SAMPLE.type;
+    if (mulFillSelect) mulFillSelect.value = MUL_SAMPLE.fill;
+    if (mulSquaresSelect) mulSquaresSelect.value = MUL_SAMPLE.squares;
     adoptSource("sample");
     render();
     track("sample_loaded", { product: profile.id });
