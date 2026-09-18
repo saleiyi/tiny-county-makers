@@ -475,6 +475,68 @@ export const BINGO_CARD_MAX_CM = 16;
 export const BINGO_CARD_ASPECT = 0.78;
 
 
+/**
+ * A printable chore chart. The chart is drawn rather than uploaded, so the paper, the day columns
+ * and the chore rows are the whole recipe, and the same geometry drives the live preview and the
+ * 300 DPI download. Every measurement is in centimetres so print matches the screen.
+ */
+export const CHART_PAPERS = Object.freeze([
+  { id: "letter", widthCm: 21.59, heightCm: 27.94, short: "US Letter", label: "US Letter (8.5 x 11 in)" },
+  { id: "a4", widthCm: 21, heightCm: 29.7, short: "A4", label: "A4 (21 x 29.7 cm)" },
+]);
+
+/** How much of the week the chart covers. A seven day week suits a holiday routine, five days a
+ *  school term. */
+export const CHART_DAYS = Object.freeze([
+  { id: "week", label: "Monday to Sunday", short: "Mon to Sun", names: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] },
+  { id: "school", label: "Monday to Friday", short: "Mon to Fri", names: ["MON", "TUE", "WED", "THU", "FRI"] },
+  { id: "school-sat", label: "Monday to Saturday", short: "Mon to Sat", names: ["MON", "TUE", "WED", "THU", "FRI", "SAT"] },
+]);
+
+/** What sits in each square. A tick is quickest, a star is the reward a young child wants, and
+ *  plain rows leave the chart open to a sticker or a drawing. */
+export const CHART_STYLES = Object.freeze([
+  { id: "tick", label: "Tick boxes" },
+  { id: "star", label: "Colour-in stars" },
+  { id: "plain", label: "Plain rows" },
+]);
+
+/** Colour kits, so the child who owns the chart gets to pick the one that goes on the fridge. */
+export const CHART_THEMES = Object.freeze([
+  { id: "rainbow", label: "Rainbow", head: "#33415c", accent: "#e4572e", band: "#ffe6d5", row: "#fffaf5" },
+  { id: "ocean", label: "Ocean", head: "#12556b", accent: "#1b9aaa", band: "#d7f0f5", row: "#f5fcfd" },
+  { id: "forest", label: "Forest", head: "#2d4739", accent: "#4c956c", band: "#dcece1", row: "#f7fbf8" },
+  { id: "sunshine", label: "Sunshine", head: "#7a5300", accent: "#f0a202", band: "#ffeeb8", row: "#fffcf3" },
+  { id: "berry", label: "Berry", head: "#5a1f3d", accent: "#b23a6b", band: "#f6dbe6", row: "#fdf7fa" },
+  { id: "space", label: "Space", head: "#232946", accent: "#5c6bc0", band: "#dde0f5", row: "#f8f9fe" },
+  { id: "pastel", label: "Pastel", head: "#4a4458", accent: "#a78bcd", band: "#ece4f7", row: "#fbf9fe" },
+  { id: "mono", label: "Black and white", head: "#1f2429", accent: "#5b6470", band: "#e6e9ed", row: "#fafafa" },
+]);
+
+/** A chart is read at a glance, so one row is one short instruction and nothing more. */
+export const CHART_MAX_ROWS = 14;
+export const CHART_MIN_ROWS = 3;
+export const CHART_ROW_LIMIT = 24;
+export const CHART_CHORE_MAX = 30;
+/** The safe printer border, and the longest a printed title, name or reward line may run. */
+export const CHART_MARGIN_CM = 1.1;
+export const CHART_TITLE_MAX = 34;
+export const CHART_NAME_MAX = 18;
+export const CHART_REWARD_MAX = 34;
+
+/** A ready-made week, so the first chart on screen is already a usable one. */
+export const CHART_SAMPLE = Object.freeze([
+  "Make my bed",
+  "Brush my teeth",
+  "Get dressed",
+  "Pack my school bag",
+  "Tidy my room",
+  "Feed the pet",
+  "Set the table",
+  "Read for 20 minutes",
+]);
+
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -501,6 +563,7 @@ const PROFILES = Object.freeze([
   { id: "gift-tag", name: "Gift Tag Maker", product: "Printable gift tag", hasHardware: false, hasBase: false, exportSvg: false, sizes: GIFT_TAG_SIZES.map((size) => size.widthCm), sizeLabels: GIFT_TAG_SIZES.map((size) => size.label) },
   { id: "name-tracing", name: "Name Tracing Worksheet Maker", product: "Name tracing worksheet", hasHardware: false, hasBase: false, exportSvg: false, sizes: NAME_TRACING_PAPERS.map((paper) => paper.widthCm), sizeLabels: NAME_TRACING_PAPERS.map((paper) => paper.label) },
   { id: "bingo", name: "Bingo Card Maker", product: "Printable bingo cards", hasHardware: false, hasBase: false, exportSvg: false, sizes: BINGO_PAPERS.map((paper) => paper.widthCm), sizeLabels: BINGO_PAPERS.map((paper) => paper.label) },
+  { id: "chore-chart", name: "Chore Chart Maker", product: "Printable chore chart", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
   { id: "word-search", name: "Word Search Maker", product: "Printable word search puzzle", hasHardware: false, hasBase: false, exportSvg: false, sizes: WORD_SEARCH_PAPERS.map((paper) => paper.widthCm), sizeLabels: WORD_SEARCH_PAPERS.map((paper) => paper.label) },
 ]);
 
@@ -2796,4 +2859,80 @@ export function bingoCallColumns(total, max = 6) {
   if (count <= 30) return Math.min(3, columns);
   if (count <= 48) return Math.min(4, columns);
   return columns;
+}
+
+/**
+ * A chore chart is a week across and a short list of jobs down, so one piece of geometry lays the
+ * whole sheet out: a title band, a weekday header, even rows and a reward line. Keeping it here
+ * means the preview and the printed page agree to the millimetre.
+ */
+export function chartPaper(value) {
+  const raw = String(value == null ? "" : value).toLowerCase();
+  const cm = Number(value);
+  return CHART_PAPERS.find((paper) => paper.id === raw
+    || (Number.isFinite(cm) && cm > 0 && Math.abs(paper.widthCm - cm) < 0.02)) || CHART_PAPERS[0];
+}
+
+export function chartDays(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return CHART_DAYS.find((days) => days.id === id) || CHART_DAYS[0];
+}
+
+export function chartStyle(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return CHART_STYLES.find((style) => style.id === id) || CHART_STYLES[0];
+}
+
+export function chartTheme(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return CHART_THEMES.find((theme) => theme.id === id) || CHART_THEMES[0];
+}
+
+/** Rows are clamped rather than rejected, so a stray value in the number box still prints a chart. */
+export function chartRows(value) {
+  const rows = Math.floor(Number(value));
+  if (!Number.isFinite(rows) || rows <= 0) return 8;
+  return Math.max(CHART_MIN_ROWS, Math.min(CHART_MAX_ROWS, rows));
+}
+
+/** One chore a line, with commas and semicolons accepted as separators for pasted lists. */
+export function chartChores(value, limit = CHART_ROW_LIMIT) {
+  const cap = Math.max(1, Math.min(CHART_ROW_LIMIT, Math.floor(Number(limit)) || CHART_ROW_LIMIT));
+  const text = String(value == null ? "" : value);
+  const out = [];
+  for (const chunk of text.split(/[\n,;]+/)) {
+    const tidy = chunk.replace(/\s+/g, " ").trim().slice(0, CHART_CHORE_MAX);
+    if (tidy && !out.includes(tidy)) out.push(tidy);
+    if (out.length >= cap) break;
+  }
+  return Object.freeze(out);
+}
+
+/** A printed line is a single row of pixels, so it is flattened to one line and clipped. */
+export function chartText(value, max = CHART_TITLE_MAX) {
+  const cap = Math.max(1, Math.floor(Number(max)) || CHART_TITLE_MAX);
+  return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, cap);
+}
+
+export function chartSheet(options) {
+  const opts = options || {};
+  const paper = chartPaper(opts.paper);
+  const days = chartDays(opts.days);
+  const rows = chartRows(opts.rows);
+  const marginCm = CHART_MARGIN_CM;
+  const usableW = paper.widthCm - marginCm * 2;
+  const usableH = paper.heightCm - marginCm * 2;
+  const titleCm = usableH * 0.115;
+  const headCm = usableH * 0.055;
+  const rewardCm = usableH * 0.06;
+  const gapCm = usableH * 0.014;
+  const bodyCm = usableH - titleCm - headCm - rewardCm - gapCm;
+  const rowCm = bodyCm / rows;
+  const labelW = usableW * 0.36;
+  const cols = days.names.length;
+  const colW = (usableW - labelW) / cols;
+  return {
+    paper, days, rows, marginCm, gapCm, usableW, usableH,
+    titleCm, headCm, rewardCm, bodyCm, rowCm, labelW, colW, cols,
+  };
 }

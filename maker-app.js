@@ -99,6 +99,16 @@ import {
   bingoCallColumns,
   BINGO_COLUMNS,
   BINGO_THEMES,
+  chartPaper,
+  chartDays,
+  chartStyle,
+  chartTheme,
+  chartRows,
+  chartChores,
+  chartText,
+  chartSheet,
+  CHART_THEMES,
+  CHART_SAMPLE,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -252,6 +262,15 @@ const bcPager = document.querySelector("#bingoPager");
 const bcPagePrev = document.querySelector("#bingoPagePrev");
 const bcPageNext = document.querySelector("#bingoPageNext");
 const bcPageLabel = document.querySelector("#bingoPageLabel");
+const chartTitleInput = document.querySelector("#chartTitle");
+const chartNameInput = document.querySelector("#chartName");
+const chartChoresInput = document.querySelector("#chartChores");
+const chartDaysSelect = document.querySelector("#chartDays");
+const chartRowsInput = document.querySelector("#chartRows");
+const chartStyleSelect = document.querySelector("#chartStyle");
+const chartThemeSelect = document.querySelector("#chartTheme");
+const chartRewardInput = document.querySelector("#chartReward");
+const chartSizeLabel = document.querySelector("#chartSizeLabel");
 const coloringStyleSelect = document.querySelector("#coloringStyle");
 const coloringDetailSelect = document.querySelector("#coloringDetail");
 const coloringWeightSelect = document.querySelector("#coloringWeight");
@@ -307,6 +326,9 @@ const BINGO_INK = "#1f2429";
 const BINGO_RULE = "#c9cfd6";
 const BINGO_HEAD_FILL = "#1f2429";
 const BINGO_FREE_FILL = "#f4c54f";
+
+/** The chart is plain type plus simple print-safe marks, so it uses the same neutral sans face. */
+const CHART_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
 
 boot();
 
@@ -473,6 +495,28 @@ function boot() {
     bcShuffle?.addEventListener("click", () => { bingoSeed = (bingoSeed % 4294967295) + 1; bingoPage = 0; schedule(); });
     bcPagePrev?.addEventListener("click", () => { bingoPage -= 1; render(); });
     bcPageNext?.addEventListener("click", () => { bingoPage += 1; render(); });
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
+  if (profile.id === "chore-chart") {
+    // The theme list is a shared recipe rather than a hand-written set of options, so the two stay
+    // in step. A chart is typed rather than uploaded, so a blank canvas stands in.
+    if (chartThemeSelect) {
+      chartThemeSelect.innerHTML = '<option value="">Choose a colour kit...</option>'
+        + CHART_THEMES.map((theme) => '<option value="' + theme.id + '">' + theme.label + "</option>").join("");
+    }
+    chartTitleInput?.addEventListener("input", schedule);
+    chartNameInput?.addEventListener("input", schedule);
+    chartChoresInput?.addEventListener("input", schedule);
+    chartDaysSelect?.addEventListener("change", schedule);
+    chartRowsInput?.addEventListener("input", schedule);
+    chartStyleSelect?.addEventListener("change", schedule);
+    chartThemeSelect?.addEventListener("change", schedule);
+    chartRewardInput?.addEventListener("input", schedule);
     image = document.createElement("canvas");
     image.width = WORK_LONG_SIDE;
     image.height = WORK_LONG_SIDE;
@@ -1021,6 +1065,18 @@ function layout() {
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: paper.heightCm, dpi: workDpi(WORK_LONG_SIDE, paper.heightCm), paper, sheet };
   }
+  if (profile.id === "chore-chart") {
+    // The sheet is the product, so the paper decides the box and the chore rows decide where
+    // every line falls at both preview and print resolution.
+    const paper = chartPaper(sizeSelect.value);
+    const sheet = chartSheet({ paper, days: chartDaysSelect?.value, rows: chartRowsInput?.value });
+    const scale = WORK_LONG_SIDE / paper.heightCm;
+    const w = Math.round(paper.widthCm * scale);
+    const h = Math.round(paper.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: paper.heightCm, dpi: workDpi(WORK_LONG_SIDE, paper.heightCm), paper, sheet };
+  }
   if (profile.id === "word-search") {
     // The sheet is the product, so the paper decides the box and the grid recipe decides where
     // every cell falls at both preview and print resolution.
@@ -1415,6 +1471,29 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawBingo(ctx, scene, true);
+  } else if (profile.id === "chore-chart") {
+    // The chart is drawn from the same fields the layout sized, so every change lands on the
+    // same printed paper instead of reflowing the whole sheet.
+    const daySet = chartDays(chartDaysSelect?.value);
+    const style = chartStyle(chartStyleSelect?.value);
+    const theme = chartTheme(chartThemeSelect?.value);
+    scene = {
+      kind: "chore-chart",
+      paper: L.paper,
+      sheet: L.sheet,
+      days: daySet,
+      rows: L.sheet.rows,
+      chores: chartChores(chartChoresInput?.value),
+      title: chartText(chartTitleInput?.value, 34),
+      name: chartText(chartNameInput?.value, 18),
+      reward: chartText(chartRewardInput?.value, 34),
+      styleId: style.id,
+      themeId: theme.id,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawChoreChart(ctx, scene, true);
   } else if (profile.id === "word-search") {
     // The puzzle is rebuilt from the same word list, level and seed the layout sized, so a shuffle
     // only changes where the words sit and never the sheet they print on.
@@ -1759,6 +1838,22 @@ function readout(L) {
       + (scene.free && scene.cells % 2 === 1 ? " with a free centre square" : "")
       + ", set in " + (scene.caseId === "lower" ? "lowercase" : "uppercase") + "." + listNote
       + " Print at 100 percent with no page scaling. No watermark, no sign-up, and nothing you type leaves your device.";
+    return;
+  }
+
+  if (profile.id === "chore-chart") {
+    // The paper is the product, so the readout leads with the sheet and the week it covers.
+    const paper = scene.paper;
+    const sheet = scene.sheet;
+    const dayCount = scene.days.names.length;
+    sizeLabel.textContent = paper.short;
+    if (chartSizeLabel) chartSizeLabel.textContent = dayCount + " days x " + sheet.rows + " chores";
+    dimensions.textContent = paper.short + " sheet at " + PRINT_DPI + " DPI ("
+      + physicalPixels(paper.widthCm, PRINT_DPI) + " x " + physicalPixels(paper.heightCm, PRINT_DPI)
+      + " px) - " + sheet.rows + (sheet.rows === 1 ? " chore row" : " chore rows") + " across "
+      + dayCount + " day columns (" + scene.days.short + "), with "
+      + (scene.chores.length ? scene.chores.length + " job" + (scene.chores.length === 1 ? "" : "s") + " filled in" : "blank chores left ready to write")
+      + ". Print at 100 percent with no page scaling. No watermark, no sign-up, and nothing you type leaves your device.";
     return;
   }
 
@@ -4292,6 +4387,180 @@ function drawBingoCallList(c, s, r, pxPerCm) {
   });
   c.restore();
 }
+function chartFitText(c, text, maxWidth, fontPx, weight) {
+  const start = Math.max(5, fontPx);
+  const label = String(text || "");
+  c.font = weight + " " + start + "px " + CHART_FONT;
+  let size = start;
+  while (size > 5 && c.measureText(label).width > maxWidth) {
+    size -= Math.max(0.25, size * 0.045);
+    c.font = weight + " " + size + "px " + CHART_FONT;
+  }
+  return size;
+}
+
+function chartStarPath(c, cx, cy, radius) {
+  c.beginPath();
+  for (let i = 0; i < 10; i += 1) {
+    const angle = -Math.PI / 2 + i * Math.PI / 5;
+    const distance = i % 2 === 0 ? radius : radius * 0.45;
+    const x = cx + Math.cos(angle) * distance;
+    const y = cy + Math.sin(angle) * distance;
+    if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.closePath();
+}
+
+function chartTick(c, cx, cy, size) {
+  c.beginPath();
+  c.moveTo(cx - size * 0.62, cy + size * 0.02);
+  c.lineTo(cx - size * 0.16, cy + size * 0.48);
+  c.lineTo(cx + size * 0.72, cy - size * 0.54);
+  c.stroke();
+}
+
+function drawChoreChart(c, s, guides) {
+  const r = s.rect;
+  const sheet = s.sheet;
+  const paper = s.paper;
+  const theme = chartTheme(s.themeId);
+  const days = Array.isArray(s.days?.names) ? s.days.names : [];
+  const rows = sheet.rows;
+  const chores = Array.isArray(s.chores) ? s.chores : [];
+  const pxPerCm = r.w / paper.widthCm;
+  const margin = sheet.marginCm * pxPerCm;
+  const x = r.x + margin;
+  const y = r.y + margin;
+  const w = r.w - margin * 2;
+  const h = r.h - margin * 2;
+  const titleH = sheet.titleCm * pxPerCm;
+  const headH = sheet.headCm * pxPerCm;
+  const rewardH = sheet.rewardCm * pxPerCm;
+  const gap = sheet.gapCm * pxPerCm;
+  const bodyY = y + titleH + headH + gap;
+  const bodyW = w;
+  const labelW = sheet.labelW * pxPerCm;
+  const colW = sheet.colW * pxPerCm;
+  const rowH = sheet.rowCm * pxPerCm;
+  const tableW = labelW + colW * days.length;
+  const lineW = Math.max(0.7, pxPerCm * 0.035);
+  const markSize = Math.min(colW * 0.25, rowH * 0.25);
+
+  c.save();
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  c.strokeStyle = theme.band;
+  c.lineWidth = Math.max(0.8, pxPerCm * 0.05);
+  c.strokeRect(x, y, w, h);
+
+  // The title band carries the chart name and the child's name so a finished sheet is identifiable.
+  c.fillStyle = theme.head;
+  c.fillRect(x, y, w, titleH);
+  const nameW = s.name ? Math.min(w * 0.32, pxPerCm * 5.2) : 0;
+  const title = s.title || "My Chore Chart";
+  const titlePx = chartFitText(c, title, w - nameW - pxPerCm * 0.8, Math.min(titleH * 0.52, pxPerCm * 1.0), "800");
+  c.fillStyle = "#ffffff";
+  c.textAlign = "left";
+  c.textBaseline = "middle";
+  c.font = "800 " + titlePx + "px " + CHART_FONT;
+  c.fillText(title, x + pxPerCm * 0.35, y + titleH * 0.54, w - nameW - pxPerCm * 0.8);
+  if (s.name) {
+    c.textAlign = "right";
+    c.font = "600 " + Math.max(6, Math.min(titleH * 0.36, pxPerCm * 0.58)) + "px " + CHART_FONT;
+    c.fillText(s.name, x + w - pxPerCm * 0.35, y + titleH * 0.54, nameW - pxPerCm * 0.2);
+  }
+
+  // The weekday header is deliberately short: every label is read from a metre away on a fridge.
+  const headY = y + titleH;
+  c.fillStyle = theme.band;
+  c.fillRect(x, headY, w, headH);
+  c.fillStyle = theme.head;
+  c.font = "800 " + Math.max(6, Math.min(headH * 0.46, pxPerCm * 0.52)) + "px " + CHART_FONT;
+  c.textAlign = "left";
+  c.textBaseline = "middle";
+  c.fillText("CHORE", x + pxPerCm * 0.25, headY + headH * 0.54, labelW - pxPerCm * 0.5);
+  c.textAlign = "center";
+  days.forEach((day, index) => {
+    const cellX = x + labelW + index * colW;
+    c.fillText(day, cellX + colW / 2, headY + headH * 0.54, colW * 0.92);
+  });
+
+  // One row per job, alternating a very light tint so the chart is easy to scan down the page.
+  for (let row = 0; row < rows; row += 1) {
+    const rowY = bodyY + row * rowH;
+    c.fillStyle = row % 2 === 0 ? "#ffffff" : theme.row;
+    c.fillRect(x, rowY, bodyW, rowH);
+    c.fillStyle = theme.band;
+    c.globalAlpha = 0.56;
+    c.fillRect(x, rowY, labelW, rowH);
+    c.globalAlpha = 1;
+
+    const chore = chores[row] || "";
+    const chorePx = chartFitText(c, chore, labelW - pxPerCm * 0.5, Math.min(rowH * 0.46, pxPerCm * 0.5), "600");
+    c.fillStyle = theme.head;
+    c.textAlign = "left";
+    c.textBaseline = "middle";
+    c.font = "600 " + chorePx + "px " + CHART_FONT;
+    c.fillText(chore, x + pxPerCm * 0.25, rowY + rowH * 0.54, labelW - pxPerCm * 0.5);
+
+    for (let col = 0; col < days.length; col += 1) {
+      const cellX = x + labelW + col * colW;
+      c.strokeStyle = theme.accent;
+      c.lineWidth = lineW;
+      c.strokeRect(cellX, rowY, colW, rowH);
+      if (s.styleId === "tick") {
+        c.globalAlpha = 0.42;
+        chartTick(c, cellX + colW / 2, rowY + rowH / 2, markSize);
+        c.globalAlpha = 1;
+      } else if (s.styleId === "star") {
+        c.globalAlpha = 0.38;
+        chartStarPath(c, cellX + colW / 2, rowY + rowH / 2, markSize);
+        c.stroke();
+        c.globalAlpha = 1;
+      }
+    }
+  }
+
+  c.strokeStyle = theme.accent;
+  c.lineWidth = lineW;
+  c.strokeRect(x, bodyY, tableW, rows * rowH);
+  c.beginPath();
+  for (let row = 0; row <= rows; row += 1) {
+    const lineY = bodyY + row * rowH;
+    c.moveTo(x, lineY);
+    c.lineTo(x + tableW, lineY);
+  }
+  for (let col = 0; col <= days.length; col += 1) {
+    const lineX = x + labelW + col * colW;
+    c.moveTo(lineX, bodyY);
+    c.lineTo(lineX, bodyY + rows * rowH);
+  }
+  c.stroke();
+
+  // The reward line is the point of the chart, so it never gets lost among the check boxes.
+  const rewardY = bodyY + rows * rowH;
+  c.fillStyle = theme.band;
+  c.fillRect(x, rewardY, tableW, rewardH);
+  c.fillStyle = theme.head;
+  c.font = "800 " + Math.max(6, Math.min(rewardH * 0.38, pxPerCm * 0.5)) + "px " + CHART_FONT;
+  c.textAlign = "left";
+  c.textBaseline = "middle";
+  c.fillText("REWARD", x + pxPerCm * 0.3, rewardY + rewardH * 0.54, labelW - pxPerCm * 0.6);
+  const reward = s.reward || "Choose a reward";
+  const rewardPx = chartFitText(c, reward, tableW - labelW - pxPerCm * 0.6, Math.min(rewardH * 0.42, pxPerCm * 0.56), "700");
+  c.fillStyle = theme.accent;
+  c.font = "700 " + rewardPx + "px " + CHART_FONT;
+  c.fillText(reward, x + labelW + pxPerCm * 0.3, rewardY + rewardH * 0.54, tableW - labelW - pxPerCm * 0.6);
+  c.restore();
+
+  if (guides) {
+    c.save();
+    c.strokeStyle = "rgba(0,0,0,.28)";
+    c.lineWidth = 1;
+    c.strokeRect(r.x, r.y, r.w, r.h);
+    c.restore();
+  }
+}
 function sceneBox() {
   if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
@@ -4317,7 +4586,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -4376,6 +4645,7 @@ function renderScene(scale) {
   else if (scene.kind === "name-tracing") drawNameTracing(c, scene, false);
   else if (scene.kind === "word-search") drawWordSearch(c, scene, false);
   else if (scene.kind === "bingo") drawBingo(c, scene, false);
+  else if (scene.kind === "chore-chart") drawChoreChart(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -4401,7 +4671,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -4429,6 +4699,8 @@ function exportName(extension) {
     ? "coloring-page-" + scene.page.id + "-" + scene.page.orientation
     : scene.kind === "name-tracing" && scene.paper
     ? "name-tracing-" + (scene.text ? scene.text.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() : "worksheet") + "-" + scene.paper.id + "-sheet-" + (scene.page + 1)
+    : scene.kind === "chore-chart" && scene.paper
+    ? "chore-chart-" + scene.paper.id + "-" + scene.days.id + "-sheet-1"
     : scene.kind === "bingo" && scene.paper
     ? "bingo-" + scene.paper.id + "-" + scene.cards.length + "-cards-sheet-" + (scene.page + 1)
     : scene.kind === "word-search" && scene.paper
@@ -5089,6 +5361,18 @@ async function loadSample() {
     // names the way a parent or teacher would, then leaves the first sheet on screen.
     if (traceName && !traceName.value.trim()) traceName.value = "Amelia\nNoah\nSophie";
     tracePage = 0;
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "chore-chart") {
+    // A chart is typed rather than uploaded, so the sample fills the boxes with a practical
+    // family week and leaves a finished sheet on screen.
+    if (chartTitleInput && !chartTitleInput.value.trim()) chartTitleInput.value = "My weekly chores";
+    if (chartNameInput && !chartNameInput.value.trim()) chartNameInput.value = "Alex";
+    if (chartChoresInput && !chartChoresInput.value.trim()) chartChoresInput.value = CHART_SAMPLE.join("\n");
+    if (chartRewardInput && !chartRewardInput.value.trim()) chartRewardInput.value = "Choose the Friday movie";
     adoptSource("sample");
     render();
     track("sample_loaded", { product: profile.id });

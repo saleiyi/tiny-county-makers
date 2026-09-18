@@ -174,6 +174,26 @@ import {
   bingoPageCount,
   bingoCallList,
   bingoCallColumns,
+  CHART_PAPERS,
+  CHART_DAYS,
+  CHART_STYLES,
+  CHART_THEMES,
+  CHART_SAMPLE,
+  CHART_MAX_ROWS,
+  CHART_MIN_ROWS,
+  CHART_ROW_LIMIT,
+  CHART_CHORE_MAX,
+  CHART_MARGIN_CM,
+  CHART_TITLE_MAX,
+  CHART_NAME_MAX,
+  chartPaper,
+  chartDays,
+  chartStyle,
+  chartTheme,
+  chartRows,
+  chartChores,
+  chartText,
+  chartSheet,
   COLORING_PAPERS,
   COLORING_MARGIN_CM,
   COLORING_STYLES,
@@ -202,8 +222,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-six distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "word-search"]);
+test("the shared engine exposes the twenty-seven distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "chore-chart", "word-search"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -1676,4 +1696,98 @@ test("the shared shuffle stream is reproducible and a word card uses the whole l
 
   const short = bingoWordGrid(["CAT"], 3, 5, true);
   assert.equal(short.flat().filter((entry) => entry === "").length, 7, "a short list leaves the rest of the card empty");
+});
+
+test("the chore chart maker exposes its papers, weeks, styles and colour kits", () => {
+  assert.equal(chartPaper("a4").id, "a4");
+  assert.equal(chartPaper(21.59).id, "letter", "the paper is matched by its width too");
+  assert.equal(chartPaper("nonsense").id, "letter", "an unknown paper falls back to US Letter");
+  assert.equal(CHART_PAPERS.length, 2);
+  assert.equal(chartDays("school").names.length, 5);
+  assert.equal(chartDays("school-sat").names.length, 6);
+  assert.equal(chartDays("week").names.length, 7);
+  assert.equal(chartDays("nonsense").id, "week", "the full week is the safe default");
+  assert.equal(chartStyle("star").id, "star");
+  assert.equal(chartStyle("plain").id, "plain");
+  assert.equal(chartStyle("nonsense").id, "tick", "tick boxes are the default style");
+  assert.equal(chartTheme("ocean").label, "Ocean");
+  assert.equal(chartTheme("nonsense").id, CHART_THEMES[0].id, "an unknown colour kit falls back to the first");
+  assert.ok(CHART_THEMES.length >= 8, "the chart maker ships a full shelf of colour kits");
+  assert.equal(new Set(CHART_THEMES.map((theme) => theme.id)).size, CHART_THEMES.length, "two colour kits share an id");
+  for (const theme of CHART_THEMES) {
+    for (const key of ["head", "accent", "band", "row"]) {
+      assert.match(theme[key], /^#[0-9a-f]{6}$/i, theme.id + " has a malformed " + key + " colour");
+    }
+  }
+  for (const days of CHART_DAYS) {
+    assert.ok(days.names.length >= 5 && days.names.length <= 7, days.id + " has an odd number of day columns");
+    assert.equal(new Set(days.names).size, days.names.length, days.id + " repeats a day");
+  }
+});
+
+test("a chore list is tidied, deduplicated and capped at one row per job", () => {
+  assert.deepEqual(chartChores("Make my bed\nBrush my teeth; Tidy my room, Feed the pet"), ["Make my bed", "Brush my teeth", "Tidy my room", "Feed the pet"]);
+  assert.deepEqual(chartChores("Make   my    bed"), ["Make my bed"], "inner whitespace is collapsed");
+  assert.deepEqual(chartChores("   "), []);
+  assert.deepEqual(chartChores("Tidy my room\nTidy my room"), ["Tidy my room"], "the same job is only listed once");
+  assert.equal(chartChores("w".repeat(80))[0].length, CHART_CHORE_MAX, "a very long job is trimmed so the row stays readable");
+  assert.equal(chartChores(Array.from({ length: 60 }, (value, index) => "job " + index).join("\n")).length, CHART_ROW_LIMIT);
+  assert.equal(chartChores("a\nb\nc", 2).length, 2, "the caller can ask for a shorter cap");
+});
+
+test("the row count is held between the printed minimum and maximum", () => {
+  assert.equal(chartRows(8), 8);
+  assert.equal(chartRows("12"), 12);
+  assert.equal(chartRows(6.7), 6, "a fractional row count is floored");
+  assert.equal(chartRows(1), CHART_MIN_ROWS, "a chart never prints fewer than three rows");
+  assert.equal(chartRows(99), CHART_MAX_ROWS, "a chart never prints more than fourteen rows");
+  assert.equal(chartRows(0), 8, "an empty row box falls back to the eight row default");
+  assert.equal(chartRows("nonsense"), 8);
+});
+
+test("the printed title, name and reward line are tidied and trimmed", () => {
+  assert.equal(chartText("  My   weekly   chores  "), "My weekly chores");
+  assert.equal(chartText("x".repeat(60), CHART_TITLE_MAX).length, CHART_TITLE_MAX);
+  assert.equal(chartText("Alex", CHART_NAME_MAX), "Alex");
+  assert.equal(chartText("a b", 1), "a");
+  assert.equal(chartText(null), "");
+  assert.ok(CHART_TITLE_MAX <= 40 && CHART_NAME_MAX <= 40, "the printed lines stay short enough for the title band");
+});
+
+test("the chore chart sheet keeps every band and every row inside the printable border", () => {
+  for (const paper of ["letter", "a4"]) {
+    for (const days of ["week", "school", "school-sat"]) {
+      const sheet = chartSheet({ paper, days, rows: 8 });
+      assert.equal(sheet.paper.id, paper);
+      assert.equal(sheet.days.id, days);
+      assert.equal(sheet.rows, 8);
+      assert.equal(sheet.cols, sheet.days.names.length);
+      assert.equal(sheet.marginCm, CHART_MARGIN_CM);
+      assert.ok(sheet.marginCm >= 1, "a printed chart keeps a real printer margin");
+      const stacked = sheet.titleCm + sheet.headCm + sheet.rewardCm + sheet.gapCm + sheet.bodyCm;
+      assert.ok(Math.abs(stacked - sheet.usableH) < 1e-9, "the stacked bands fill the usable height");
+      assert.ok(Math.abs(sheet.usableW + sheet.marginCm * 2 - sheet.paper.widthCm) < 1e-9, "the usable width honours the margin");
+      assert.ok(Math.abs(sheet.usableH + sheet.marginCm * 2 - sheet.paper.heightCm) < 1e-9, "the usable height honours the margin");
+      assert.ok(Math.abs(sheet.bodyCm - sheet.rowCm * sheet.rows) < 1e-9, "the rows divide the body exactly");
+      assert.ok(Math.abs(sheet.labelW + sheet.colW * sheet.cols - sheet.usableW) < 1e-9, "the columns fill the usable width");
+      assert.ok(sheet.rowCm > 0 && sheet.colW > 0);
+    }
+  }
+  assert.equal(chartSheet().paper.id, "letter", "no paper choice prints US Letter");
+  assert.equal(chartSheet({ rows: 1 }).rows, CHART_MIN_ROWS, "the sheet asks chartRows for its row count");
+  assert.ok(chartSheet({ rows: 14 }).rowCm < chartSheet({ rows: 3 }).rowCm, "more rows means shallower rows");
+});
+
+test("the chart profile carries a paper list and ships a usable sample week", () => {
+  const profile = getProductProfile("chore-chart");
+  assert.equal(profile.name, "Chore Chart Maker");
+  assert.equal(profile.exportSvg, false, "the chart is a printed sheet, so there is no cut path to export");
+  assert.equal(profile.hasHardware, false);
+  assert.equal(profile.hasBase, false);
+  assert.equal(profile.sizes.length, CHART_PAPERS.length);
+  assert.equal(profile.sizeLabels.length, CHART_PAPERS.length);
+  assert.equal(profile.sizeLabels[0], "US Letter (8.5 x 11 in)");
+  assert.ok(CHART_SAMPLE.length >= 5, "the sample week is long enough to fill a chart");
+  assert.equal(new Set(CHART_SAMPLE).size, CHART_SAMPLE.length, "the sample week repeats a job");
+  for (const job of CHART_SAMPLE) assert.ok(job.length <= CHART_CHORE_MAX, "a sample job is longer than one row allows");
 });
