@@ -117,6 +117,10 @@ import {
   mulShowsAnswer,
   mulSheet,
   MUL_SAMPLE,
+  crownStyle,
+  crownBand,
+  crownSheet,
+  CROWN_SAMPLE,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -279,6 +283,10 @@ const chartStyleSelect = document.querySelector("#chartStyle");
 const chartThemeSelect = document.querySelector("#chartTheme");
 const chartRewardInput = document.querySelector("#chartReward");
 const chartSizeLabel = document.querySelector("#chartSizeLabel");
+const crownNameInput = document.querySelector("#crownName");
+const crownStyleSelect = document.querySelector("#crownStyle");
+const crownBandSelect = document.querySelector("#crownBand");
+const crownThemeSelect = document.querySelector("#crownTheme");
 const mulTitleInput = document.querySelector("#mulTitle");
 const mulNameInput = document.querySelector("#mulName");
 const mulTypeSelect = document.querySelector("#mulType");
@@ -512,6 +520,24 @@ function boot() {
     bcShuffle?.addEventListener("click", () => { bingoSeed = (bingoSeed % 4294967295) + 1; bingoPage = 0; schedule(); });
     bcPagePrev?.addEventListener("click", () => { bingoPage -= 1; render(); });
     bcPageNext?.addEventListener("click", () => { bingoPage += 1; render(); });
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
+  if (profile.id === "crown-maker") {
+    // A crown is typed rather than uploaded, so a blank canvas stands in for the artwork slot and
+    // the colour kits come from the same shared recipe as the other printable sheets.
+    if (crownThemeSelect) {
+      crownThemeSelect.innerHTML = '<option value="">Choose a colour kit...</option>'
+        + CHART_THEMES.map((theme) => '<option value="' + theme.id + '">' + theme.label + "</option>").join("");
+    }
+    crownNameInput?.addEventListener("input", schedule);
+    crownStyleSelect?.addEventListener("change", schedule);
+    crownBandSelect?.addEventListener("change", schedule);
+    crownThemeSelect?.addEventListener("change", schedule);
     image = document.createElement("canvas");
     image.width = WORK_LONG_SIDE;
     image.height = WORK_LONG_SIDE;
@@ -1104,6 +1130,19 @@ function layout() {
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: paper.heightCm, dpi: workDpi(WORK_LONG_SIDE, paper.heightCm), paper, sheet };
   }
+  if (profile.id === "crown-maker") {
+    // A crown band runs along the long edge of the page, so the paper is turned to landscape and
+    // the recipe decides where each band and each point falls at preview and print resolution.
+    const paper = chartPaper(sizeSelect.value);
+    const sheet = crownSheet({ paper, style: crownStyleSelect?.value, band: crownBandSelect?.value });
+    const longCm = Math.max(sheet.widthCm, sheet.heightCm);
+    const scale = WORK_LONG_SIDE / longCm;
+    const w = Math.round(sheet.widthCm * scale);
+    const h = Math.round(sheet.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), paper, sheet };
+  }
   if (profile.id === "chore-chart") {
     // The sheet is the product, so the paper decides the box and the chore rows decide where
     // every line falls at both preview and print resolution.
@@ -1523,6 +1562,25 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawBingo(ctx, scene, true);
+  } else if (profile.id === "crown-maker") {
+    // The crown is rebuilt from the same fields the layout sized, so a name, a style or a band
+    // change lands on the same printed paper instead of reflowing the sheet.
+    const style = crownStyle(crownStyleSelect?.value);
+    const band = crownBand(crownBandSelect?.value);
+    const theme = chartTheme(crownThemeSelect?.value);
+    scene = {
+      kind: "crown-maker",
+      paper: L.paper,
+      sheet: L.sheet,
+      styleId: style.id,
+      bandId: band.id,
+      name: chartText(crownNameInput?.value, 22),
+      themeId: theme.id,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawCrown(ctx, scene, true);
   } else if (profile.id === "chore-chart") {
     // The chart is drawn from the same fields the layout sized, so every change lands on the
     // same printed paper instead of reflowing the whole sheet.
@@ -1940,6 +1998,21 @@ function readout(L) {
       + rangeNote + ", with " + fillNote + " and the square numbers "
       + (scene.squaresId === "on" ? "shaded along the diagonal" : "left plain")
       + ". Print at 100 percent with no page scaling. No watermark, no sign-up, and nothing you type leaves your device.";
+    return;
+  }
+
+  if (profile.id === "crown-maker") {
+    // The band is the product, so the readout leads with the sheet it prints on and the crown it makes.
+    const paper = scene.paper;
+    const sheet = scene.sheet;
+    sizeLabel.textContent = paper.short;
+    dimensions.textContent = paper.short + " sheet in landscape at " + PRINT_DPI + " DPI ("
+      + physicalPixels(sheet.widthCm, PRINT_DPI) + " x " + physicalPixels(sheet.heightCm, PRINT_DPI) + " px) - "
+      + sheet.perSheet + " bands with " + sheet.teeth + " points each, a " + sheet.bandHCm.toFixed(1) + " cm deep "
+      + sheet.band.label.toLowerCase() + " in the " + sheet.style.label.toLowerCase() + " style, and a "
+      + sheet.tabCm.toFixed(1) + " cm glue tab on the end of every band, so one sheet joins up into about "
+      + sheet.fitCm.toFixed(0) + " cm of crown. Print at 100 percent with no page scaling. No watermark, "
+      + "no sign-up, and nothing you type leaves your device.";
     return;
   }
 
@@ -4843,6 +4916,161 @@ function drawMultiplicationChart(c, s, guides) {
     c.restore();
   }
 }
+function crownFitText(c, text, maxWidth, fontPx, weight) {
+  const label = String(text == null ? "" : text);
+  let size = Math.max(5, fontPx);
+  c.font = weight + " " + size + "px " + CHART_FONT;
+  while (size > 5 && c.measureText(label).width > maxWidth) {
+    size -= Math.max(0.25, size * 0.045);
+    c.font = weight + " " + size + "px " + CHART_FONT;
+  }
+  return size;
+}
+
+/**
+ * One point of a crown, appended to a path that is already open at the point left edge. Every
+ * style is written as a single closed shape so the whole band can be filled in one pass and the
+ * neighbouring points never show a seam where two fills meet.
+ */
+function crownPoint(c, style, x, baseY, tw, th) {
+  const cx = x + tw / 2;
+  const top = baseY - th;
+  if (style === "birthday") {
+    // A scalloped edge: a half round sits on the band and the next one starts where it ends.
+    c.ellipse(cx, baseY, tw / 2, th, 0, Math.PI, 0);
+    return;
+  }
+  if (style === "queen") {
+    // A rounded arch, so the crown reads as soft rather than spiky.
+    c.bezierCurveTo(x + tw * 0.16, top - th * 0.1, x + tw * 0.84, top - th * 0.1, x + tw, baseY);
+    return;
+  }
+  if (style === "princess") {
+    // Two lobes meeting at a point on the band, which is the heart a princess crown is cut from.
+    c.bezierCurveTo(x - tw * 0.04, baseY - th * 0.7, x + tw * 0.16, top - th * 0.08, cx, top + th * 0.3);
+    c.bezierCurveTo(x + tw * 0.84, top - th * 0.08, x + tw * 1.04, baseY - th * 0.7, x + tw, baseY);
+    return;
+  }
+  if (style === "king") {
+    // A sharp five sided point, the silhouette people picture when they think of a crown.
+    c.lineTo(x, baseY - th * 0.4);
+    c.lineTo(cx, top);
+    c.lineTo(x + tw, baseY - th * 0.4);
+    c.lineTo(x + tw, baseY);
+    return;
+  }
+  // Plain keeps the simplest cut: one straight triangle per point.
+  c.lineTo(cx, top);
+  c.lineTo(x + tw, baseY);
+}
+
+/**
+ * A printable paper crown. Two bands share one landscape sheet, each one an outline of points on
+ * top of a band with a glue tab at the end, so a single download is a crown that can be cut out
+ * and worn. One recipe draws the preview and the 300 DPI sheet, so the two always agree.
+ */
+function drawCrown(c, s, guides) {
+  const r = s.rect;
+  const sheet = s.sheet;
+  const theme = chartTheme(s.themeId);
+  const pxPerCm = r.w / sheet.widthCm;
+  const x0 = r.x + sheet.marginCm * pxPerCm;
+  const y0 = r.y + sheet.marginCm * pxPerCm;
+  const bodyW = sheet.bodyWCm * pxPerCm;
+  const tabW = sheet.tabCm * pxPerCm;
+  const bodyH = sheet.bodyCm * pxPerCm;
+  const teethH = sheet.teethCm * pxPerCm;
+  const tw = sheet.toothWCm * pxPerCm;
+  const lineW = Math.max(0.7, pxPerCm * 0.035);
+
+  c.save();
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+
+  for (let b = 0; b < sheet.perSheet; b += 1) {
+    const top = y0 + (sheet.topCm + b * (sheet.bandHCm + sheet.gapCm)) * pxPerCm;
+    const baseY = top + teethH;
+    const bottom = baseY + bodyH;
+
+    // The points and the band are one closed outline, so the fill has no seam between neighbours.
+    c.save();
+    c.beginPath();
+    c.moveTo(x0, baseY);
+    for (let i = 0; i < sheet.teeth; i += 1) crownPoint(c, s.styleId, x0 + i * tw, baseY, tw, teethH);
+    c.lineTo(x0 + bodyW, bottom);
+    c.lineTo(x0, bottom);
+    c.closePath();
+    c.fillStyle = theme.head;
+    c.fill();
+    c.restore();
+
+    // An accent edge where the points meet the band, and a second one along the bottom.
+    c.save();
+    c.strokeStyle = theme.accent;
+    c.lineWidth = Math.max(1, pxPerCm * 0.08);
+    c.beginPath();
+    c.moveTo(x0, baseY);
+    c.lineTo(x0 + bodyW, baseY);
+    c.stroke();
+    c.lineWidth = lineW;
+    c.beginPath();
+    c.moveTo(x0, bottom);
+    c.lineTo(x0 + bodyW, bottom);
+    c.stroke();
+    c.restore();
+
+    // The name sits on the front of the band, shrunk until it fits between the two ends.
+    if (s.name) {
+      const maxNameW = bodyW - pxPerCm * 1.4;
+      const size = crownFitText(c, s.name, maxNameW, Math.min(bodyH * 0.6, pxPerCm * 1.6), "800");
+      c.save();
+      c.fillStyle = "#ffffff";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.font = "800 " + size + "px " + CHART_FONT;
+      c.fillText(s.name, x0 + bodyW / 2, baseY + bodyH * 0.56, maxNameW);
+      c.restore();
+    }
+
+    // The tab tucks behind the next band, so it is left white and marked with a fold line.
+    c.save();
+    c.fillStyle = "#ffffff";
+    c.fillRect(x0 + bodyW, baseY, tabW, bodyH);
+    c.strokeStyle = theme.accent;
+    c.lineWidth = lineW;
+    c.setLineDash([pxPerCm * 0.24, pxPerCm * 0.2]);
+    c.strokeRect(x0 + bodyW, baseY, tabW, bodyH);
+    c.beginPath();
+    c.moveTo(x0 + bodyW + tabW * 0.26, bottom - lineW * 2);
+    c.lineTo(x0 + bodyW + tabW * 0.7, baseY + lineW * 2);
+    c.moveTo(x0 + bodyW + tabW * 0.48, bottom - lineW * 2);
+    c.lineTo(x0 + bodyW + tabW * 0.92, baseY + lineW * 2);
+    c.stroke();
+    c.setLineDash([]);
+    c.restore();
+  }
+
+  // The sheet carries its own instructions, because the two bands are cut apart before they are worn.
+  const noteY = y0 + (sheet.topCm + sheet.bandHCm + sheet.gapCm / 2) * pxPerCm;
+  const noteSize = Math.max(5, Math.min(sheet.gapCm * pxPerCm * 0.44, pxPerCm * 0.44));
+  c.save();
+  c.fillStyle = theme.accent;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.font = "600 " + noteSize + "px " + CHART_FONT;
+  c.fillText("Cut out both bands on the solid line. Overlap the tab behind the end of the other band, then glue or tape it.", r.x + r.w / 2, noteY, r.w - sheet.marginCm * pxPerCm * 2);
+  c.restore();
+
+  c.restore();
+
+  if (guides) {
+    c.save();
+    c.strokeStyle = "rgba(0,0,0,.28)";
+    c.lineWidth = 1;
+    c.strokeRect(r.x, r.y, r.w, r.h);
+    c.restore();
+  }
+}
 function sceneBox() {
   if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
@@ -4868,7 +5096,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart" || scene.kind === "crown-maker") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -4929,6 +5157,7 @@ function renderScene(scale) {
   else if (scene.kind === "bingo") drawBingo(c, scene, false);
   else if (scene.kind === "chore-chart") drawChoreChart(c, scene, false);
   else if (scene.kind === "multiplication-chart") drawMultiplicationChart(c, scene, false);
+  else if (scene.kind === "crown-maker") drawCrown(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -4954,7 +5183,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart" || scene.kind === "crown-maker") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -4982,6 +5211,8 @@ function exportName(extension) {
     ? "coloring-page-" + scene.page.id + "-" + scene.page.orientation
     : scene.kind === "name-tracing" && scene.paper
     ? "name-tracing-" + (scene.text ? scene.text.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() : "worksheet") + "-" + scene.paper.id + "-sheet-" + (scene.page + 1)
+    : scene.kind === "crown-maker" && scene.paper
+    ? "crown-maker-" + scene.paper.id + "-" + scene.styleId + "-" + scene.bandId + "-2-bands"
     : scene.kind === "multiplication-chart" && scene.paper
     ? "multiplication-chart-" + scene.paper.id + "-" + scene.orient + "-1-to-" + scene.max
     : scene.kind === "chore-chart" && scene.paper
@@ -5646,6 +5877,17 @@ async function loadSample() {
     // names the way a parent or teacher would, then leaves the first sheet on screen.
     if (traceName && !traceName.value.trim()) traceName.value = "Amelia\nNoah\nSophie";
     tracePage = 0;
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "crown-maker") {
+    // A crown is typed rather than uploaded, so the sample fills the name box and leaves a
+    // finished band on screen before anything is chosen.
+    if (crownNameInput && !crownNameInput.value.trim()) crownNameInput.value = CROWN_SAMPLE.name;
+    if (crownStyleSelect) crownStyleSelect.value = CROWN_SAMPLE.style;
+    if (crownBandSelect) crownBandSelect.value = CROWN_SAMPLE.band;
     adoptSource("sample");
     render();
     track("sample_loaded", { product: profile.id });

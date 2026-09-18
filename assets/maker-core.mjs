@@ -593,6 +593,46 @@ export const MUL_SAMPLE = Object.freeze({
 });
 
 
+/**
+ * A printable paper crown. The band is drawn at the real paper size, so the same geometry lays
+ * out the preview and the 300 DPI download: two bands to a landscape sheet, a cutting outline
+ * around the points, and a glue tab at the end of each band.
+ */
+export const CROWN_STYLES = Object.freeze([
+  { id: "king", label: "King - sharp points" },
+  { id: "queen", label: "Queen - arches and pearls" },
+  { id: "princess", label: "Princess - hearts" },
+  { id: "birthday", label: "Birthday - scallops" },
+  { id: "plain", label: "Plain - simple zigzag" },
+]);
+
+/** How deep the band is. A deeper band carries a longer name and sits further down the forehead. */
+export const CROWN_BANDS = Object.freeze([
+  { id: "slim", label: "Slim band", bodyCm: 3.2, teethCm: 2.9 },
+  { id: "classic", label: "Classic band", bodyCm: 4, teethCm: 3.6 },
+  { id: "wide", label: "Tall band", bodyCm: 4.8, teethCm: 4.2 },
+]);
+
+/** The safe printer border, and the longest name that fits on the front of a band. */
+export const CROWN_MARGIN_CM = 1.1;
+export const CROWN_NAME_MAX = 22;
+/** Two bands to a sheet: one sheet is a child-sized crown, two sheets cover most adults. */
+export const CROWN_PER_SHEET = 2;
+/** The overlap that gets glued or taped behind the next band. */
+export const CROWN_TAB_CM = 1.7;
+/** A point is cut out with scissors, so no point is ever drawn narrower than this. */
+export const CROWN_TOOTH_CM = 3.5;
+/** The smallest gap between two bands, which keeps the cut line clear of its neighbour. */
+export const CROWN_MIN_GAP_CM = 0.8;
+
+/** A ready-made crown, so a finished band is already on screen before anything is typed. */
+export const CROWN_SAMPLE = Object.freeze({
+  name: "Amelia",
+  style: "queen",
+  band: "classic",
+});
+
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -621,6 +661,7 @@ const PROFILES = Object.freeze([
   { id: "bingo", name: "Bingo Card Maker", product: "Printable bingo cards", hasHardware: false, hasBase: false, exportSvg: false, sizes: BINGO_PAPERS.map((paper) => paper.widthCm), sizeLabels: BINGO_PAPERS.map((paper) => paper.label) },
   { id: "chore-chart", name: "Chore Chart Maker", product: "Printable chore chart", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
   { id: "multiplication-chart", name: "Multiplication Chart Maker", product: "Printable multiplication chart", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
+  { id: "crown-maker", name: "Crown Maker", product: "Printable paper crown", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
   { id: "word-search", name: "Word Search Maker", product: "Printable word search puzzle", hasHardware: false, hasBase: false, exportSvg: false, sizes: WORD_SEARCH_PAPERS.map((paper) => paper.widthCm), sizeLabels: WORD_SEARCH_PAPERS.map((paper) => paper.label) },
 ]);
 
@@ -3065,5 +3106,56 @@ export function mulSheet(options) {
     widthCm, heightCm, usableW, usableH, titleCm, bodyCm,
     cols, rows, cellW, cellH, cellCm,
     blockCols, blockRows, blockW, blockH, lineCm,
+  };
+}
+
+export function crownStyle(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return CROWN_STYLES.find((style) => style.id === id) || CROWN_STYLES[0];
+}
+
+export function crownBand(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return CROWN_BANDS.find((band) => band.id === id) || CROWN_BANDS[1];
+}
+
+/**
+ * One sheet recipe drives the preview and the print. A crown band runs along the long edge of the
+ * page, so the sheet is always landscape and the paper is turned; two bands are stacked down the
+ * page and each one ends in a tab that tucks behind its neighbour. Every measurement is in
+ * centimetres so the printed band measures what the preview promised.
+ */
+export function crownSheet(options) {
+  const opts = options || {};
+  const paper = chartPaper(opts.paper);
+  const style = crownStyle(opts.style);
+  const band = crownBand(opts.band);
+  const marginCm = CROWN_MARGIN_CM;
+  // The band is printed across the long edge, so the paper is turned to landscape.
+  const widthCm = paper.heightCm;
+  const heightCm = paper.widthCm;
+  const usableW = widthCm - marginCm * 2;
+  const usableH = heightCm - marginCm * 2;
+  // Tall points are trimmed rather than allowed to run off the page, so a wide band still prints.
+  const maxBandH = (usableH - CROWN_MIN_GAP_CM * (CROWN_PER_SHEET + 1)) / CROWN_PER_SHEET;
+  const wantedH = band.bodyCm + band.teethCm;
+  const shrink = Math.min(1, maxBandH / wantedH);
+  const bodyCm = band.bodyCm * shrink;
+  const teethCm = band.teethCm * shrink;
+  const bandHCm = bodyCm + teethCm;
+  const gapCm = (usableH - bandHCm * CROWN_PER_SHEET) / (CROWN_PER_SHEET + 1);
+  const topCm = gapCm;
+  const tabCm = CROWN_TAB_CM;
+  const bodyWCm = usableW - tabCm;
+  // Whole points only, so the outline cuts out cleanly and the points stay even.
+  const teeth = Math.max(4, Math.round(bodyWCm / CROWN_TOOTH_CM));
+  const toothWCm = bodyWCm / teeth;
+  return {
+    paper, style, band, marginCm, tabCm, perSheet: CROWN_PER_SHEET,
+    widthCm, heightCm, usableW, usableH,
+    bodyCm, teethCm, bandHCm, gapCm, topCm,
+    bodyWCm, teeth, toothWCm,
+    // Two bands overlap by one tab, so this is the crown that comes off one sheet.
+    fitCm: CROWN_PER_SHEET * usableW - tabCm,
   };
 }

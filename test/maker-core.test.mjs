@@ -194,6 +194,18 @@ import {
   chartChores,
   chartText,
   chartSheet,
+  CROWN_STYLES,
+  CROWN_BANDS,
+  CROWN_MARGIN_CM,
+  CROWN_NAME_MAX,
+  CROWN_PER_SHEET,
+  CROWN_TAB_CM,
+  CROWN_TOOTH_CM,
+  CROWN_MIN_GAP_CM,
+  CROWN_SAMPLE,
+  crownStyle,
+  crownBand,
+  crownSheet,
   MUL_TYPES,
   MUL_RANGES,
   MUL_FILLS,
@@ -240,8 +252,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-eight distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "chore-chart", "multiplication-chart", "word-search"]);
+test("the shared engine exposes the twenty-nine distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "chore-chart", "multiplication-chart", "crown-maker", "word-search"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -1898,4 +1910,71 @@ test("the multiplication chart profile carries a paper list and ships a usable s
   assert.equal(mulFill(MUL_SAMPLE.fill).id, "full");
   assert.equal(mulSquares(MUL_SAMPLE.squares).id, "on");
   assert.ok(MUL_SAMPLE.title.length <= MUL_TITLE_MAX && MUL_SAMPLE.name.length <= MUL_NAME_MAX, "the sample fits the printed bands");
+});
+
+test("the crown maker exposes its styles and bands", () => {
+  assert.equal(crownStyle("king").id, "king");
+  assert.equal(crownStyle("nonsense").id, "king", "sharp points are the safe default");
+  assert.equal(crownBand("wide").id, "wide");
+  assert.equal(crownBand("nonsense").id, "classic", "the classic band is the safe default");
+  assert.equal(new Set(CROWN_STYLES.map((style) => style.id)).size, CROWN_STYLES.length, "two crown styles share an id");
+  assert.equal(new Set(CROWN_BANDS.map((band) => band.id)).size, CROWN_BANDS.length, "two crown bands share an id");
+  assert.ok(CROWN_NAME_MAX > 0 && CROWN_NAME_MAX <= 30, "the printed band holds a real first name, not a sentence");
+  assert.ok(CROWN_TOOTH_CM > 0, "a point is never cut narrower than a scissor can turn");
+  assert.ok(CROWN_MIN_GAP_CM > 0, "two stacked bands keep a cut line between them");
+});
+
+test("the crown band geometry fills the turned page with whole points", () => {
+  for (const paper of ["letter", "a4"]) {
+    for (const band of ["slim", "classic", "wide"]) {
+      const sheet = crownSheet({ paper, style: "queen", band });
+      assert.equal(sheet.paper.id, paper);
+      assert.equal(sheet.style.id, "queen");
+      assert.equal(sheet.band.id, band);
+      assert.equal(sheet.perSheet, CROWN_PER_SHEET);
+      assert.equal(sheet.marginCm, CROWN_MARGIN_CM);
+      assert.equal(sheet.tabCm, CROWN_TAB_CM);
+      assert.equal(sheet.widthCm, sheet.paper.heightCm, "the band runs along the long edge, so the page is turned");
+      assert.equal(sheet.heightCm, sheet.paper.widthCm);
+      assert.ok(Math.abs(sheet.usableW + sheet.marginCm * 2 - sheet.widthCm) < 1e-9, "the usable width honours the margin");
+      assert.ok(Math.abs(sheet.usableH + sheet.marginCm * 2 - sheet.heightCm) < 1e-9, "the usable height honours the margin");
+      assert.ok(Math.abs(sheet.bandHCm * sheet.perSheet + sheet.gapCm * (sheet.perSheet + 1) - sheet.usableH) < 1e-9, "the two bands and their gaps fill the usable height");
+      assert.ok(Math.abs(sheet.bodyWCm + sheet.tabCm - sheet.usableW) < 1e-9, "the band body plus the glue tab fills the usable width");
+      assert.ok(Math.abs(sheet.toothWCm * sheet.teeth - sheet.bodyWCm) < 1e-9, "the points divide the band evenly");
+      assert.ok(sheet.teeth >= 4, "a crown keeps at least four points");
+      assert.ok(sheet.gapCm >= CROWN_MIN_GAP_CM - 1e-9, "the gap never drops below the cut floor");
+      assert.ok(Math.abs(sheet.fitCm - (sheet.perSheet * sheet.usableW - sheet.tabCm)) < 1e-9, "one sheet loses exactly one tab to the overlap");
+    }
+  }
+  assert.equal(crownSheet().paper.id, "letter", "no paper choice prints US Letter");
+  assert.equal(crownSheet().band.id, "classic", "no band choice prints the classic band");
+});
+
+test("a wide band is trimmed so it still prints, and one sheet wraps a child head", () => {
+  const slim = crownSheet({ band: "slim" });
+  const classic = crownSheet({ band: "classic" });
+  const wide = crownSheet({ band: "wide" });
+  assert.ok(slim.bandHCm < classic.bandHCm);
+  assert.ok(classic.bandHCm < wide.bandHCm);
+  assert.ok(Math.abs(slim.bandHCm - (CROWN_BANDS[0].bodyCm + CROWN_BANDS[0].teethCm)) < 1e-9, "a slim band has room, so it prints at its full height");
+  assert.ok(wide.bandHCm <= (wide.usableH - CROWN_MIN_GAP_CM * (CROWN_PER_SHEET + 1)) / CROWN_PER_SHEET + 1e-9, "the tall band is scaled down rather than allowed to run off the page");
+  assert.ok(slim.fitCm > 40 && classic.fitCm > 40, "one Letter sheet of two bands wraps around a child head");
+  const a4 = crownSheet({ paper: "a4" });
+  const letter = crownSheet({ paper: "letter" });
+  assert.ok(Math.abs(a4.fitCm - (a4.perSheet * a4.usableW - a4.tabCm)) < 1e-9, "the A4 sheet measures from its own paper");
+  assert.ok(a4.fitCm > letter.fitCm, "the taller A4 page yields a longer band than US Letter");
+});
+
+test("the crown profile carries a paper list and ships a usable sample", () => {
+  const profile = getProductProfile("crown-maker");
+  assert.equal(profile.name, "Crown Maker");
+  assert.equal(profile.exportSvg, false, "a printed crown has no cut path to export");
+  assert.equal(profile.hasHardware, false);
+  assert.equal(profile.hasBase, false);
+  assert.equal(profile.sizes.length, CHART_PAPERS.length);
+  assert.equal(profile.sizeLabels.length, CHART_PAPERS.length);
+  assert.equal(profile.sizeLabels[0], "US Letter (8.5 x 11 in)");
+  assert.equal(crownStyle(CROWN_SAMPLE.style).id, "queen", "the sample is the arch-and-pearls crown a birthday reaches for");
+  assert.equal(crownBand(CROWN_SAMPLE.band).id, "classic");
+  assert.ok(CROWN_SAMPLE.name.length <= CROWN_NAME_MAX, "the sample name fits the printed band");
 });
