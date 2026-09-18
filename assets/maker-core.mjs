@@ -243,6 +243,69 @@ export const CUPCAKE_PAPERS = Object.freeze([
   { id: "black", label: "black", hex: "#14181a" },
 ]);
 
+/**
+ * The two papers a handwriting worksheet is printed on. Every row on the sheet is measured
+ * from these numbers, so the ruled lines land in the same place on screen and on paper.
+ */
+export const NAME_TRACING_PAPERS = Object.freeze([
+  { id: "letter", widthCm: 21.59, heightCm: 27.94, short: "US Letter", label: "US Letter (8.5 x 11 in)" },
+  { id: "a4", widthCm: 21, heightCm: 29.7, short: "A4", label: "A4 (21 x 29.7 cm)" },
+]);
+
+/**
+ * How the practice rows are drawn. A dotted or dashed row is stroked as an outline with a dash
+ * pattern measured in fractions of the letter height, so the dots stay in proportion on a
+ * phone and on a 300 DPI page alike.
+ */
+export const NAME_TRACING_STYLES = Object.freeze([
+  { id: "dotted", label: "Dotted outline", mode: "stroke", dash: [0.06, 0.16], alpha: 1 },
+  { id: "dashed", label: "Dashed outline", mode: "stroke", dash: [0.22, 0.16], alpha: 1 },
+  { id: "hollow", label: "Hollow outline", mode: "stroke", dash: null, alpha: 1 },
+  { id: "grey", label: "Light grey", mode: "fill", dash: null, alpha: 0.26 },
+  { id: "solid", label: "Solid black", mode: "fill", dash: null, alpha: 1 },
+]);
+
+/**
+ * The ruled lines under the writing. Blue-red-blue is the school paper a lot of parents and
+ * teachers ask for by name: a blue headline, a red dashed midline and a blue baseline.
+ */
+export const NAME_TRACING_RULES = Object.freeze([
+  { id: "blue-red-blue", label: "Blue top line, red dashed middle, blue base line", top: "#2f6fd0", mid: "#e0483a", base: "#2f6fd0", dashMid: true },
+  { id: "grey-ruled", label: "Grey three-line school paper", top: "#a8b0ad", mid: "#c3c9c6", base: "#a8b0ad", dashMid: true },
+  { id: "baseline", label: "A single writing line", top: "", mid: "", base: "#a8b0ad", dashMid: false },
+  { id: "none", label: "No guide lines", top: "", mid: "", base: "", dashMid: false },
+]);
+
+/** The letter case a worksheet is set in. A name is a proper noun, so as typed comes first. */
+export const NAME_TRACING_CASES = Object.freeze([
+  { id: "as-typed", label: "As typed" },
+  { id: "upper", label: "UPPERCASE" },
+  { id: "lower", label: "lowercase" },
+  { id: "title", label: "Title Case" },
+]);
+
+/** The pencil colours a worksheet is printed in, in the order the tool lists them. */
+export const NAME_TRACING_INKS = Object.freeze([
+  { id: "graphite", label: "graphite", hex: "#4a5250" },
+  { id: "blue", label: "blue", hex: "#2f6fd0" },
+  { id: "green", label: "green", hex: "#2f7d4f" },
+  { id: "violet", label: "violet", hex: "#6b4bb0" },
+  { id: "black", label: "black", hex: "#14181a" },
+]);
+
+/** The printer border a worksheet keeps, and the tallest a single writing row is allowed to get. */
+export const NAME_TRACING_MARGIN_CM = 1.27;
+export const NAME_TRACING_BAND_MAX_CM = 3.4;
+export const NAME_TRACING_HEADER_CM = 1.6;
+
+/** The most names one batch can carry, so a whole class list still prints in one sitting. */
+export const NAME_TRACING_LIMIT = 40;
+
+/** How many practice rows and blank rows a worksheet can be built from. */
+export const NAME_TRACING_ROW_MIN = 2;
+export const NAME_TRACING_ROW_MAX = 10;
+export const NAME_TRACING_BLANK_MAX = 6;
+
 /** The safe printer border and the gap between toppers on a printable sheet. */
 export const CUPCAKE_MARGIN_CM = 0.8;
 export const CUPCAKE_GUTTER_CM = 0.25;
@@ -304,6 +367,7 @@ const PROFILES = Object.freeze([
   { id: "place-card", name: "Place Card Maker", product: "Printable place card", hasHardware: false, hasBase: false, exportSvg: false, sizes: PLACE_CARD_SHEETS.map((sheet) => sheet.widthCm), sizeLabels: PLACE_CARD_SHEETS.map((sheet) => sheet.label) },
   { id: "coloring", name: "Photo to Coloring Page Maker", product: "Coloring page", hasHardware: false, hasBase: false, exportSvg: false, sizes: ["letter", "a4"], sizeLabels: ["US Letter (8.5 x 11 in)", "A4 (21 x 29.7 cm)"] },
   { id: "gift-tag", name: "Gift Tag Maker", product: "Printable gift tag", hasHardware: false, hasBase: false, exportSvg: false, sizes: GIFT_TAG_SIZES.map((size) => size.widthCm), sizeLabels: GIFT_TAG_SIZES.map((size) => size.label) },
+  { id: "name-tracing", name: "Name Tracing Worksheet Maker", product: "Name tracing worksheet", hasHardware: false, hasBase: false, exportSvg: false, sizes: NAME_TRACING_PAPERS.map((paper) => paper.widthCm), sizeLabels: NAME_TRACING_PAPERS.map((paper) => paper.label) },
 ]);
 
 export const PRINT_DPI = 300;
@@ -539,6 +603,132 @@ export function giftTagHole(width, height) {
   const r = Math.max(3, unit * 0.065);
   const cy = Math.max(r + unit * 0.045, unit * 0.135);
   return Object.freeze({ cx: w / 2, cy, r: Math.round(r * 100) / 100 });
+}
+
+/** The paper a worksheet is printed on, looked up by the width the size picker stores. */
+export function nameTracingPaper(value) {
+  const cm = Number(value);
+  return NAME_TRACING_PAPERS.find((paper) => Math.abs(paper.widthCm - cm) < 0.02) || NAME_TRACING_PAPERS[0];
+}
+
+/** The practice-row style, falling back to the classic dotted outline. */
+export function nameTracingStyle(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return NAME_TRACING_STYLES.find((style) => style.id === raw) || NAME_TRACING_STYLES[0];
+}
+
+/** The ruled line set, falling back to blue-red-blue school paper. */
+export function nameTracingRule(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return NAME_TRACING_RULES.find((rule) => rule.id === raw) || NAME_TRACING_RULES[0];
+}
+
+/** The letter case, falling back to printing the name exactly as it was typed. */
+export function nameTracingCase(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return NAME_TRACING_CASES.find((entry) => entry.id === raw) || NAME_TRACING_CASES[0];
+}
+
+/** A usable pencil colour, falling back to graphite. */
+export function nameTracingInkHex(value) {
+  return readHexColour(value, NAME_TRACING_INKS, "#4a5250");
+}
+
+/**
+ * Applies the chosen case to a name. Nothing is changed unless the visitor asked for it, because
+ * "McKenzie" and "van der Berg" should print the way the family writes them.
+ */
+export function nameTracingText(name, caseValue) {
+  const text = String(name === undefined || name === null ? "" : name).replace(/\s+/g, " ").trim();
+  const raw = caseValue && typeof caseValue === "object" && caseValue.id !== undefined
+    ? caseValue.id
+    : caseValue;
+  const chosen = String(raw === undefined || raw === null ? "" : raw).trim().toLowerCase();
+  if (chosen === "upper") return text.toUpperCase();
+  if (chosen === "lower") return text.toLowerCase();
+  if (chosen === "title") {
+    return text.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (whole, separator, letter) => separator + letter.toUpperCase());
+  }
+  return text;
+}
+
+/**
+ * Splits the name box into one name per line. A parent gets a single worksheet, and a teacher
+ * who pastes a class list gets one page per child in the order the register reads.
+ */
+export function nameTracingNames(value, limit = NAME_TRACING_LIMIT) {
+  const asked = Number(limit);
+  const cap = Number.isFinite(asked) && asked > 0 ? Math.floor(asked) : NAME_TRACING_LIMIT;
+  const names = [];
+  const lines = String(value === undefined || value === null ? "" : value).split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.replace(/\s+/g, " ").trim().slice(0, 24);
+    if (!trimmed) continue;
+    names.push(trimmed);
+    if (names.length >= cap) break;
+  }
+  return names;
+}
+
+/**
+ * How many copies of the name fit along one writing line and how wide each slot is. The caller
+ * measures the name once and this returns the count, so the row on screen and the row on the
+ * printed page can never disagree about how many names are on the line.
+ */
+export function nameTracingSlots(usableW, unitW, max = 8) {
+  const width = Number(usableW);
+  const unit = Number(unitW);
+  if (!Number.isFinite(width) || width <= 0) throw new Error("Usable width must be positive.");
+  if (!Number.isFinite(unit) || unit <= 0) throw new Error("Unit width must be positive.");
+  const asked = Number(max);
+  const ceiling = Number.isFinite(asked) && asked >= 1 ? Math.floor(asked) : 1;
+  const count = Math.max(1, Math.min(ceiling, Math.floor((width + 0.0001) / unit)));
+  return Object.freeze({ count, slotW: width / count });
+}
+
+/** Rounds a row count into the range the worksheet can actually print. */
+function nameTracingCount(value, min, max, fallback) {
+  const asked = Number(value);
+  if (!Number.isFinite(asked)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(asked)));
+}
+
+/**
+ * The ruled block a worksheet is built from: how wide the writing lines are, how many rows of
+ * each kind there are and how tall one row is. The preview and the 300 DPI print both read
+ * this, so a row never moves between the screen and the paper.
+ */
+export function nameTracingSheet(options) {
+  const opts = options || {};
+  const paper = nameTracingPaper(opts.paper);
+  const practiceRows = nameTracingCount(opts.rows, NAME_TRACING_ROW_MIN, NAME_TRACING_ROW_MAX, 5);
+  const blankRows = nameTracingCount(opts.blankRows, 0, NAME_TRACING_BLANK_MAX, 1);
+  const guideRows = opts.guide === false ? 0 : 1;
+  const headerRows = opts.header === false ? 0 : 1;
+  const marginCm = NAME_TRACING_MARGIN_CM;
+  const headerCm = headerRows ? NAME_TRACING_HEADER_CM : 0;
+  const usableW = Math.max(2, paper.widthCm - marginCm * 2);
+  const usableH = Math.max(2, paper.heightCm - marginCm * 2 - headerCm);
+  const totalRows = Math.max(1, practiceRows + blankRows + guideRows);
+  const bandCm = Math.min(NAME_TRACING_BAND_MAX_CM, usableH / totalRows);
+  const lineCm = bandCm * 0.76;
+  return Object.freeze({
+    paper,
+    marginCm,
+    headerCm,
+    headerRows,
+    guideRows,
+    practiceRows,
+    blankRows,
+    totalRows,
+    usableW,
+    usableH,
+    bandCm,
+    padCm: bandCm * 0.12,
+    lineCm,
+    midCm: lineCm / 2,
+    blockCm: bandCm * totalRows,
+  });
 }
 
 /** The desk name plate sizes, looked up by the long side the size picker stores. */

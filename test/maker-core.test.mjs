@@ -115,6 +115,25 @@ import {
   giftTagPaperHex,
   giftTagGrid,
   giftTagHole,
+  NAME_TRACING_PAPERS,
+  NAME_TRACING_STYLES,
+  NAME_TRACING_RULES,
+  NAME_TRACING_CASES,
+  NAME_TRACING_INKS,
+  NAME_TRACING_LIMIT,
+  NAME_TRACING_ROW_MIN,
+  NAME_TRACING_ROW_MAX,
+  NAME_TRACING_BLANK_MAX,
+  NAME_TRACING_MARGIN_CM,
+  nameTracingPaper,
+  nameTracingStyle,
+  nameTracingRule,
+  nameTracingCase,
+  nameTracingInkHex,
+  nameTracingText,
+  nameTracingNames,
+  nameTracingSlots,
+  nameTracingSheet,
   COLORING_PAPERS,
   COLORING_MARGIN_CM,
   COLORING_STYLES,
@@ -143,8 +162,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-three distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag"]);
+test("the shared engine exposes the twenty-four distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -1184,4 +1203,121 @@ test("gift tag punch holes stay on the card and clear of the message", () => {
   assert.ok(big.cy + big.r < 10.16);
   assert.throws(() => giftTagHole(0, 7.62), /positive/);
   assert.throws(() => giftTagHole(5.08, -1), /positive/);
+});
+
+test("the name tracing profile carries both papers and no photo controls", () => {
+  const profile = getProductProfile("name-tracing");
+  assert.equal(profile.name, "Name Tracing Worksheet Maker");
+  assert.equal(profile.product, "Name tracing worksheet");
+  assert.equal(profile.exportSvg, false);
+  assert.equal(profile.hasHardware, false);
+  assert.equal(profile.hasBase, false);
+  assert.equal(profile.sizes.length, 2);
+  assert.deepEqual([...profile.sizeLabels], [
+    "US Letter (8.5 x 11 in)",
+    "A4 (21 x 29.7 cm)",
+  ]);
+});
+
+test("name tracing papers, styles, rules, cases and inks resolve with safe fallbacks", () => {
+  assert.equal(NAME_TRACING_PAPERS.length, 2);
+  assert.equal(NAME_TRACING_MARGIN_CM, 1.27);
+  assert.equal(NAME_TRACING_ROW_MIN, 2);
+  assert.equal(NAME_TRACING_ROW_MAX, 10);
+  assert.equal(NAME_TRACING_BLANK_MAX, 6);
+  assert.equal(NAME_TRACING_LIMIT, 40);
+  assert.equal(nameTracingPaper(21).id, "a4");
+  assert.equal(nameTracingPaper(21.59).id, "letter");
+  assert.equal(nameTracingPaper("999").id, "letter", "an unknown paper falls back to US Letter");
+  assert.equal(nameTracingPaper(undefined).id, "letter");
+
+  assert.equal(NAME_TRACING_STYLES.length, 5);
+  assert.equal(nameTracingStyle("DASHED").id, "dashed");
+  assert.equal(nameTracingStyle("solid").id, "solid");
+  assert.equal(nameTracingStyle("nope").id, "dotted", "an unknown style falls back to the dotted outline");
+  assert.equal(nameTracingStyle(undefined).id, "dotted");
+
+  assert.equal(NAME_TRACING_RULES.length, 4);
+  assert.equal(nameTracingRule("grey-ruled").id, "grey-ruled");
+  assert.equal(nameTracingRule("none").id, "none");
+  assert.equal(nameTracingRule("nope").id, "blue-red-blue", "the blue red blue school paper is the default");
+  assert.equal(nameTracingRule(undefined).id, "blue-red-blue");
+
+  assert.equal(NAME_TRACING_CASES.length, 4);
+  assert.equal(nameTracingCase("UPPER").id, "upper");
+  assert.equal(nameTracingCase("nope").id, "as-typed", "a name prints as typed unless asked otherwise");
+  assert.equal(nameTracingCase(undefined).id, "as-typed");
+
+  assert.equal(NAME_TRACING_INKS.length, 5);
+  assert.equal(nameTracingInkHex("#ABC"), "#aabbcc");
+  assert.equal(nameTracingInkHex("blue"), "#2f6fd0");
+  assert.equal(nameTracingInkHex("no-such-ink"), "#4a5250", "an unknown ink falls back to graphite");
+  assert.equal(nameTracingInkHex(undefined), "#4a5250");
+});
+
+test("name tracing text keeps a family name intact unless a case is chosen", () => {
+  assert.equal(nameTracingText("  Amelia   Rose  ", "as-typed"), "Amelia Rose");
+  assert.equal(nameTracingText("Amelia", "upper"), "AMELIA");
+  assert.equal(nameTracingText("Amelia", "lower"), "amelia");
+  assert.equal(nameTracingText("amelia", "title"), "Amelia");
+  assert.equal(nameTracingText("amelia"), "amelia", "as-typed is the default");
+  assert.equal(nameTracingText("van der berg", "title"), "Van Der Berg");
+  assert.equal(nameTracingText("o'neil", "title"), "O'Neil");
+  assert.equal(nameTracingText("", "title"), "");
+  assert.equal(nameTracingText(undefined, "upper"), "");
+});
+
+test("name tracing splits a class list into one name per sheet", () => {
+  assert.deepEqual(nameTracingNames("Amelia\n\n Noah \nSophie"), ["Amelia", "Noah", "Sophie"]);
+  assert.deepEqual(nameTracingNames(""), []);
+  assert.deepEqual(nameTracingNames("   \n  \n"), []);
+  assert.deepEqual(nameTracingNames("a\nb\nc", 2), ["a", "b"], "the batch cap is honoured");
+  assert.deepEqual(nameTracingNames("a\nb\nc", 0), ["a", "b", "c"], "a zero cap falls back to the full limit");
+  assert.equal(nameTracingNames("x".repeat(30))[0].length, 24, "a single name is capped so it still fits a row");
+  assert.equal(nameTracingNames("a\nb\nc".repeat(40)).length, 40, "a whole class list still fits the batch limit");
+});
+
+test("name tracing rows count how many copies of a name fit the line", () => {
+  const three = nameTracingSlots(100, 30, 8);
+  assert.equal(three.count, 3);
+  assert.ok(Math.abs(three.slotW - 100 / 3) < 1e-9);
+  assert.equal(nameTracingSlots(100, 1000).count, 1, "at least one copy always lands on the line");
+  assert.equal(nameTracingSlots(100, 10, 3).count, 3, "the visible ceiling is respected");
+  assert.equal(nameTracingSlots(100, 10).count, 8, "the default ceiling is respected");
+  assert.throws(() => nameTracingSlots(0, 30), /positive/);
+  assert.throws(() => nameTracingSlots(100, 0), /positive/);
+});
+
+test("name tracing sheets lay the ruled block out inside the printable border", () => {
+  const letter = nameTracingSheet({ paper: "letter", rows: 5, blankRows: 1, guide: true });
+  assert.equal(letter.paper.id, "letter");
+  assert.equal(letter.practiceRows, 5);
+  assert.equal(letter.blankRows, 1);
+  assert.equal(letter.totalRows, 7, "five practice rows, a blank row and the guide row");
+  assert.ok(Math.abs(letter.usableW - 19.05) < 1e-9, "US Letter keeps a 1.27 cm border each side");
+  assert.ok(Math.abs(letter.bandCm - 3.4) < 1e-9);
+  assert.ok(Math.abs(letter.lineCm - 2.584) < 1e-9);
+  assert.ok(Math.abs(letter.midCm - 1.292) < 1e-9);
+
+  const a4 = nameTracingSheet({ paper: 21 });
+  assert.equal(a4.paper.id, "a4");
+  assert.ok(Math.abs(a4.usableW - 18.46) < 1e-9);
+
+  const clamped = nameTracingSheet({ rows: 100, blankRows: 99 });
+  assert.equal(clamped.practiceRows, NAME_TRACING_ROW_MAX);
+  assert.equal(clamped.blankRows, NAME_TRACING_BLANK_MAX);
+  const floored = nameTracingSheet({ rows: 0, blankRows: 0 });
+  assert.equal(floored.practiceRows, NAME_TRACING_ROW_MIN);
+  assert.equal(floored.blankRows, 0);
+
+  const bare = nameTracingSheet({ guide: false, header: false });
+  assert.equal(bare.guideRows, 0, "the guide row is optional");
+  assert.equal(bare.headerCm, 0, "the title row is optional");
+  assert.equal(bare.totalRows, 6, "five practice rows and one blank row by default, with no extras");
+
+  const fallback = nameTracingSheet();
+  assert.equal(fallback.paper.id, "letter", "no paper choice prints US Letter");
+  assert.equal(fallback.practiceRows, 5);
+  assert.equal(fallback.blankRows, 1);
+  assert.equal(fallback.headerRows, 1);
 });

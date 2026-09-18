@@ -54,6 +54,18 @@ import {
   giftTagPaperHex,
   giftTagGrid,
   giftTagHole,
+  nameTracingPaper,
+  nameTracingStyle,
+  nameTracingRule,
+  nameTracingCase,
+  nameTracingInkHex,
+  nameTracingText,
+  nameTracingNames,
+  nameTracingSlots,
+  nameTracingSheet,
+  NAME_TRACING_ROW_MIN,
+  NAME_TRACING_ROW_MAX,
+  NAME_TRACING_BLANK_MAX,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -170,6 +182,18 @@ const giftTagFrom = document.querySelector("#giftFrom");
 const giftTagFontSelect = document.querySelector("#giftFont");
 const giftTagPaper = document.querySelector("#giftPaper");
 const giftTagSheetSelect = document.querySelector("#giftSheet");
+const traceName = document.querySelector("#traceName");
+const traceRows = document.querySelector("#traceRows");
+const traceBlanks = document.querySelector("#traceBlanks");
+const traceStyle = document.querySelector("#traceStyle");
+const traceRule = document.querySelector("#traceRule");
+const traceCase = document.querySelector("#traceCase");
+const traceInk = document.querySelector("#traceInk");
+const traceGuide = document.querySelector("#traceGuide");
+const tracePager = document.querySelector("#tracePager");
+const tracePagePrev = document.querySelector("#tracePagePrev");
+const tracePageNext = document.querySelector("#tracePageNext");
+const tracePageLabel = document.querySelector("#tracePageLabel");
 const coloringStyleSelect = document.querySelector("#coloringStyle");
 const coloringDetailSelect = document.querySelector("#coloringDetail");
 const coloringWeightSelect = document.querySelector("#coloringWeight");
@@ -184,6 +208,8 @@ let plateLogo = null;
 let stripPhotos = [];
 let tablePhoto = null;
 let placeCardPage = 0;
+// A tracing batch can hold a whole class list, so the sheet being previewed is paged like place cards.
+let tracePage = 0;
 // A polaroid can be downloaded as a blank film frame, so the upload lives beside the shared
 // artwork slot instead of replacing the placeholder the shared export path expects.
 let polaroidPhoto = null;
@@ -200,6 +226,9 @@ let liftedCanvas = null;
 let rawSource = { width: 0, height: 0 };
 let scene = null;
 let raf = 0;
+
+/** The font every worksheet row is set in. Trebuchet is the clearest of the five loaded faces for a child to trace. */
+const NAME_TRACING_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
 
 boot();
 
@@ -326,6 +355,26 @@ function boot() {
     render();
     document.fonts?.ready?.then?.(() => schedule());
   }
+  if (profile.id === "name-tracing") {
+    traceName?.addEventListener("input", () => { tracePage = 0; schedule(); });
+    traceRows?.addEventListener("change", schedule);
+    traceBlanks?.addEventListener("change", schedule);
+    traceStyle?.addEventListener("change", schedule);
+    traceRule?.addEventListener("change", schedule);
+    traceCase?.addEventListener("change", schedule);
+    traceInk?.addEventListener("input", schedule);
+    traceGuide?.addEventListener("change", schedule);
+    tracePagePrev?.addEventListener("click", () => { tracePage -= 1; render(); });
+    tracePageNext?.addEventListener("click", () => { tracePage += 1; render(); });
+    // A worksheet is typed rather than uploaded, so a blank page stands in for the artwork and
+    // the shared preview and download plumbing works before a single name is entered.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
   if (profile.id === "coloring") {
     coloringStyleSelect?.addEventListener("change", schedule);
     coloringDetailSelect?.addEventListener("change", schedule);
@@ -350,6 +399,7 @@ function boot() {
   wireHexPresets(polaroidPaper, "#polaroidPaperPresets", "data-paper", schedule);
   wireHexPresets(cupcakePaper, "#cupcakePaperPresets", "data-paper", schedule);
   wireHexPresets(giftTagPaper, "#giftPaperPresets", "data-paper", schedule);
+  wireHexPresets(traceInk, "#traceInkPresets", "data-ink", schedule);
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
   contactInput?.addEventListener("input", schedule);
@@ -795,6 +845,23 @@ function layout() {
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), tag, sheet };
   }
+  if (profile.id === "name-tracing") {
+    // The worksheet is the product, so the paper decides the box and the row recipe decides
+    // where every ruled line falls. Preview and print both read the same sheet layout.
+    const paper = nameTracingPaper(sizeSelect.value);
+    const sheet = nameTracingSheet({
+      paper,
+      rows: traceRows?.value,
+      blankRows: traceBlanks?.value,
+      guide: traceGuide?.checked !== false,
+    });
+    const scale = WORK_LONG_SIDE / paper.heightCm;
+    const w = Math.round(paper.widthCm * scale);
+    const h = Math.round(paper.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: paper.heightCm, dpi: workDpi(WORK_LONG_SIDE, paper.heightCm), paper, sheet };
+  }
   if (profile.id === "coloring") {
     // The sheet is the product, so the paper decides the box and the photo simply fits inside
     // the printer margin. The preview works at its own DPI and the download is rebuilt at 300.
@@ -1103,6 +1170,30 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawGiftTag(ctx, scene, true);
+  } else if (profile.id === "name-tracing") {
+    // One name per page keeps a whole class list printable in register order, so the batch is
+    // split into pages here and the pager only ever moves the visible sheet.
+    const names = nameTracingNames(traceName?.value || "");
+    const pages = Math.max(1, names.length);
+    if (tracePage > pages - 1) tracePage = pages - 1;
+    if (tracePage < 0) tracePage = 0;
+    scene = {
+      kind: "name-tracing",
+      paper: nameTracingPaper(sizeSelect.value),
+      sheet: L.sheet,
+      names,
+      text: names.length ? nameTracingText(names[tracePage], traceCase?.value) : "",
+      page: tracePage,
+      pages,
+      style: nameTracingStyle(traceStyle?.value),
+      rule: nameTracingRule(traceRule?.value),
+      ink: nameTracingInkHex(traceInk?.value),
+      guide: traceGuide?.checked !== false,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawNameTracing(ctx, scene, true);
   } else if (profile.id === "coloring") {
     scene = {
       kind: "coloring",
@@ -1351,6 +1442,31 @@ function readout(L) {
     return;
   }
 
+  if (profile.id === "name-tracing") {
+    // The sheet is the product, so the readout leads with the paper and the rows the child gets,
+    // then pages a whole class list by name.
+    const sheet = scene.sheet;
+    const paper = scene.paper;
+    sizeLabel.textContent = paper.short;
+    if (tracePager) tracePager.hidden = scene.pages <= 1;
+    if (tracePageLabel) tracePageLabel.textContent = "Sheet " + (scene.page + 1) + " of " + scene.pages;
+    const styleName = scene.style.label.toLowerCase();
+    const ruleName = scene.rule.label.toLowerCase();
+    const pages = scene.pages > 1 ? " One page per name, so this batch holds " + scene.pages + " worksheets." : "";
+    const free = sheet.blankRows ? sheet.blankRows + " blank row" + (sheet.blankRows === 1 ? "" : "s") + " for free writing" : "no blank rows";
+    const body = paper.short + " worksheet at " + PRINT_DPI + " DPI ("
+      + physicalPixels(paper.widthCm, PRINT_DPI) + " x " + physicalPixels(paper.heightCm, PRINT_DPI)
+      + " px) - " + sheet.practiceRows + " tracing rows in " + styleName + ", with "
+      + ruleName + " and " + free + "."
+      + (scene.text
+        ? " The name prints across each writing line as many times as it cleanly fits."
+        : " Type a name on the left to fill the rows.")
+      + pages
+      + " Print at 100 percent with no page scaling so the ruled lines come out the size they are on screen."
+      + " No watermark, and nothing you type leaves your device.";
+    dimensions.textContent = body;
+    return;
+  }
   if (profile.id === "place-card") {
     // The sheet is the product, so the readout leads with the paper and then says what is on it.
     const grid = scene.grid;
@@ -3422,6 +3538,161 @@ function roundRect(c, x, y, w, h, radius) {
 
 // ------------------------------------------------------------------ export
 
+/**
+ * The three ruled lines under one writing band. Blue red blue is the school paper parents ask for
+ * by name, so the top and base lines share a blue and only the middle line is red and dashed.
+ */
+function nameTracingLines(c, rule, x, w, topY, midY, baseY) {
+  const lineH = Math.max(1, baseY - topY);
+  c.save();
+  c.lineWidth = Math.max(0.8, lineH * 0.035);
+  c.setLineDash([]);
+  if (rule.top) {
+    c.strokeStyle = rule.top;
+    c.beginPath();
+    c.moveTo(x, topY);
+    c.lineTo(x + w, topY);
+    c.stroke();
+  }
+  if (rule.mid) {
+    c.strokeStyle = rule.mid;
+    c.setLineDash(rule.dashMid ? [Math.max(2, lineH * 0.14), Math.max(2, lineH * 0.12)] : []);
+    c.beginPath();
+    c.moveTo(x, midY);
+    c.lineTo(x + w, midY);
+    c.stroke();
+  }
+  if (rule.base) {
+    c.setLineDash([]);
+    c.strokeStyle = rule.base;
+    c.beginPath();
+    c.moveTo(x, baseY);
+    c.lineTo(x + w, baseY);
+    c.stroke();
+  }
+  c.restore();
+}
+
+/** One writing row: the name is repeated across the line as many times as it cleanly fits. */
+function nameTracingRowText(c, x, y, w, fontPx, text, style, ink, alpha) {
+  if (!text) return;
+  c.save();
+  c.font = "700 " + fontPx + "px " + NAME_TRACING_FONT;
+  c.textAlign = "center";
+  c.textBaseline = "alphabetic";
+  const unitW = Math.max(1, c.measureText(text).width);
+  const slots = nameTracingSlots(w, unitW * 1.22, 8);
+  c.globalAlpha = alpha;
+  c.lineJoin = "round";
+  for (let i = 0; i < slots.count; i += 1) {
+    const cx = x + slots.slotW * (i + 0.5);
+    if (style.mode === "fill") {
+      c.fillStyle = ink;
+      c.fillText(text, cx, y);
+    } else {
+      c.strokeStyle = ink;
+      c.lineWidth = Math.max(1, fontPx * 0.048);
+      c.setLineDash(style.dash ? style.dash.map((k) => Math.max(1, k * fontPx)) : []);
+      c.strokeText(text, cx, y);
+    }
+  }
+  c.restore();
+}
+
+/**
+ * The whole worksheet: paper, a Name and Date header, the guided model row, the tracing rows and
+ * the blank rows for free writing. Every measurement comes from the shared sheet recipe, so the
+ * preview and the 300 DPI download put the ruled lines in the same place.
+ */
+function drawNameTracing(c, s, guides) {
+  const r = s.rect;
+  const sheet = s.sheet;
+  const paper = s.paper || sheet.paper;
+  const pxPerCm = r.w / paper.widthCm;
+  const margin = sheet.marginCm * pxPerCm;
+  const usableW = sheet.usableW * pxPerCm;
+  const band = sheet.bandCm * pxPerCm;
+  const linePx = sheet.lineCm * pxPerCm;
+  const text = (s.text || "").trim();
+  const style = s.style;
+  const rule = s.rule;
+  const ink = s.ink;
+  const guide = s.guide !== false;
+
+  // The paper itself, with the page shadow that only the on-screen preview carries.
+  c.save();
+  if (guides) {
+    c.shadowColor = "rgba(29,36,32,.22)";
+    c.shadowBlur = 26;
+    c.shadowOffsetY = 12;
+  }
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  c.restore();
+
+  const left = r.x + margin;
+  let top = r.y + margin;
+
+  // The Name and Date header, written in the same graphite as the rows.
+  if (sheet.headerRows) {
+    const headerPx = sheet.headerCm * pxPerCm;
+    const headSize = Math.max(8, Math.min(headerPx * 0.36, linePx * 0.52));
+    const labelY = top + headerPx * 0.42;
+    const ruleY = top + headerPx * 0.72;
+    c.save();
+    c.fillStyle = "rgba(74,82,80,.82)";
+    c.font = "600 " + headSize + "px " + NAME_TRACING_FONT;
+    c.textAlign = "left";
+    c.textBaseline = "middle";
+    c.fillText("Name", left, labelY);
+    const nameW = c.measureText("Name").width;
+    c.fillText("Date", left + usableW * 0.66, labelY);
+    const dateW = c.measureText("Date").width;
+    c.strokeStyle = "rgba(74,82,80,.45)";
+    c.lineWidth = Math.max(0.8, linePx * 0.045);
+    c.setLineDash([Math.max(2, linePx * 0.1), Math.max(2, linePx * 0.08)]);
+    c.beginPath();
+    c.moveTo(left + nameW + linePx * 0.22, ruleY);
+    c.lineTo(left + usableW * 0.62, ruleY);
+    c.moveTo(left + usableW * 0.66 + dateW + linePx * 0.22, ruleY);
+    c.lineTo(left + usableW, ruleY);
+    c.stroke();
+    c.restore();
+    top += headerPx;
+  }
+
+  // Each band is one writing row; the guided model row sits above the tracing rows.
+  const rowCount = sheet.totalRows;
+  const startsGuide = guide && sheet.guideRows === 1;
+  for (let row = 0; row < rowCount; row += 1) {
+    const rowTop = top + row * band;
+    const topY = rowTop + (band - linePx) / 2;
+    const midY = topY + linePx / 2;
+    const baseY = topY + linePx;
+    nameTracingLines(c, rule, left, usableW, topY, midY, baseY);
+    const isGuide = startsGuide && row === 0;
+    const isBlank = row >= sheet.guideRows + sheet.practiceRows;
+    if (!isBlank && text) {
+      const fontPx = linePx * 0.8;
+      if (isGuide) {
+        // The model row is a solid, lighter copy of the name so the child follows it first.
+        nameTracingRowText(c, left, baseY, usableW, fontPx, text, { mode: "fill", dash: null }, ink, 0.42);
+      } else {
+        nameTracingRowText(c, left, baseY, usableW, fontPx, text, style, ink, style.alpha === undefined ? 1 : style.alpha);
+      }
+    }
+  }
+
+  // A quiet footer so a printed sheet still points back to the tool without shouting.
+  c.save();
+  c.fillStyle = "rgba(29,36,32,.3)";
+  c.font = "500 " + Math.max(6, linePx * 0.22) + "px " + NAME_TRACING_FONT;
+  c.textAlign = "center";
+  c.textBaseline = "alphabetic";
+  c.fillText("Name tracing worksheet - free at Tiny County Makers", r.x + r.w / 2, r.y + r.h - margin * 0.42);
+  c.restore();
+}
+
 function sceneBox() {
   if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
@@ -3447,7 +3718,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -3503,6 +3774,7 @@ function renderScene(scale) {
   else if (scene.kind === "polaroid") drawPolaroid(c, scene, false);
   else if (scene.kind === "cupcake") drawCupcake(c, scene, false);
   else if (scene.kind === "gift-tag") drawGiftTag(c, scene, false);
+  else if (scene.kind === "name-tracing") drawNameTracing(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -3528,7 +3800,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -3554,6 +3826,8 @@ function exportScale() {
 function exportName(extension) {
   const stem = scene.kind === "coloring" && scene.page
     ? "coloring-page-" + scene.page.id + "-" + scene.page.orientation
+    : scene.kind === "name-tracing" && scene.paper
+    ? "name-tracing-" + (scene.text ? scene.text.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() : "worksheet") + "-" + scene.paper.id + "-sheet-" + (scene.page + 1)
     : scene.kind === "gift-tag" && scene.tag
     ? "gift-tag-" + scene.tag.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
     : scene.kind === "cupcake" && scene.topper
@@ -4205,6 +4479,16 @@ async function loadSample() {
     track("sample_loaded", { product: profile.id });
     return;
   }
+  if (profile.id === "name-tracing") {
+    // A worksheet is typed rather than uploaded, so the sample fills the box with a short list of
+    // names the way a parent or teacher would, then leaves the first sheet on screen.
+    if (traceName && !traceName.value.trim()) traceName.value = "Amelia\nNoah\nSophie";
+    tracePage = 0;
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
   if (profile.id === "gift-tag") {
     // A finished tag is the best demo, so the sample fills the card and leaves a message and a
     // To / From pair the way a real visitor would fill them.
@@ -4277,7 +4561,16 @@ async function loadSample() {
 
 function adoptSource(label) {
   const badge = document.querySelector("#sourceBadge");
-  if (badge) badge.textContent = label === "sample" ? "Sample image - replace with your own file anytime" : "";
+  if (!badge) return;
+  if (label !== "sample") {
+    badge.textContent = "";
+    return;
+  }
+  // A typed tool has no file to swap out, so it says what the sample is instead of telling a
+  // visitor to replace an upload they never made.
+  badge.textContent = document.querySelector("#photo")
+    ? "Sample image - replace with your own file anytime"
+    : "Sample loaded - edit the fields to make it yours";
 }
 
 // ------------------------------------------------------------------ helpers
