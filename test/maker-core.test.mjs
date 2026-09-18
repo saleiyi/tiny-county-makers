@@ -105,11 +105,36 @@ import {
   cupcakeSheet,
   cupcakePaperHex,
   cupcakeGrid,
+  COLORING_PAPERS,
+  COLORING_MARGIN_CM,
+  COLORING_STYLES,
+  COLORING_DETAILS,
+  COLORING_WEIGHTS,
+  coloringPaper,
+  coloringStyle,
+  coloringDetail,
+  coloringWeight,
+  lineWeightPx,
+  lineRadiusPx,
+  coloringPage,
+  fitBox,
+  grayscalePlane,
+  boxBlurPlane,
+  posterizeThresholds,
+  posterizePlane,
+  boundaryMask,
+  differenceOfGaussians,
+  quantileThreshold,
+  maskAbove,
+  dilateMask,
+  despeckleMask,
+  invertMask,
+  maskInkRatio,
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-one distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card"]);
+test("the shared engine exposes the twenty-two distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -954,4 +979,131 @@ test("cupcake sheet grids tile a batch of toppers with a printable margin", () =
   assert.equal(cupcakeGrid("a4", 7.62).perSheet, 6);
   assert.equal(cupcakeGrid("letter", 5.08).gutterCm, 0.25, "toppers leave a gutter so scissors can pass between them");
   assert.equal(cupcakeGrid("letter", 5.08).marginCm, 0.8, "the grid stays clear of the unprintable border");
+});
+
+test("coloring paper, style, detail and weight lookups resolve with safe fallbacks", () => {
+  assert.equal(COLORING_MARGIN_CM, 1.27);
+  assert.deepEqual(COLORING_PAPERS.map((paper) => paper.id), ["letter", "a4"]);
+  assert.equal(coloringPaper("a4").id, "a4");
+  assert.equal(coloringPaper("US-Letter").id, "letter", "the printable aliases should still find their sheet");
+  assert.equal(coloringPaper("nonsense").id, "letter", "an unknown sheet falls back to US Letter");
+  assert.equal(coloringPaper(undefined).id, "letter");
+  assert.deepEqual(COLORING_STYLES.map((style) => style.id), ["outline", "sketch"]);
+  assert.equal(coloringStyle("sketch").id, "sketch");
+  assert.equal(coloringStyle("pencil").id, "sketch");
+  assert.equal(coloringStyle("zzz").id, "outline", "an unknown style falls back to the cleaner outline");
+  assert.equal(coloringStyle(undefined).id, "outline");
+  assert.deepEqual(COLORING_DETAILS.map((detail) => detail.id), ["simple", "balanced", "detailed"]);
+  assert.equal(coloringDetail("simple").id, "simple");
+  assert.equal(coloringDetail("high").id, "detailed");
+  assert.equal(coloringDetail("nonsense").id, "balanced", "an unknown detail falls back to the balanced mid point");
+  assert.equal(coloringDetail(undefined).id, "balanced");
+  assert.deepEqual(COLORING_WEIGHTS.map((weight) => weight.id), ["fine", "medium", "bold"]);
+  assert.equal(coloringWeight("bold").id, "bold");
+  assert.equal(coloringWeight("thick").id, "bold");
+  assert.equal(coloringWeight("nonsense").id, "medium");
+  assert.equal(coloringWeight(undefined).id, "medium");
+});
+
+test("coloring page geometry keeps the printer margin in step with the paper", () => {
+  const letter = coloringPage("letter", "portrait");
+  assert.equal(letter.orientation, "portrait");
+  assert.equal(letter.widthPx, 2550);
+  assert.equal(letter.heightPx, 3300);
+  assert.equal(letter.artWidthCm, 19.05);
+  assert.equal(letter.artWidthPx, 2250);
+  assert.equal(letter.marginPx, 150, "the art stays inside a 1.27 cm printer border");
+  const flipped = coloringPage("letter", "landscape");
+  assert.equal(flipped.orientation, "landscape");
+  assert.equal(flipped.widthPx, 3300);
+  assert.equal(flipped.heightPx, 2550);
+  const a4 = coloringPage("a4", "portrait");
+  assert.equal(a4.id, "a4");
+  assert.equal(a4.widthCm, 21);
+  assert.equal(a4.heightCm, 29.7);
+  assert.equal(a4.widthPx, 2480);
+  assert.equal(a4.heightPx, 3508);
+  assert.equal(coloringPage("a4", "landscape").widthPx, 3508);
+  assert.equal(coloringPage("nonsense").id, "letter", "a bad sheet still prints on a real page");
+});
+
+test("fitBox contains a photo inside the art box and centres it", () => {
+  const wide = fitBox(4000, 3000, 2000, 2000);
+  assert.deepEqual(wide, { width: 2000, height: 1500, scale: 0.5, x: 0, y: 250 });
+  const tall = fitBox(1000, 4000, 2000, 2000);
+  assert.deepEqual(tall, { width: 500, height: 2000, scale: 0.5, x: 750, y: 0 });
+  assert.throws(() => fitBox(0, 100, 100, 100));
+  assert.throws(() => fitBox(100, 100, 0, 100));
+});
+
+test("grayscalePlane weights the channels and lays transparency over white", () => {
+  const plane = grayscalePlane(Uint8ClampedArray.from([0, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 128]), 4, 1);
+  assert.deepEqual([...plane], [0, 255, 255, 127]);
+  assert.throws(() => grayscalePlane(Uint8ClampedArray.from([0, 0, 0, 255]), 2, 2));
+});
+
+test("boxBlurPlane smooths a plane and clamps the border", () => {
+  assert.deepEqual([...boxBlurPlane(Uint8Array.from([0, 0, 255]), 3, 1, 1)], [0, 85, 170]);
+  const flat = Uint8Array.from(Array(9).fill(90));
+  assert.deepEqual([...boxBlurPlane(flat, 3, 3, 1)], [...flat], "a flat plane survives a blur");
+  assert.deepEqual([...boxBlurPlane(Uint8Array.from([1, 2, 3]), 3, 1, 0)], [1, 2, 3]);
+});
+
+test("posterizeThresholds and posterizePlane split tones into colouring bands", () => {
+  const paper = new Uint8Array(100);
+  paper.fill(0, 0, 50);
+  paper.fill(255, 50, 100);
+  assert.deepEqual(posterizeThresholds(paper, 2), [1]);
+  assert.deepEqual(posterizeThresholds(paper, 3), [1, 255]);
+  const bands = posterizePlane(paper, 10, 10, 2);
+  assert.equal(bands[0], 0);
+  assert.equal(bands[50], 1);
+  assert.ok([...bands].every((label) => label === 0 || label === 1));
+});
+
+test("boundaryMask inks only the seam between two tone bands", () => {
+  assert.deepEqual([...boundaryMask(Uint8Array.from([0, 0, 0, 1]), 2, 2)], [0, 1, 1, 1]);
+  const solid = Uint8Array.from(Array(9).fill(2));
+  assert.deepEqual([...boundaryMask(solid, 3, 3)], [...new Uint8Array(9)], "a flat band has no seam and stays blank");
+  assert.throws(() => boundaryMask(Uint8Array.from([0, 1]), 2, 2));
+});
+
+test("differenceOfGaussians flattens tone and reacts to an edge", () => {
+  const flat = differenceOfGaussians(Uint8Array.from(Array(25).fill(128)), 5, 5);
+  assert.ok([...flat].every((value) => Math.abs(value - 1.92) < 0.01), "a flat plane reads as a constant, near-zero response");
+  const edge = new Uint8Array(25);
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) edge[y * 5 + x] = x < 2 ? 0 : 255;
+  const response = differenceOfGaussians(edge, 5, 5);
+  assert.ok(Math.max(...[...response].map(Math.abs)) > 5, "a tonal edge survives as pencil line");
+});
+
+test("quantileThreshold, maskAbove, dilate and despeckle build a printable line mask", () => {
+  assert.equal(quantileThreshold([0, 1, 2, 3], 0.5), 1);
+  assert.equal(quantileThreshold([], 0.5), 0);
+  assert.equal(quantileThreshold([5, 5, 5], 0.5), 5, "a flat response has no threshold to find");
+  assert.deepEqual([...maskAbove(Uint8Array.from([0, 100, 200]), 3, 1, 100)], [0, 1, 1]);
+  assert.deepEqual([...dilateMask(Uint8Array.from([0, 1, 0]), 3, 1, 1)], [1, 1, 1], "dilation grows a hairline into a stroke");
+  assert.deepEqual([...dilateMask(Uint8Array.from([0, 1, 0]), 3, 1, 0)], [0, 1, 0]);
+  const dot = new Uint8Array(9);
+  dot[4] = 1;
+  assert.deepEqual([...despeckleMask(dot, 3, 3, 2)], [...new Uint8Array(9)], "a lone speck is dropped");
+  const hole = Uint8Array.from(Array(9).fill(1));
+  hole[4] = 0;
+  assert.deepEqual([...despeckleMask(hole, 3, 3, 2)], [...new Uint8Array(9).fill(1)], "a pinhole is filled");
+});
+
+test("invertMask, maskInkRatio and line weight describe the printed line", () => {
+  assert.deepEqual([...invertMask(Uint8Array.from([0, 1, 1, 0]))], [1, 0, 0, 1]);
+  assert.equal(maskInkRatio(Uint8Array.from([1, 0, 1, 0])), 0.5);
+  assert.equal(maskInkRatio(new Uint8Array(0)), 0);
+  assert.equal(lineWeightPx(0.5), 6);
+  assert.equal(lineWeightPx(0.9), 11);
+  assert.equal(lineWeightPx(1.4), 17);
+  assert.equal(lineWeightPx(0), 1, "a line never disappears entirely");
+  assert.equal(lineWeightPx("nonsense"), 1);
+  assert.equal(lineRadiusPx(0.5), 3);
+  assert.equal(lineRadiusPx(0.9), 5);
+  assert.equal(lineRadiusPx(1.4), 8);
+  assert.equal(lineRadiusPx(0), 0);
+  assert.equal(lineWeightPx(25.4, 150), 150, "the export DPI scales the printed line");
 });

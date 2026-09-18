@@ -269,6 +269,7 @@ const PROFILES = Object.freeze([
   { id: "table-number", name: "Table Number Maker", product: "Wedding table number", hasHardware: false, hasBase: false, exportSvg: false, sizes: TABLE_NUMBER_SIZES.map((size) => size.widthCm), sizeLabels: TABLE_NUMBER_SIZES.map((size) => size.label) },
   { id: "polaroid", name: "Polaroid Frame Maker", product: "Polaroid photo frame", hasHardware: false, hasBase: false, exportSvg: false, sizes: POLAROID_FRAMES.map((frame) => frame.widthCm), sizeLabels: POLAROID_FRAMES.map((frame) => frame.label) },
   { id: "place-card", name: "Place Card Maker", product: "Printable place card", hasHardware: false, hasBase: false, exportSvg: false, sizes: PLACE_CARD_SHEETS.map((sheet) => sheet.widthCm), sizeLabels: PLACE_CARD_SHEETS.map((sheet) => sheet.label) },
+  { id: "coloring", name: "Photo to Coloring Page Maker", product: "Coloring page", hasHardware: false, hasBase: false, exportSvg: false, sizes: ["letter", "a4"], sizeLabels: ["US Letter (8.5 x 11 in)", "A4 (21 x 29.7 cm)"] },
 ]);
 
 export const PRINT_DPI = 300;
@@ -463,7 +464,9 @@ export function deskNamePlateSize(value) {
 
 /** Size dropdown label: photo blocks read in inches, every other product reads in cm. */
 export function sizeOptionLabel(profile, longSideCm) {
-  const index = profile.sizes.indexOf(Number(longSideCm));
+  // Sizes are centimetres for every product except the colouring page, which picks a paper, so
+  // the lookup compares as text instead of coercing a paper id into a broken number.
+  const index = profile.sizes.findIndex((size) => String(size) === String(longSideCm));
   const labels = profile.sizeLabels;
   if (index >= 0 && labels && labels[index]) return labels[index];
   return longSideCm + " cm long side";
@@ -1526,4 +1529,395 @@ export function contoursToSmoothD(contours, precision = 2) {
 
 function round(value) {
   return Math.round(value * 100) / 100;
+}
+// ---------------------------------------------------------------- coloring pages
+
+/**
+ * The paper a coloring page is printed on. Both sheets are stored portrait and swapped by the
+ * orientation control, so the page geometry has one source of truth.
+ */
+export const COLORING_PAPERS = Object.freeze([
+  { id: "letter", short: "US Letter", label: "US Letter (8.5 x 11 in)", widthCm: 21.59, heightCm: 27.94 },
+  { id: "a4", short: "A4", label: "A4 (21 x 29.7 cm)", widthCm: 21, heightCm: 29.7 },
+]);
+
+/** The printer border the line art stays inside, in centimetres. */
+export const COLORING_MARGIN_CM = 1.27;
+
+/**
+ * How the line art is drawn. "outline" posterizes the photo and inks the seam between
+ * neighboring tones, which closes shapes the way a coloring book does. "sketch" runs an
+ * extended difference of Gaussians, which keeps the pencil-drawing look.
+ */
+export const COLORING_STYLES = Object.freeze([
+  { id: "outline", label: "Clean outlines" },
+  { id: "sketch", label: "Pencil sketch" },
+]);
+
+/**
+ * How much of the photo survives into the drawing. "blur" is a fraction of the art's long side
+ * rather than a pixel count, so the preview and the 300 DPI print agree on what the setting
+ * means, and "ink" is the share of the sheet that is allowed to come back as line.
+ */
+export const COLORING_DETAILS = Object.freeze([
+  { id: "simple", label: "Simple", levels: 3, blur: 0.01, ink: 0.1 },
+  { id: "balanced", label: "Balanced", levels: 4, blur: 0.006, ink: 0.14 },
+  { id: "detailed", label: "Detailed", levels: 5, blur: 0.0035, ink: 0.2 },
+]);
+
+/** Printed line weights, in millimetres, resolved to whole pixels at the export DPI. */
+export const COLORING_WEIGHTS = Object.freeze([
+  { id: "fine", label: "Fine", mm: 0.5 },
+  { id: "medium", label: "Medium", mm: 0.9 },
+  { id: "bold", label: "Bold", mm: 1.4 },
+]);
+
+function coloringLookup(list, value, aliases) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  if (aliases && Object.prototype.hasOwnProperty.call(aliases, raw)) return list[aliases[raw]];
+  for (let i = 0; i < list.length; i++) if (list[i].id === raw) return list[i];
+  return null;
+}
+
+/** Paper lookup: an unknown sheet falls back to US Letter, the size most visitors print on. */
+export function coloringPaper(value) {
+  return coloringLookup(COLORING_PAPERS, value, { "us-letter": 0, "8.5x11": 0, "8.5 x 11": 0 }) || COLORING_PAPERS[0];
+}
+
+/** Style lookup: anything unrecognized is the outline style, which is the better coloring page. */
+export function coloringStyle(value) {
+  const found = coloringLookup(COLORING_STYLES, value, { pencil: 1, "pencil-sketch": 1, line: 0, lines: 0 });
+  return found || COLORING_STYLES[0];
+}
+
+export function coloringDetail(value) {
+  return coloringLookup(COLORING_DETAILS, value, { low: 0, easy: 0, medium: 1, high: 2, more: 2 }) || COLORING_DETAILS[1];
+}
+
+export function coloringWeight(value) {
+  return coloringLookup(COLORING_WEIGHTS, value, { thin: 0, normal: 1, thick: 2, heavy: 2, extra: 2 }) || COLORING_WEIGHTS[1];
+}
+
+/** Millimetres of printed line -> whole pixels at a DPI, never less than one so a line shows. */
+export function lineWeightPx(millimetres, dpi = PRINT_DPI) {
+  const mm = Number(millimetres), safeDpi = Number(dpi);
+  if (!(mm > 0) || !(safeDpi > 0)) return 1;
+  return Math.max(1, Math.round((mm / 25.4) * safeDpi));
+}
+
+/** Half of the printed line weight in whole pixels: the dilation that thickens a traced hairline. */
+export function lineRadiusPx(millimetres, dpi = PRINT_DPI) {
+  return Math.max(0, Math.round((lineWeightPx(millimetres, dpi) - 1) / 2));
+}
+
+function cmToPixels(cm, dpi) {
+  return Math.max(1, Math.round((Number(cm) / 2.54) * dpi));
+}
+
+/**
+ * Page geometry for one coloring sheet: the paper, the printer margin and the pixel box the
+ * line art is drawn into at the export DPI. The preview and the download both read this, so a
+ * change to the margin can never make the screen and the printer disagree.
+ */
+export function coloringPage(paperValue, orientation, dpi = PRINT_DPI) {
+  const paper = coloringPaper(paperValue);
+  const safeDpi = Number(dpi) > 0 ? Number(dpi) : PRINT_DPI;
+  const landscape = String(orientation === undefined || orientation === null ? "" : orientation).trim().toLowerCase() === "landscape";
+  const widthCm = landscape ? paper.heightCm : paper.widthCm;
+  const heightCm = landscape ? paper.widthCm : paper.heightCm;
+  const artWidthCm = Math.max(1, widthCm - COLORING_MARGIN_CM * 2);
+  const artHeightCm = Math.max(1, heightCm - COLORING_MARGIN_CM * 2);
+  const widthPx = cmToPixels(widthCm, safeDpi);
+  const heightPx = cmToPixels(heightCm, safeDpi);
+  const artWidthPx = cmToPixels(artWidthCm, safeDpi);
+  const artHeightPx = cmToPixels(artHeightCm, safeDpi);
+  return {
+    id: paper.id,
+    short: paper.short,
+    label: paper.label,
+    orientation: landscape ? "landscape" : "portrait",
+    dpi: safeDpi,
+    widthCm: round(widthCm),
+    heightCm: round(heightCm),
+    marginCm: COLORING_MARGIN_CM,
+    artWidthCm: round(artWidthCm),
+    artHeightCm: round(artHeightCm),
+    widthPx,
+    heightPx,
+    artWidthPx,
+    artHeightPx,
+    marginPx: Math.max(0, Math.round((widthPx - artWidthPx) / 2)),
+  };
+}
+
+/**
+ * Contain-fit a source box inside a destination box and center it on whole pixels. The result
+ * carries the scale as well as the pixel box, because the line weight and the blur are both
+ * expressed in the destination's pixels.
+ */
+export function fitBox(sourceWidth, sourceHeight, boxWidth, boxHeight) {
+  const sw = Number(sourceWidth), sh = Number(sourceHeight);
+  const bw = Number(boxWidth), bh = Number(boxHeight);
+  if (!(sw > 0) || !(sh > 0) || !(bw > 0) || !(bh > 0)) {
+    throw new Error("fitBox needs positive source and destination sizes.");
+  }
+  const scale = Math.min(bw / sw, bh / sh);
+  const width = Math.max(1, Math.round(sw * scale));
+  const height = Math.max(1, Math.round(sh * scale));
+  return {
+    width: width,
+    height: height,
+    scale: scale,
+    x: Math.round((bw - width) / 2),
+    y: Math.round((bh - height) / 2),
+  };
+}
+
+/**
+ * RGBA pixels -> one 0-255 luminance byte per pixel, with any transparency laid over white.
+ * Flattening here keeps every later pass branch-free, and it means a cut-out PNG traces the
+ * subject rather than the transparent box it arrived in.
+ */
+export function grayscalePlane(pixels, width, height) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  if (!(w > 0 && h > 0)) throw new Error("Plane dimensions must be positive.");
+  if (!pixels || pixels.length < w * h * 4) throw new Error("Pixel buffer is smaller than the plane dimensions.");
+  const out = new Uint8Array(w * h);
+  for (let i = 0, p = 0; i < out.length; i++, p += 4) {
+    const alpha = pixels[p + 3] / 255;
+    const paper = 255 * (1 - alpha);
+    const r = pixels[p] * alpha + paper;
+    const g = pixels[p + 1] * alpha + paper;
+    const b = pixels[p + 2] * alpha + paper;
+    out[i] = Math.max(0, Math.min(255, Math.round(0.299 * r + 0.587 * g + 0.114 * b)));
+  }
+  return out;
+}
+
+/**
+ * Separable box blur on an 8-bit plane, with the edges clamped so the border does not darken.
+ * Two of these per axis stand in for a Gaussian, which is all a threshold needs to see.
+ */
+export function boxBlurPlane(plane, width, height, radius) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  if (!(w > 0 && h > 0)) throw new Error("Plane dimensions must be positive.");
+  if (!plane || plane.length < w * h) throw new Error("Plane buffer is smaller than the plane dimensions.");
+  const r = Math.max(0, Math.floor(Number(radius) || 0));
+  if (r === 0) return Uint8Array.from(plane.subarray(0, w * h));
+  const span = 2 * r + 1;
+  const pass = new Uint8Array(w * h);
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    let sum = 0;
+    for (let k = -r; k <= r; k++) sum += plane[row + Math.min(w - 1, Math.max(0, k))];
+    for (let x = 0; x < w; x++) {
+      pass[row + x] = Math.round(sum / span);
+      sum += plane[row + Math.min(w - 1, x + r + 1)] - plane[row + Math.max(0, x - r)];
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let sum = 0;
+    for (let k = -r; k <= r; k++) sum += pass[Math.min(h - 1, Math.max(0, k)) * w + x];
+    for (let y = 0; y < h; y++) {
+      out[y * w + x] = Math.round(sum / span);
+      sum += pass[Math.min(h - 1, y + r + 1) * w + x] - pass[Math.max(0, y - r) * w + x];
+    }
+  }
+  return out;
+}
+
+/** The tone boundaries that split an 8-bit plane into equally common bands. */
+export function posterizeThresholds(plane, levels) {
+  const bands = Math.max(2, Math.min(16, Math.floor(Number(levels) || 2)));
+  const histogram = new Uint32Array(256);
+  for (let i = 0; i < plane.length; i++) histogram[plane[i]]++;
+  const thresholds = [];
+  const total = plane.length;
+  let seen = 0, bin = 0;
+  for (let step = 1; step < bands; step++) {
+    const target = (total * step) / bands;
+    while (bin < 255 && seen + histogram[bin] < target) { seen += histogram[bin]; bin++; }
+    thresholds.push(Math.max(1, Math.min(255, bin)));
+  }
+  return thresholds;
+}
+
+/** Flatten a photo into a few tone bands, which is what turns it into colorable regions. */
+export function posterizePlane(plane, width, height, levels) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  if (!plane || plane.length < w * h) throw new Error("Plane buffer is smaller than the plane dimensions.");
+  const thresholds = posterizeThresholds(plane.subarray(0, w * h), levels);
+  const out = new Uint8Array(w * h);
+  for (let i = 0; i < out.length; i++) {
+    const value = plane[i];
+    let label = 0;
+    while (label < thresholds.length && value >= thresholds[label]) label++;
+    out[i] = label;
+  }
+  return out;
+}
+
+/**
+ * The seam between neighboring tone bands, which is what gives the outline style its closed,
+ * coloring-book shapes. The outer frame is left out so the printer margin stays blank.
+ */
+export function boundaryMask(labels, width, height) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  if (!labels || labels.length < w * h) throw new Error("Label buffer is smaller than the plane dimensions.");
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const value = labels[i];
+      if ((x > 0 && labels[i - 1] !== value) || (x < w - 1 && labels[i + 1] !== value)) { out[i] = 1; continue; }
+      if ((y > 0 && labels[i - w] !== value) || (y < h - 1 && labels[i + w] !== value)) out[i] = 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Extended difference of Gaussians response for the sketch style: the photo minus a blurrier,
+ * slightly faded copy of itself. Flat areas land near zero and only the tonal edges survive,
+ * which is what makes the result read as pencil rather than as a photograph.
+ */
+export function differenceOfGaussians(plane, width, height, sigma = 1.5, fade = 0.985) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  if (!(w > 0 && h > 0)) throw new Error("Plane dimensions must be positive.");
+  if (!plane || plane.length < w * h) throw new Error("Plane buffer is smaller than the plane dimensions.");
+  const sharp = Math.max(1, Math.round(Number(sigma) || 1.5));
+  const soft = Math.max(sharp + 1, Math.round(sharp * 1.6));
+  const a = boxBlurPlane(boxBlurPlane(plane, w, h, sharp), w, h, sharp);
+  const b = boxBlurPlane(boxBlurPlane(plane, w, h, soft), w, h, soft);
+  const p = Math.max(0.5, Math.min(1, Number(fade) || 0.985));
+  const out = new Float32Array(w * h);
+  for (let i = 0; i < out.length; i++) out[i] = a[i] - p * b[i];
+  return out;
+}
+
+/**
+ * The value below which `quantile` of a response plane sits, read off a coarse histogram so a
+ * full 300 DPI sheet can be thresholded without ever being sorted.
+ */
+export function quantileThreshold(values, quantile) {
+  const n = values.length;
+  if (!n) return 0;
+  const q = Math.max(0, Math.min(1, Number(quantile) || 0));
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = values[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  if (!(max > min)) return max;
+  const bins = 1024;
+  const histogram = new Uint32Array(bins);
+  const scale = (bins - 1) / (max - min);
+  for (let i = 0; i < n; i++) histogram[Math.round((values[i] - min) * scale)]++;
+  const target = n * q;
+  let seen = 0;
+  for (let b = 0; b < bins; b++) {
+    seen += histogram[b];
+    if (seen >= target) return min + b / scale;
+  }
+  return max;
+}
+
+/** Binary mask of every value at or above `threshold`. */
+export function maskAbove(values, width, height, threshold) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  if (!values || values.length < w * h) throw new Error("Value buffer is smaller than the plane dimensions.");
+  const limit = Number(threshold);
+  const out = new Uint8Array(w * h);
+  for (let i = 0; i < out.length; i++) out[i] = values[i] >= limit ? 1 : 0;
+  return out;
+}
+
+/**
+ * Grow every line by `radius` pixels, so the printed line weight is a real measurement instead
+ * of whatever the posterize pass happened to produce. Separable, so the cost stays linear in
+ * the pixel count no matter how heavy the line.
+ */
+export function dilateMask(mask, width, height, radius) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  if (!(w > 0 && h > 0)) throw new Error("Mask dimensions must be positive.");
+  if (!mask || mask.length < w * h) throw new Error("Mask buffer is smaller than the mask dimensions.");
+  const r = Math.max(0, Math.floor(Number(radius) || 0));
+  if (r === 0) return Uint8Array.from(mask.subarray(0, w * h));
+  const horizontal = new Uint8Array(w * h);
+  const out = new Uint8Array(w * h);
+  const queue = new Int32Array(w + 1);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    let head = 0, tail = 0;
+    for (let x = 0; x < w + r; x++) {
+      if (x < w) {
+        const value = mask[row + x];
+        while (tail > head && mask[row + queue[tail - 1]] <= value) tail--;
+        queue[tail++] = x;
+      }
+      const target = x - r;
+      if (target < 0) continue;
+      while (queue[head] < target - r) head++;
+      horizontal[row + target] = mask[row + queue[head]];
+    }
+  }
+  const column = new Int32Array(h + 1);
+  for (let x = 0; x < w; x++) {
+    let head = 0, tail = 0;
+    for (let y = 0; y < h + r; y++) {
+      if (y < h) {
+        const value = horizontal[y * w + x];
+        while (tail > head && horizontal[column[tail - 1] * w + x] <= value) tail--;
+        column[tail++] = y;
+      }
+      const target = y - r;
+      if (target < 0) continue;
+      while (column[head] < target - r) head++;
+      out[target * w + x] = horizontal[column[head] * w + x];
+    }
+  }
+  return out;
+}
+
+/**
+ * A threshold leaves one-pixel specks behind on a busy photo. A pixel only survives as ink when
+ * it is part of a stroke rather than a stray dot, and a matching pass fills pinholes so the
+ * lines print solid instead of dotted.
+ */
+export function despeckleMask(mask, width, height, minNeighbours = 2) {
+  const w = Math.floor(Number(width)), h = Math.floor(Number(height));
+  if (!mask || mask.length < w * h) throw new Error("Mask buffer is smaller than the mask dimensions.");
+  const floor = Math.max(1, Math.min(4, Math.floor(Number(minNeighbours) || 2)));
+  const out = Uint8Array.from(mask.subarray(0, w * h));
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      let neighbours = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx !== 0 || dy !== 0) neighbours += mask[i + dy * w + dx];
+        }
+      }
+      if (mask[i]) { if (neighbours < floor) out[i] = 0; }
+      else if (neighbours >= 9 - floor) out[i] = 1;
+    }
+  }
+  return out;
+}
+
+/** Swap ink for paper, for the white-on-black tracing sheet. */
+export function invertMask(mask) {
+  const out = new Uint8Array(mask.length);
+  for (let i = 0; i < out.length; i++) out[i] = mask[i] ? 0 : 1;
+  return out;
+}
+
+/** Share of the sheet that ends up as ink, which the readout quotes back to the visitor. */
+export function maskInkRatio(mask) {
+  if (!mask || !mask.length) return 0;
+  let ink = 0;
+  for (let i = 0; i < mask.length; i++) ink += mask[i] ? 1 : 0;
+  return ink / mask.length;
 }

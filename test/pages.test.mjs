@@ -27,6 +27,7 @@ const TOOL_PAGES = [
   { file: "polaroid-frame-maker.html", maker: "polaroid", title: "Polaroid Frame Maker" },
   { file: "place-card-maker.html", maker: "place-card", title: "Place Card Maker" },
   { file: "cupcake-topper-maker.html", maker: "cupcake", title: "Cupcake Topper Maker" },
+  { file: "coloring-page-maker.html", maker: "coloring", title: "Photo to Coloring Page Maker" },
 ];
 
 const SHARED_IDS = ["photo", "size", "sizeLabel", "pngDownload", "preview", "dimensions", "productName"];
@@ -180,6 +181,7 @@ test("the sitemap lists every published page with the current lastmod", () => {
     "polaroid-frame-maker.html",
     "place-card-maker.html",
     "cupcake-topper-maker.html",
+    "coloring-page-maker.html",
   ];
   for (const entry of paths) {
     assert.ok(xml.includes(entry), `sitemap.xml is missing ${entry}`);
@@ -233,7 +235,7 @@ test("the keychain FAQ and how-to markup match what visitors can read", () => {
 
 test("the homepage advertises the other free tools with real descriptions", () => {
   const html = read("index.html");
-  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "bookmark-maker.html", "acrylic-coaster-maker.html", "desk-name-plate-maker.html", "photo-jigsaw-puzzle-maker.html", "sticker-outline-maker.html", "photo-strip-maker.html", "table-number-maker.html", "polaroid-frame-maker.html", "place-card-maker.html", "cupcake-topper-maker.html"]) {
+  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "bookmark-maker.html", "acrylic-coaster-maker.html", "desk-name-plate-maker.html", "photo-jigsaw-puzzle-maker.html", "sticker-outline-maker.html", "photo-strip-maker.html", "table-number-maker.html", "polaroid-frame-maker.html", "place-card-maker.html", "cupcake-topper-maker.html", "coloring-page-maker.html"]) {
     assert.ok(html.includes(`href="./${tool}"`), `index.html does not link ${tool}`);
   }
   assert.match(html, /<section class="tools-band" id="more-tools">/, "the related-tools band disappeared");

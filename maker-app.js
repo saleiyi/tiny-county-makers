@@ -60,11 +60,32 @@ import {
   isCakeTopperStyle,
   photoBlockSize,
   sizeOptionLabel,
+  coloringPaper,
+  coloringStyle,
+  coloringDetail,
+  coloringWeight,
+  coloringPage,
+  lineWeightPx,
+  lineRadiusPx,
+  fitBox,
+  grayscalePlane,
+  boxBlurPlane,
+  posterizePlane,
+  boundaryMask,
+  differenceOfGaussians,
+  quantileThreshold,
+  maskAbove,
+  dilateMask,
+  despeckleMask,
+  maskInkRatio,
   PRINT_DPI,
 } from "./assets/maker-core.mjs";
 
 const CANVAS = 900;
 const WORK_LONG_SIDE = 620;
+// Coloring sheets trace their line art above the preview's own DPI, because a 0.5 mm hairline and a
+// 1.4 mm line land on the same pixel at preview resolution and the weight control would look dead.
+const COLORING_PREVIEW_DPI = 120;
 const LIFT_LONG_SIDE = 2400;
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const DEFAULT_NAME_FONT = "'Playfair Display', Georgia, serif";
@@ -78,6 +99,7 @@ const DEFAULT_PLACE_CARD_FONT = "'Playfair Display', Georgia, 'Times New Roman',
 const DEFAULT_POLAROID_FONT = "'Brush Script MT', 'Segoe Script', cursive";
 const DEFAULT_CUPCAKE_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
 const CUPCAKE_MAX_CHARS = 40;
+const COLORING_INK = "#141414";
 
 const root = document.querySelector("[data-maker]");
 const profile = getProductProfile(root.dataset.maker);
@@ -133,6 +155,11 @@ const cupcakeText = document.querySelector("#cupcakeText");
 const cupcakeFontSelect = document.querySelector("#cupcakeFont");
 const cupcakePaper = document.querySelector("#cupcakePaper");
 const cupcakeSheetSelect = document.querySelector("#cupcakeSheet");
+const coloringStyleSelect = document.querySelector("#coloringStyle");
+const coloringDetailSelect = document.querySelector("#coloringDetail");
+const coloringWeightSelect = document.querySelector("#coloringWeight");
+const coloringOrientationSelect = document.querySelector("#coloringOrientation");
+const coloringInvertInput = document.querySelector("#coloringInvert");
 
 let image = null;
 let imageDataUrl = "";
@@ -147,6 +174,9 @@ let placeCardPage = 0;
 let polaroidPhoto = null;
 // A cupcake topper can be printed blank, so the upload lives beside the placeholder artwork.
 let cupcakePhoto = null;
+// A coloring page does not need artwork of its own: the sheet alone is a usable download, so the
+// uploaded photo is kept beside the blank placeholder the shared export path expects.
+let coloringPhoto = null;
 let rawContours = null;
 let backgroundLifted = false;
 let liftedCanvas = null;
@@ -256,6 +286,21 @@ function boot() {
     cupcakeSheetSelect?.addEventListener("change", schedule);
     // A topper is cut from card stock, so a blank placeholder stands in for the artwork and
     // the shared preview and download plumbing works before a single photo is added.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
+  if (profile.id === "coloring") {
+    coloringStyleSelect?.addEventListener("change", schedule);
+    coloringDetailSelect?.addEventListener("change", schedule);
+    coloringWeightSelect?.addEventListener("change", schedule);
+    coloringOrientationSelect?.addEventListener("change", schedule);
+    coloringInvertInput?.addEventListener("change", schedule);
+    // The sheet itself is the product, so a blank page stands in for the artwork and the shared
+    // preview and download plumbing works before a single photo is added.
     image = document.createElement("canvas");
     image.width = WORK_LONG_SIDE;
     image.height = WORK_LONG_SIDE;
@@ -583,6 +628,7 @@ async function adoptImage(dataUrl) {
     image = null;
     if (profile.id === "table-number") tablePhoto = null;
     if (profile.id === "cupcake") cupcakePhoto = null;
+    if (profile.id === "coloring") coloringPhoto = null;
     setDownloadsEnabled(false);
     note("We could not read that image. Please try another file.");
     return false;
@@ -591,6 +637,8 @@ async function adoptImage(dataUrl) {
   if (profile.id === "polaroid") polaroidPhoto = image;
   // A cupcake topper can be printed blank, so the photo is kept beside the placeholder artwork.
   if (profile.id === "cupcake") cupcakePhoto = image;
+  // A coloring page is drawn from the photo itself, so the upload is kept for the line-art pass.
+  if (profile.id === "coloring") coloringPhoto = image;
   // A table number keeps its photo beside the typed number, so it is remembered here rather
   // than read back off the shared artwork slot.
   if (profile.id === "table-number") tablePhoto = image;
@@ -695,6 +743,21 @@ function layout() {
     const x = (CANVAS - w) / 2;
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), topper, sheet };
+  }
+  if (profile.id === "coloring") {
+    // The sheet is the product, so the paper decides the box and the photo simply fits inside
+    // the printer margin. The preview works at its own DPI and the download is rebuilt at 300.
+    const paper = coloringPaper(sizeSelect.value);
+    const orientation = coloringOrientationSelect?.value === "landscape" ? "landscape" : "portrait";
+    const longCm = Math.max(paper.widthCm, paper.heightCm);
+    const dpi = workDpi(WORK_LONG_SIDE, longCm);
+    const page = coloringPage(paper.id, orientation, dpi);
+    const sheet = coloringPage(paper.id, orientation, COLORING_PREVIEW_DPI);
+    const w = page.widthPx;
+    const h = page.heightPx;
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: longCm, dpi, page, sheet };
   }
   if (profile.id === "photo-strip") {
     // A strip is a fixed 2 in wide column of photos, so the product size decides the box
@@ -970,6 +1033,24 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawCupcake(ctx, scene, true);
+  } else if (profile.id === "coloring") {
+    scene = {
+      kind: "coloring",
+      page: L.page,
+      sheet: L.sheet,
+      style: coloringStyle(coloringStyleSelect?.value),
+      detail: coloringDetail(coloringDetailSelect?.value),
+      weight: coloringWeight(coloringWeightSelect?.value),
+      invert: !!coloringInvertInput?.checked,
+      photo: coloringPhoto,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    // The sheet is traced at COLORING_PREVIEW_DPI DPI and then scaled onto the artboard, so the weight
+    // and the detail the visitor picks are the same decisions the 300 DPI download will make.
+    scene.canvas = coloringPageCanvas(scene.sheet, scene);
+    drawColoringPage(ctx, scene, true);
   } else if (profile.id === "photo-keychain") {
     const geometry = photoKeychainGeometry(L);
     scene = {
@@ -1179,6 +1260,24 @@ function readout(L) {
       + (scene.names ? " The names print under the number." : "")
       + (scene.number ? "" : " Type a table number to put it on the card.")
       + " No watermark, and the photos never leave your device.";
+    return;
+  }
+
+  if (profile.id === "coloring") {
+    // The sheet is the product, so the readout leads with the paper, the orientation and the
+    // 300 DPI pixel size, then says what the settings actually do to the line art.
+    const page = scene.page;
+    const print = coloringPage(page.id, page.orientation, PRINT_DPI);
+    const styleName = scene.style.id === "sketch" ? "pencil sketch" : "clean outlines";
+    const ink = scene.inkRatio ? Math.round(scene.inkRatio * 100) : 0;
+    sizeLabel.textContent = page.short;
+    dimensions.textContent = page.short + " " + page.orientation + " page at " + PRINT_DPI + " DPI ("
+      + print.widthPx + " x " + print.heightPx + " px) - " + styleName + " with " + scene.weight.mm
+      + " mm lines and " + scene.detail.label.toLowerCase() + " detail"
+      + (scene.invert ? ", printed as white lines on black for tracing" : "") + "."
+      + " The art keeps a " + round2(page.marginCm) + " cm printer margin on every side"
+      + (scene.photo ? ", and about " + ink + "% of the sheet comes back as line" : "")
+      + ". No watermark, no sign-up, and your photo never leaves your device.";
     return;
   }
 
@@ -3024,7 +3123,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -3046,6 +3145,13 @@ function sceneBox() {
 }
 
 function renderScene(scale) {
+  if (scene.kind === "coloring") {
+    // The page is rebuilt at the export DPI instead of being scaled up, so the printed line
+    // weight and the tone boundaries stay exactly what the settings promised.
+    const page = coloringPage(scene.page.id, scene.page.orientation, PRINT_DPI);
+    const out = coloringPageCanvas(page, scene);
+    return { canvas: out, box: { x: 0, y: 0, width: page.widthPx, height: page.heightPx } };
+  }
   const box = sceneBox();
   if (!box) return null;
   const out = document.createElement("canvas");
@@ -3097,7 +3203,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -3121,7 +3227,9 @@ function exportScale() {
 
 /** Download name: photo blocks read as inches, everything else as a long side in cm. */
 function exportName(extension) {
-  const stem = scene.kind === "cupcake" && scene.topper
+  const stem = scene.kind === "coloring" && scene.page
+    ? "coloring-page-" + scene.page.id + "-" + scene.page.orientation
+    : scene.kind === "cupcake" && scene.topper
     ? "cupcake-topper-" + scene.topper.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
     : scene.kind === "polaroid" && scene.frame
     ? "polaroid-" + scene.frame.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
@@ -3137,7 +3245,117 @@ function exportName(extension) {
   return stem + "-" + PRINT_DPI + "dpi." + extension;
 }
 
+/**
+ * The line-art mask for one coloring sheet, at the sheet's own resolution. Every measurement
+ * comes from the destination pixels, so the preview and the 300 DPI download agree on what
+ * "balanced" and "medium" actually mean.
+ */
+function coloringMask(page, s) {
+  const w = page.artWidthPx;
+  const h = page.artHeightPx;
+  const photo = s.photo;
+  if (!photo) return new Uint8Array(w * h);
+  const art = document.createElement("canvas");
+  art.width = w;
+  art.height = h;
+  const g = art.getContext("2d", { willReadFrequently: true });
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, w, h);
+  const sw = photo.naturalWidth || photo.width || 0;
+  const sh = photo.naturalHeight || photo.height || 0;
+  if (sw > 0 && sh > 0) {
+    const fit = fitBox(sw, sh, w, h);
+    g.imageSmoothingQuality = "high";
+    g.drawImage(photo, 0, 0, sw, sh, fit.x, fit.y, fit.width, fit.height);
+  }
+  const plane = grayscalePlane(g.getImageData(0, 0, w, h).data, w, h);
+  const blur = Math.round(s.detail.blur * Math.max(w, h));
+  const smooth = blur > 0 ? boxBlurPlane(plane, w, h, blur) : plane;
+  let mask;
+  if (s.style.id === "sketch") {
+    // A sigma in millimetres keeps the pencil edges the same thickness on screen and on paper.
+    const sigma = Math.max(1, Math.round((0.4 / 25.4) * page.dpi));
+    const response = differenceOfGaussians(smooth, w, h, sigma, 0.985);
+    mask = maskAbove(response, w, h, quantileThreshold(response, 1 - s.detail.ink));
+  } else {
+    mask = boundaryMask(posterizePlane(smooth, w, h, s.detail.levels), w, h);
+  }
+  mask = despeckleMask(mask, w, h, 2);
+  // A flat or almost flat picture has no seams to draw, and a threshold on a flat response would
+  // ink the whole sheet; an empty page is the honest answer instead of a solid block.
+  if (maskInkRatio(mask) > 0.45) return new Uint8Array(w * h);
+  const radius = lineRadiusPx(s.weight.mm, page.dpi);
+  return radius > 0 ? dilateMask(mask, w, h, radius) : mask;
+}
+
+/** One finished sheet: paper, blank printer margin and the line art, all at the page's own DPI. */
+function coloringPageCanvas(page, s) {
+  const mask = coloringMask(page, s);
+  const out = document.createElement("canvas");
+  out.width = page.widthPx;
+  out.height = page.heightPx;
+  const g = out.getContext("2d");
+  g.fillStyle = s.invert ? COLORING_INK : "#ffffff";
+  g.fillRect(0, 0, page.widthPx, page.heightPx);
+  const art = g.createImageData(page.artWidthPx, page.artHeightPx);
+  const inkRgb = s.invert ? [255, 255, 255] : [20, 20, 20];
+  const paperRgb = s.invert ? [20, 20, 20] : [255, 255, 255];
+  for (let i = 0; i < mask.length; i++) {
+    const p = i * 4;
+    const rgb = mask[i] ? inkRgb : paperRgb;
+    art.data[p] = rgb[0];
+    art.data[p + 1] = rgb[1];
+    art.data[p + 2] = rgb[2];
+    art.data[p + 3] = 255;
+  }
+  g.putImageData(art, page.marginPx, page.marginPx);
+  s.inkRatio = maskInkRatio(mask);
+  return out;
+}
+
+/** The sheet on the preview canvas, with a soft shadow so it reads as a real page of paper. */
+function drawColoringPage(c, s, guides) {
+  const r = s.rect;
+  if (guides) {
+    c.save();
+    c.shadowColor = "rgba(20,26,23,.2)";
+    c.shadowBlur = 26;
+    c.shadowOffsetY = 12;
+    c.fillStyle = s.invert ? COLORING_INK : "#ffffff";
+    c.fillRect(r.x, r.y, r.w, r.h);
+    c.restore();
+  }
+  if (s.canvas) c.drawImage(s.canvas, r.x, r.y, r.w, r.h);
+  if (guides) {
+    c.save();
+    c.strokeStyle = "rgba(20,26,23,.14)";
+    c.lineWidth = 1;
+    c.strokeRect(r.x + 0.5, r.y + 0.5, Math.max(1, r.w - 1), Math.max(1, r.h - 1));
+    c.restore();
+  }
+}
+
+/**
+ * Coloring pages are the one product that is rebuilt for the download rather than scaled up:
+ * a mask traced at preview resolution would print as a fat, ragged line, so the whole sheet is
+ * redrawn at 300 DPI with the same settings.
+ */
+function exportColoringPng() {
+  note("Drawing your " + scene.page.short + " page at 300 DPI - this can take a few seconds...");
+  requestAnimationFrame(() => setTimeout(() => {
+    if (scene.kind !== "coloring") return;
+    const page = coloringPage(scene.page.id, scene.page.orientation, PRINT_DPI);
+    const out = coloringPageCanvas(page, scene);
+    download(out.toDataURL("image/png"), exportName("png"));
+    track("design_downloaded", { format: "png", dpi: PRINT_DPI, longSideCm: scene.longSideCm, paper: page.id, orientation: page.orientation });
+    note(scene.photo
+      ? "Your " + page.short + " " + page.orientation + " coloring page is ready - a " + page.widthPx + " x " + page.heightPx + " px PNG at " + PRINT_DPI + " DPI."
+      : "Your blank " + page.short + " " + page.orientation + " sheet is ready - upload a photo to fill it with line art.");
+  }, 0));
+}
+
 function exportPng() {
+  if (scene.kind === "coloring") return exportColoringPng();
   const rendered = renderScene(exportScale());
   if (!rendered) return note("Upload an image with visible artwork first.");
   const name = exportName("png");
@@ -3431,7 +3649,7 @@ function exportTopperSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw" || profile.id === "polaroid" || profile.id === "cupcake") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw" || profile.id === "polaroid" || profile.id === "cupcake" || profile.id === "coloring") return photoSampleArtwork();
   if (profile.id === "table-number") return photoSampleArtwork();
   if (profile.id === "sticker-outline") return stickerOutlineSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
