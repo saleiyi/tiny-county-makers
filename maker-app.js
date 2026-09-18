@@ -121,6 +121,12 @@ import {
   crownBand,
   crownSheet,
   CROWN_SAMPLE,
+  monogramStyle,
+  monogramLayout,
+  monogramSheet,
+  monogramText,
+  monogramShapePoints,
+  MONOGRAM_SAMPLE,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -287,6 +293,10 @@ const crownNameInput = document.querySelector("#crownName");
 const crownStyleSelect = document.querySelector("#crownStyle");
 const crownBandSelect = document.querySelector("#crownBand");
 const crownThemeSelect = document.querySelector("#crownTheme");
+const monogramTextInput = document.querySelector("#monogramText");
+const monogramStyleSelect = document.querySelector("#monogramStyle");
+const monogramLayoutSelect = document.querySelector("#monogramLayout");
+const monogramThemeSelect = document.querySelector("#monogramTheme");
 const mulTitleInput = document.querySelector("#mulTitle");
 const mulNameInput = document.querySelector("#mulName");
 const mulTypeSelect = document.querySelector("#mulType");
@@ -538,6 +548,24 @@ function boot() {
     crownStyleSelect?.addEventListener("change", schedule);
     crownBandSelect?.addEventListener("change", schedule);
     crownThemeSelect?.addEventListener("change", schedule);
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
+  if (profile.id === "monogram-maker") {
+    // A monogram is typed rather than uploaded, so a blank canvas stands in for the artwork slot and
+    // the colour kits come from the same shared recipe as the other printable sheets.
+    if (monogramThemeSelect) {
+      monogramThemeSelect.innerHTML = '<option value="">Choose a colour kit...</option>'
+        + CHART_THEMES.map((theme) => '<option value="' + theme.id + '">' + theme.label + "</option>").join("");
+    }
+    monogramTextInput?.addEventListener("input", schedule);
+    monogramStyleSelect?.addEventListener("change", schedule);
+    monogramLayoutSelect?.addEventListener("change", schedule);
+    monogramThemeSelect?.addEventListener("change", schedule);
     image = document.createElement("canvas");
     image.width = WORK_LONG_SIDE;
     image.height = WORK_LONG_SIDE;
@@ -1143,6 +1171,19 @@ function layout() {
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), paper, sheet };
   }
+  if (profile.id === "monogram-maker") {
+    // The monogram is the product, so the paper decides the sheet and the frame recipe decides
+    // where the initials and the cutline fall at both preview and print resolution.
+    const paper = chartPaper(sizeSelect.value);
+    const sheet = monogramSheet({ paper, style: monogramStyleSelect?.value, layout: monogramLayoutSelect?.value, text: monogramTextInput?.value });
+    const longCm = Math.max(sheet.widthCm, sheet.heightCm);
+    const scale = WORK_LONG_SIDE / longCm;
+    const w = Math.round(sheet.widthCm * scale);
+    const h = Math.round(sheet.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), paper, sheet };
+  }
   if (profile.id === "chore-chart") {
     // The sheet is the product, so the paper decides the box and the chore rows decide where
     // every line falls at both preview and print resolution.
@@ -1581,6 +1622,25 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawCrown(ctx, scene, true);
+  } else if (profile.id === "monogram-maker") {
+    // The monogram is rebuilt from the same fields the layout sized, so a letter, a style or a
+    // frame change lands on the same printed paper instead of reflowing the sheet.
+    const style = monogramStyle(monogramStyleSelect?.value);
+    const layout = monogramLayout(monogramLayoutSelect?.value);
+    const theme = chartTheme(monogramThemeSelect?.value);
+    scene = {
+      kind: "monogram-maker",
+      paper: L.paper,
+      sheet: L.sheet,
+      styleId: style.id,
+      layoutId: layout.id,
+      text: monogramText(monogramTextInput?.value, style.id),
+      themeId: theme.id,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawMonogram(ctx, scene, true);
   } else if (profile.id === "chore-chart") {
     // The chart is drawn from the same fields the layout sized, so every change lands on the
     // same printed paper instead of reflowing the whole sheet.
@@ -2012,6 +2072,20 @@ function readout(L) {
       + sheet.band.label.toLowerCase() + " in the " + sheet.style.label.toLowerCase() + " style, and a "
       + sheet.tabCm.toFixed(1) + " cm glue tab on the end of every band, so one sheet joins up into about "
       + sheet.fitCm.toFixed(0) + " cm of crown. Print at 100 percent with no page scaling. No watermark, "
+      + "no sign-up, and nothing you type leaves your device.";
+    return;
+  }
+
+  if (profile.id === "monogram-maker") {
+    // The frame is the product, so the readout leads with the sheet it prints on and the initials inside.
+    const paper = scene.paper;
+    const sheet = scene.sheet;
+    sizeLabel.textContent = paper.short;
+    dimensions.textContent = paper.short + " sheet at " + PRINT_DPI + " DPI ("
+      + physicalPixels(sheet.widthCm, PRINT_DPI) + " x " + physicalPixels(sheet.heightCm, PRINT_DPI) + " px) - "
+      + "a " + sheet.frameW.toFixed(1) + " x " + sheet.frameH.toFixed(1) + " cm " + sheet.layout.label.toLowerCase()
+      + " frame around the " + sheet.style.label.toLowerCase() + " monogram \"" + sheet.text + "\", with the frame "
+      + "outline exported as an SVG cutline. Print at 100 percent with no page scaling. No watermark, "
       + "no sign-up, and nothing you type leaves your device.";
     return;
   }
@@ -5071,6 +5145,133 @@ function drawCrown(c, s, guides) {
     c.restore();
   }
 }
+function monogramFont(styleId) {
+  if (styleId === "block") return { family: "'Trebuchet MS', 'Segoe UI', sans-serif", weight: "800" };
+  if (styleId === "script") return { family: "'Brush Script MT', 'Brush Script', 'Segoe Script', cursive", weight: "400" };
+  if (styleId === "numbers") return { family: "'Courier New', Courier, monospace", weight: "700" };
+  return { family: "'Playfair Display', Georgia, 'Times New Roman', serif", weight: "600" };
+}
+
+/**
+ * Split a printed monogram into the pieces that get their own size. The classic three initial
+ * layout lifts the middle letter, and the two initial layout drops the ampersand, so A & M reads
+ * the way a wedding monogram is traditionally set.
+ */
+function monogramTokens(styleId, text) {
+  const words = String(text == null ? "" : text).split(/\s+/).filter(Boolean);
+  if (styleId === "classic") {
+    return words.map((word, index) => ({ text: word, scale: words.length === 3 && index === 1 ? 1.34 : 1 }));
+  }
+  if (styleId === "duo") {
+    return words.map((word) => ({ text: word, scale: word === "&" ? 0.7 : 1 }));
+  }
+  return words.map((word) => ({ text: word, scale: 1 }));
+}
+
+/** Trace one closed polygon through the given points. */
+function monogramPath(c, points) {
+  c.beginPath();
+  points.forEach(([x, y], index) => {
+    if (index === 0) c.moveTo(x, y);
+    else c.lineTo(x, y);
+  });
+  c.closePath();
+}
+
+/**
+ * A printable monogram. The frame is drawn at the real paper size and the initials are centred
+ * inside it, so the preview, the 300 DPI PNG and the SVG cutline all describe the same piece of
+ * paper. The inner rule echoes the outer shape at nine tenths size, which is what makes a plain
+ * initial read as a monogram rather than a letter sitting in a box.
+ */
+function drawMonogram(c, s, guides) {
+  const r = s.rect;
+  const sheet = s.sheet;
+  const theme = chartTheme(s.themeId);
+  const pxPerCm = r.w / sheet.widthCm;
+  const cx = r.x + sheet.centerXCm * pxPerCm;
+  const cy = r.y + sheet.centerYCm * pxPerCm;
+  const fw = sheet.frameW * pxPerCm;
+  const fh = sheet.frameH * pxPerCm;
+  const x0 = cx - fw / 2;
+  const y0 = cy - fh / 2;
+  const lineW = Math.max(0.8, pxPerCm * 0.04);
+  const points = monogramShapePoints(s.layoutId, fw, fh).map(([x, y]) => [x0 + x, y0 + y]);
+
+  c.save();
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  c.restore();
+
+  c.save();
+  monogramPath(c, points);
+  c.fillStyle = theme.band;
+  c.fill();
+  c.restore();
+
+  c.save();
+  monogramPath(c, points);
+  c.strokeStyle = theme.head;
+  c.lineWidth = Math.max(1.6, pxPerCm * 0.16);
+  c.lineJoin = "round";
+  c.stroke();
+  c.restore();
+
+  const inner = points.map(([x, y]) => [cx + (x - cx) * 0.9, cy + (y - cy) * 0.9]);
+  c.save();
+  monogramPath(c, inner);
+  c.strokeStyle = theme.accent;
+  c.lineWidth = lineW;
+  c.setLineDash([pxPerCm * 0.3, pxPerCm * 0.22]);
+  c.stroke();
+  c.setLineDash([]);
+  c.restore();
+
+  if (sheet.text) {
+    const font = monogramFont(s.styleId);
+    const tokens = monogramTokens(s.styleId, sheet.text);
+    const maxWidth = fw * sheet.layout.room;
+    const maxHeight = fh * (s.styleId === "single" ? 0.52 : 0.46);
+    const widthAt = (size) => tokens.reduce((total, token) => {
+      c.font = font.weight + " " + Math.max(1, size * token.scale) + "px " + font.family;
+      return total + c.measureText(token.text).width;
+    }, 0) + size * 0.18 * Math.max(0, tokens.length - 1);
+
+    let size = Math.min(maxHeight, fw * 0.52);
+    for (let guard = 0; guard < 240; guard += 1) {
+      const wanted = widthAt(size);
+      if (wanted <= maxWidth || size <= 6) break;
+      size = Math.max(6, size * (maxWidth / wanted) * 0.98);
+    }
+
+    const widths = tokens.map((token) => {
+      c.font = font.weight + " " + Math.max(1, size * token.scale) + "px " + font.family;
+      return c.measureText(token.text).width;
+    });
+    const gap = size * 0.18;
+    const totalWidth = widths.reduce((sum, value) => sum + value, 0) + gap * Math.max(0, tokens.length - 1);
+
+    c.save();
+    c.fillStyle = theme.head;
+    c.textAlign = "left";
+    c.textBaseline = "middle";
+    let pen = cx - totalWidth / 2;
+    tokens.forEach((token, index) => {
+      c.font = font.weight + " " + Math.max(1, size * token.scale) + "px " + font.family;
+      c.fillText(token.text, pen, cy);
+      pen += widths[index] + gap;
+    });
+    c.restore();
+  }
+
+  if (guides) {
+    c.save();
+    c.strokeStyle = "rgba(0,0,0,.28)";
+    c.lineWidth = 1;
+    c.strokeRect(r.x, r.y, r.w, r.h);
+    c.restore();
+  }
+}
 function sceneBox() {
   if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
@@ -5096,7 +5297,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart" || scene.kind === "crown-maker") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart" || scene.kind === "crown-maker" || scene.kind === "monogram-maker") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -5158,6 +5359,7 @@ function renderScene(scale) {
   else if (scene.kind === "chore-chart") drawChoreChart(c, scene, false);
   else if (scene.kind === "multiplication-chart") drawMultiplicationChart(c, scene, false);
   else if (scene.kind === "crown-maker") drawCrown(c, scene, false);
+  else if (scene.kind === "monogram-maker") drawMonogram(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -5183,7 +5385,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart" || scene.kind === "crown-maker") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo" || scene.kind === "chore-chart" || scene.kind === "multiplication-chart" || scene.kind === "crown-maker" || scene.kind === "monogram-maker") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -5213,6 +5415,8 @@ function exportName(extension) {
     ? "name-tracing-" + (scene.text ? scene.text.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() : "worksheet") + "-" + scene.paper.id + "-sheet-" + (scene.page + 1)
     : scene.kind === "crown-maker" && scene.paper
     ? "crown-maker-" + scene.paper.id + "-" + scene.styleId + "-" + scene.bandId + "-2-bands"
+    : scene.kind === "monogram-maker" && scene.paper
+    ? "monogram-maker-" + scene.paper.id + "-" + scene.styleId + "-" + scene.layoutId
     : scene.kind === "multiplication-chart" && scene.paper
     ? "multiplication-chart-" + scene.paper.id + "-" + scene.orient + "-1-to-" + scene.max
     : scene.kind === "chore-chart" && scene.paper
@@ -5358,6 +5562,7 @@ function exportPng() {
 }
 
 function exportSvg() {
+  if (scene.kind === "monogram-maker") return exportMonogramSvg();
   if (scene.kind === "cake-topper") return exportTopperSvg();
   if (scene.kind === "coaster") return exportCoasterSvg();
   if (scene.kind === "name-plate") return exportNamePlateSvg();
@@ -5467,6 +5672,47 @@ function stickerOutlineSampleArtwork() {
 }
 
 /** Cut path plus a printable artwork layer, the same split the sticker tool ships. */
+function exportMonogramSvg() {
+  const scale = exportScale();
+  const box = sceneBox();
+  if (!box) return note("The monogram could not be measured. Please reload the page and try again.");
+  const sheet = scene.sheet;
+  const width = Math.max(1, Math.round(box.width * scale));
+  const height = Math.max(1, Math.round(box.height * scale));
+  const art = document.createElement("canvas");
+  art.width = width;
+  art.height = height;
+  const ax = art.getContext("2d");
+  ax.fillStyle = "#ffffff";
+  ax.fillRect(0, 0, width, height);
+  ax.scale(scale, scale);
+  ax.translate(-box.x, -box.y);
+  drawMonogram(ax, scene, false);
+  const pxPerCm = scene.rect.w / sheet.widthCm;
+  const cx = scene.rect.x + sheet.centerXCm * pxPerCm;
+  const cy = scene.rect.y + sheet.centerYCm * pxPerCm;
+  const fw = sheet.frameW * pxPerCm;
+  const fh = sheet.frameH * pxPerCm;
+  const x0 = cx - fw / 2;
+  const y0 = cy - fh / 2;
+  const shape = contoursToPathD([monogramShapePoints(scene.layoutId, fw, fh)
+    .map(([x, y]) => [(x0 + x - box.x) * scale, (y0 + y - box.y) * scale])], 2);
+  const lines = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + " " + height + '" role="img">',
+    "<title>" + profile.product + " cutline - " + sheet.frameW.toFixed(1) + " x " + sheet.frameH.toFixed(1) + " cm frame, " + PRINT_DPI + " DPI</title>",
+    '<defs><clipPath id="MonogramFrame"><path d="' + shape + '"/></clipPath></defs>',
+    '<g id="Artwork" clip-path="url(#MonogramFrame)">',
+    '<image x="0" y="0" width="' + width + '" height="' + height + '" href="' + art.toDataURL("image/png") + '"/>',
+    "</g>",
+    '<g id="Cutline" fill="none" stroke="#ff00ff" stroke-width="1">',
+    '<path d="' + shape + '"/>',
+    "</g>",
+    "</svg>",
+  ];
+  downloadBlob(lines.join("\n"), exportName("svg"), "image/svg+xml;charset=utf-8");
+  track("design_downloaded", { format: "svg", dpi: PRINT_DPI, longSideCm: scene.longSideCm });
+}
+
 function exportOrnamentSvg() {
   const scale = exportScale();
   const box = sceneBox();
@@ -5888,6 +6134,17 @@ async function loadSample() {
     if (crownNameInput && !crownNameInput.value.trim()) crownNameInput.value = CROWN_SAMPLE.name;
     if (crownStyleSelect) crownStyleSelect.value = CROWN_SAMPLE.style;
     if (crownBandSelect) crownBandSelect.value = CROWN_SAMPLE.band;
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "monogram-maker") {
+    // A monogram is typed rather than uploaded, so the sample fills the text box and leaves a
+    // finished frame on screen before anything is chosen.
+    if (monogramTextInput && !monogramTextInput.value.trim()) monogramTextInput.value = MONOGRAM_SAMPLE.text;
+    if (monogramStyleSelect) monogramStyleSelect.value = MONOGRAM_SAMPLE.style;
+    if (monogramLayoutSelect) monogramLayoutSelect.value = MONOGRAM_SAMPLE.layout;
     adoptSource("sample");
     render();
     track("sample_loaded", { product: profile.id });

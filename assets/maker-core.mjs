@@ -633,6 +633,42 @@ export const CROWN_SAMPLE = Object.freeze({
 });
 
 
+/**
+ * A printable monogram: the initials sit inside a frame, so one sheet recipe decides where the
+ * frame, the letters and the cutline fall. The same geometry draws the preview and the 300 DPI
+ * download, and the frame outline is what the SVG export cuts.
+ */
+export const MONOGRAM_LAYOUTS = Object.freeze([
+  { id: "circle", label: "Classic circle", ratio: 1, room: 0.74 },
+  { id: "oval", label: "Oval", ratio: 1.26, room: 0.66 },
+  { id: "diamond", label: "Diamond", ratio: 1.1, room: 0.52 },
+  { id: "shield", label: "Crest shield", ratio: 1.16, room: 0.62 },
+  { id: "square", label: "Corner square", ratio: 1, room: 0.7 },
+]);
+
+/** The six monogram styles the tool offers, in the order the UI lists them. */
+export const MONOGRAM_STYLES = Object.freeze([
+  { id: "classic", label: "Classic three initials", hint: "A M R" },
+  { id: "block", label: "Block four initials", hint: "A M R S" },
+  { id: "single", label: "Single initial", hint: "A" },
+  { id: "script", label: "Wedding script", hint: "A & J" },
+  { id: "numbers", label: "Number date", hint: "2026" },
+  { id: "duo", label: "Two initials", hint: "A & M" },
+]);
+
+/** The safe printer border, and the longest monogram the frame is drawn to hold. */
+export const MONOGRAM_MARGIN_CM = 1.6;
+export const MONOGRAM_TEXT_MAX = 24;
+/** The frame never grows past this share of the page, so a monogram keeps a real paper border. */
+export const MONOGRAM_FRAME_SHARE = 0.76;
+
+/** A ready-made monogram, so a finished frame is on screen before anything is typed. */
+export const MONOGRAM_SAMPLE = Object.freeze({
+  text: "A&M",
+  style: "duo",
+  layout: "circle",
+});
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -662,6 +698,7 @@ const PROFILES = Object.freeze([
   { id: "chore-chart", name: "Chore Chart Maker", product: "Printable chore chart", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
   { id: "multiplication-chart", name: "Multiplication Chart Maker", product: "Printable multiplication chart", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
   { id: "crown-maker", name: "Crown Maker", product: "Printable paper crown", hasHardware: false, hasBase: false, exportSvg: false, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
+  { id: "monogram-maker", name: "Monogram Maker", product: "Printable monogram", hasHardware: false, hasBase: false, exportSvg: true, sizes: CHART_PAPERS.map((paper) => paper.widthCm), sizeLabels: CHART_PAPERS.map((paper) => paper.label) },
   { id: "word-search", name: "Word Search Maker", product: "Printable word search puzzle", hasHardware: false, hasBase: false, exportSvg: false, sizes: WORD_SEARCH_PAPERS.map((paper) => paper.widthCm), sizeLabels: WORD_SEARCH_PAPERS.map((paper) => paper.label) },
 ]);
 
@@ -2965,8 +3002,12 @@ export function bingoCallColumns(total, max = 6) {
  * means the preview and the printed page agree to the millimetre.
  */
 export function chartPaper(value) {
-  const raw = String(value == null ? "" : value).toLowerCase();
-  const cm = Number(value);
+  // The size box hands over a paper id or a width in centimetres, and a caller that has already
+  // resolved the paper hands over the paper itself, so both shapes land on the same sheet.
+  const resolved = value && typeof value === "object" ? value : null;
+  const source = resolved ? resolved.id : value;
+  const raw = String(source == null ? "" : source).toLowerCase();
+  const cm = Number(resolved ? resolved.widthCm : value);
   return CHART_PAPERS.find((paper) => paper.id === raw
     || (Number.isFinite(cm) && cm > 0 && Math.abs(paper.widthCm - cm) < 0.02)) || CHART_PAPERS[0];
 }
@@ -3157,5 +3198,121 @@ export function crownSheet(options) {
     bodyWCm, teeth, toothWCm,
     // Two bands overlap by one tab, so this is the crown that comes off one sheet.
     fitCm: CROWN_PER_SHEET * usableW - tabCm,
+  };
+}
+
+export function monogramStyle(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return MONOGRAM_STYLES.find((style) => style.id === id) || MONOGRAM_STYLES[0];
+}
+
+export function monogramLayout(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return MONOGRAM_LAYOUTS.find((layout) => layout.id === id) || MONOGRAM_LAYOUTS[0];
+}
+
+/**
+ * The text that actually gets drawn: one space-separated line per style, so the canvas can lay
+ * the tokens out without knowing anything else about the request. Letter styles keep the first
+ * few initials, the date style keeps the digits, and the script style keeps the words a couple
+ * typed so "Amelia & James" prints the way it was asked for.
+ */
+export function monogramText(value, style = "classic") {
+  const id = monogramStyle(style).id;
+  const raw = String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, MONOGRAM_TEXT_MAX);
+  if (id === "numbers") {
+    const digits = (raw.match(/[0-9]/g) || []).join("").slice(0, 8);
+    return digits || "2026";
+  }
+  if (id === "script") {
+    const script = raw.replace(/[^A-Za-z0-9&. ]+/g, "").trim();
+    return script || "A & J";
+  }
+  // A box of whole names is read as one initial per name, which is what turns a typed name into
+  // lettering; a box of initials is read letter by letter so "a m r" keeps the order it was typed.
+  const names = raw.split(" ").filter((word) => /[A-Za-z]/.test(word));
+  const initial = (word) => (word.match(/[A-Za-z]/) || [""])[0].toUpperCase();
+  const pick = (limit) => (names.length > 1
+    ? names.slice(0, limit).map(initial)
+    : (raw.match(/[A-Za-z]/g) || []).slice(0, limit).map((ch) => ch.toUpperCase()));
+  if (id === "single") return (raw.match(/[A-Za-z]/) || ["A"])[0].toUpperCase();
+  if (id === "duo") {
+    const pair = pick(2);
+    if (pair.length < 2) return (pair[0] || "A") + " & " + (pair[1] || "M");
+    return pair[0] + " & " + pair[1];
+  }
+  if (id === "block") {
+    const four = pick(4);
+    return (four.length ? four.join(" ") : "A M R S");
+  }
+  const three = pick(3);
+  // A traditional three letter monogram sets the surname in the middle. That swap only happens
+  // when whole names were typed; single letter initials stay in the order they were written.
+  if (names.length >= 3 && names.every((word) => (word.match(/[A-Za-z]/g) || []).length > 1)) {
+    return [three[0], three[2], three[1]].join(" ");
+  }
+  return (three.length ? three.join(" ") : "A M R");
+}
+
+/**
+ * Closed polygon for a monogram frame, in a local box of width x height. Circle and oval share
+ * one sampled ellipse; the other three are hand-placed outlines, then every shape is fitted to
+ * the box exactly so "longest side" means the same thing for all five.
+ */
+export function monogramShapePoints(layout, width, height, samples = 200) {
+  const w = Number(width), h = Number(height);
+  if (!(w > 0 && h > 0)) throw new Error("Monogram width and height must be positive.");
+  const count = Math.max(24, Math.floor(Number(samples) || 200));
+  const id = monogramLayout(layout).id;
+  return fitPolygonToBox(rawMonogramPolygon(id, count), w, h);
+}
+
+function rawMonogramPolygon(layout, samples) {
+  if (layout === "diamond") {
+    // A four point lozenge, the frame a formal monogram is most often set in.
+    return [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]];
+  }
+  if (layout === "shield") {
+    // A crest shield: a straight top, two square shoulders, then a taper to the point.
+    return [[0.07, 0], [0.93, 0], [1, 0.1], [1, 0.58], [0.5, 1], [0, 0.58], [0, 0.1]];
+  }
+  if (layout === "square") {
+    // A square with clipped corners, which reads as a plaque rather than a plain box.
+    const k = 0.14;
+    return [[k, 0], [1 - k, 0], [1, k], [1, 1 - k], [1 - k, 1], [k, 1], [0, 1 - k], [0, k]];
+  }
+  const pts = [];
+  for (let i = 0; i < samples; i += 1) {
+    const angle = -Math.PI / 2 + (i / samples) * Math.PI * 2;
+    pts.push([0.5 + 0.5 * Math.cos(angle), 0.5 + 0.5 * Math.sin(angle)]);
+  }
+  return pts;
+}
+
+/**
+ * One sheet recipe drives the preview and the print. The monogram is centred on a portrait page,
+ * the frame is the biggest version of the chosen silhouette that keeps the printer margin, and
+ * the text is normalised here so the canvas and the SVG cutline always agree.
+ */
+export function monogramSheet(options) {
+  const opts = options || {};
+  const paper = chartPaper(opts.paper);
+  const style = monogramStyle(opts.style);
+  const layout = monogramLayout(opts.layout);
+  const marginCm = MONOGRAM_MARGIN_CM;
+  const widthCm = paper.widthCm;
+  const heightCm = paper.heightCm;
+  const usableW = widthCm - marginCm * 2;
+  const usableH = heightCm - marginCm * 2;
+  const ratio = layout.ratio;
+  const frameW = Math.min(usableW, usableH / ratio) * MONOGRAM_FRAME_SHARE;
+  const frameH = frameW * ratio;
+  return {
+    paper, style, layout, marginCm,
+    widthCm, heightCm, usableW, usableH,
+    frameW, frameH, ratio,
+    centerXCm: widthCm / 2,
+    centerYCm: heightCm / 2,
+    text: monogramText(opts.text, style.id),
   };
 }

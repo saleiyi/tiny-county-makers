@@ -206,6 +206,17 @@ import {
   crownStyle,
   crownBand,
   crownSheet,
+  MONOGRAM_LAYOUTS,
+  MONOGRAM_STYLES,
+  MONOGRAM_MARGIN_CM,
+  MONOGRAM_TEXT_MAX,
+  MONOGRAM_FRAME_SHARE,
+  MONOGRAM_SAMPLE,
+  monogramStyle,
+  monogramLayout,
+  monogramText,
+  monogramShapePoints,
+  monogramSheet,
   MUL_TYPES,
   MUL_RANGES,
   MUL_FILLS,
@@ -252,8 +263,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-nine distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "chore-chart", "multiplication-chart", "crown-maker", "word-search"]);
+test("the shared engine exposes the thirty distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "chore-chart", "multiplication-chart", "crown-maker", "monogram-maker", "word-search"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -1732,6 +1743,8 @@ test("the chore chart maker exposes its papers, weeks, styles and colour kits", 
   assert.equal(chartPaper("a4").id, "a4");
   assert.equal(chartPaper(21.59).id, "letter", "the paper is matched by its width too");
   assert.equal(chartPaper("nonsense").id, "letter", "an unknown paper falls back to US Letter");
+  assert.equal(chartPaper(CHART_PAPERS[1]).id, "a4", "a paper that is already resolved comes back as the same sheet");
+  assert.equal(chartPaper(CHART_PAPERS[0]).id, "letter");
   assert.equal(CHART_PAPERS.length, 2);
   assert.equal(chartDays("school").names.length, 5);
   assert.equal(chartDays("school-sat").names.length, 6);
@@ -1977,4 +1990,94 @@ test("the crown profile carries a paper list and ships a usable sample", () => {
   assert.equal(crownStyle(CROWN_SAMPLE.style).id, "queen", "the sample is the arch-and-pearls crown a birthday reaches for");
   assert.equal(crownBand(CROWN_SAMPLE.band).id, "classic");
   assert.ok(CROWN_SAMPLE.name.length <= CROWN_NAME_MAX, "the sample name fits the printed band");
+});
+
+test("the monogram maker exposes its styles and frames", () => {
+  assert.equal(monogramStyle("script").id, "script");
+  assert.equal(monogramStyle("nonsense").id, "classic", "three initials are the safe default");
+  assert.equal(monogramLayout("shield").id, "shield");
+  assert.equal(monogramLayout("nonsense").id, "circle", "the classic circle is the safe default");
+  assert.equal(new Set(MONOGRAM_STYLES.map((style) => style.id)).size, MONOGRAM_STYLES.length, "two monogram styles share an id");
+  assert.equal(new Set(MONOGRAM_LAYOUTS.map((layout) => layout.id)).size, MONOGRAM_LAYOUTS.length, "two monogram frames share an id");
+  for (const layout of MONOGRAM_LAYOUTS) {
+    assert.ok(layout.ratio > 0, layout.id + " needs a real height to width ratio");
+    assert.ok(layout.room > 0 && layout.room < 1, layout.id + " must leave the letters inside the frame");
+  }
+  assert.ok(MONOGRAM_TEXT_MAX >= 16 && MONOGRAM_TEXT_MAX <= 32, "the box holds initials or a few names, not a sentence");
+  assert.ok(MONOGRAM_FRAME_SHARE > 0.5 && MONOGRAM_FRAME_SHARE < 1, "the frame keeps a real paper border");
+});
+
+test("each monogram style normalises what the box is handed", () => {
+  assert.equal(monogramText("a m r", "classic"), "A M R");
+  assert.equal(monogramText("Amelia Rose Bennett", "classic"), "A B R", "whole names put the surname in the middle");
+  assert.equal(monogramText("a r b", "classic"), "A R B", "typed initials keep the order they were typed in");
+  assert.equal(monogramText("Amy Bo Cy Di", "block"), "A B C D", "the block row reads one initial per name");
+  assert.equal(monogramText("Alexandra Rose Bennett", "classic"), "A B R", "three full names fit the box and still find the surname");
+  assert.equal(monogramText("a&m", "duo"), "A & M");
+  assert.equal(monogramText("", "duo"), "A & M", "an empty two initial monogram falls back to a readable pair");
+  assert.equal(monogramText("Amelia", "single"), "A");
+  assert.equal(monogramText("a m r s", "block"), "A M R S");
+  assert.equal(monogramText("Amelia & James", "script"), "Amelia & James");
+  assert.equal(monogramText("09/16/2026", "numbers"), "09162026");
+  assert.equal(monogramText("", "numbers"), "2026", "an empty date still prints a year");
+  assert.ok(monogramText("a".repeat(40), "script").length <= MONOGRAM_TEXT_MAX, "the box is clamped before it is printed");
+});
+
+test("every monogram frame is a closed outline that fills its box exactly", () => {
+  for (const layout of MONOGRAM_LAYOUTS) {
+    const points = monogramShapePoints(layout.id, 300, 240);
+    assert.ok(points.length >= 4, layout.id + " needs a real outline");
+    for (const [x, y] of points) {
+      assert.ok(x >= -1e-9 && x <= 300 + 1e-9, layout.id + " strays outside the frame box");
+      assert.ok(y >= -1e-9 && y <= 240 + 1e-9, layout.id + " strays outside the frame box");
+    }
+    const b = boundsOfContours([points]);
+    assert.ok(Math.abs(b.width - 300) < 1e-6, layout.id + " should use the full width");
+    assert.ok(Math.abs(b.height - 240) < 1e-6, layout.id + " should use the full height");
+    assert.ok(polygonArea(points) > 0, layout.id + " must trace a non-degenerate path");
+    const path = contoursToPathD([points], 2);
+    assert.ok(path.startsWith("M") && path.endsWith("Z"), layout.id + " cutline should be a closed path");
+  }
+  assert.equal(monogramShapePoints("diamond", 100, 100).length, 4, "the diamond is a four point lozenge");
+  assert.equal(monogramShapePoints("shield", 100, 100).length, 7, "the shield keeps its seven corners");
+  assert.throws(() => monogramShapePoints("circle", 0, 100), "a frame needs a real size");
+});
+
+test("the monogram sheet keeps a printer border on either paper", () => {
+  for (const paper of ["letter", "a4"]) {
+    for (const layout of MONOGRAM_LAYOUTS) {
+      const sheet = monogramSheet({ paper, layout: layout.id, style: "classic", text: "A M R" });
+      assert.equal(sheet.paper.id, paper);
+      assert.equal(sheet.layout.id, layout.id);
+      assert.equal(sheet.marginCm, MONOGRAM_MARGIN_CM);
+      assert.equal(sheet.centerXCm, sheet.widthCm / 2, "the frame is centred across the page");
+      assert.equal(sheet.centerYCm, sheet.heightCm / 2, "the frame is centred down the page");
+      assert.ok(Math.abs(sheet.frameH - sheet.frameW * layout.ratio) < 1e-9, layout.id + " keeps its own proportions");
+      assert.ok(sheet.frameW > 0 && sheet.frameW <= sheet.usableW + 1e-9, layout.id + " never spills past the printable width");
+      assert.ok(sheet.frameH > 0 && sheet.frameH <= sheet.usableH + 1e-9, layout.id + " never spills past the printable height");
+      assert.ok(sheet.frameW <= sheet.usableW * MONOGRAM_FRAME_SHARE + 1e-9, layout.id + " keeps a real border on the page");
+    }
+  }
+  const letter = monogramSheet({ paper: "letter" });
+  const a4 = monogramSheet({ paper: "a4" });
+  assert.ok(letter.frameW > a4.frameW, "the wider Letter sheet prints the larger frame");
+  assert.equal(monogramSheet().paper.id, "letter", "no paper choice prints US Letter");
+  assert.equal(monogramSheet().layout.id, "circle", "no frame choice prints the classic circle");
+  assert.equal(monogramSheet({ text: "a&m", style: "duo" }).text, "A & M", "the sheet carries the normalised text");
+  assert.equal(monogramSheet({ paper: chartPaper("21") }).paper.id, "a4", "the A4 choice reaches the sheet, not just the label");
+  assert.equal(crownSheet({ paper: chartPaper("21") }).paper.id, "a4", "a resolved paper sizes the crown sheet as A4");
+});
+
+test("the monogram profile carries a paper list, exports SVG and ships a usable sample", () => {
+  const profile = getProductProfile("monogram-maker");
+  assert.equal(profile.name, "Monogram Maker");
+  assert.equal(profile.exportSvg, true, "the frame outline is a cut path, so the tool exports SVG");
+  assert.equal(profile.hasHardware, false);
+  assert.equal(profile.hasBase, false);
+  assert.equal(profile.sizes.length, CHART_PAPERS.length);
+  assert.equal(profile.sizeLabels.length, CHART_PAPERS.length);
+  assert.equal(profile.sizeLabels[0], "US Letter (8.5 x 11 in)");
+  assert.equal(monogramStyle(MONOGRAM_SAMPLE.style).id, "duo", "the sample is the two initial monogram a couple reaches for");
+  assert.equal(monogramLayout(MONOGRAM_SAMPLE.layout).id, "circle");
+  assert.ok(monogramText(MONOGRAM_SAMPLE.text, MONOGRAM_SAMPLE.style).length <= MONOGRAM_TEXT_MAX, "the sample fits the frame");
 });
