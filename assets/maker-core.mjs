@@ -343,6 +343,71 @@ export const GIFT_TAG_PAPERS = Object.freeze([
 export const GIFT_TAG_MARGIN_CM = 0.8;
 export const GIFT_TAG_GUTTER_CM = 0.25;
 
+/**
+ * A printable word search puzzle. The grid is drawn at the paper size the puzzle prints on,
+ * so the cells land the same size on screen and on a 300 DPI sheet.
+ */
+export const WORD_SEARCH_PAPERS = Object.freeze([
+  { id: "letter", widthCm: 21.59, heightCm: 27.94, short: "US Letter", label: "US Letter (8.5 x 11 in)" },
+  { id: "a4", widthCm: 21, heightCm: 29.7, short: "A4", label: "A4 (21 x 29.7 cm)" },
+]);
+
+/**
+ * The grid sizes the puzzle offers. "auto" is the only one that grows: it starts at ten cells
+ * and opens up until the longest word and the whole list can be seated without crowding.
+ */
+export const WORD_SEARCH_GRIDS = Object.freeze([
+  { id: "auto", label: "Auto - fit my word list", cells: 0 },
+  { id: "10", label: "10 x 10 quick puzzle", cells: 10 },
+  { id: "12", label: "12 x 12", cells: 12 },
+  { id: "15", label: "15 x 15 classroom size", cells: 15 },
+  { id: "18", label: "18 x 18 big list", cells: 18 },
+]);
+
+/**
+ * The direction set is the whole difficulty. Across and down only is the puzzle a beginner
+ * finishes; the diagonals and the reversed spellings are what turn the same square grid into
+ * the puzzle a teenager has to hunt through.
+ */
+export const WORD_SEARCH_LEVELS = Object.freeze([
+  { id: "easy", label: "Easy - across and down only", dirs: [[1, 0], [0, 1]] },
+  { id: "medium", label: "Medium - adds one diagonal", dirs: [[1, 0], [0, 1], [1, 1]] },
+  { id: "hard", label: "Hard - all eight directions", dirs: [[1, 0], [0, 1], [1, 1], [1, -1], [-1, 0], [0, -1], [-1, -1], [-1, 1]] },
+]);
+
+/** The two letter cases a puzzle is set in. Uppercase is the classroom default. */
+export const WORD_SEARCH_CASES = Object.freeze([
+  { id: "upper", label: "UPPERCASE" },
+  { id: "lower", label: "lowercase" },
+]);
+
+/** Ready-made lists, so a teacher can tap once and print a themed puzzle. */
+export const WORD_SEARCH_THEMES = Object.freeze([
+  { id: "animals", label: "Animals", words: ["ELEPHANT", "GIRAFFE", "PENGUIN", "DOLPHIN", "RABBIT", "TIGER", "MONKEY", "TURTLE", "ZEBRA", "PANDA", "KOALA", "OTTER"] },
+  { id: "fruits", label: "Fruit and veg", words: ["APPLE", "BANANA", "CHERRY", "GRAPES", "MANGO", "MELON", "ORANGE", "PEACH", "CARROT", "POTATO", "TOMATO", "PUMPKIN"] },
+  { id: "colors", label: "Colours", words: ["RED", "BLUE", "GREEN", "YELLOW", "ORANGE", "PURPLE", "PINK", "BROWN", "BLACK", "WHITE", "SILVER", "GOLD"] },
+  { id: "school", label: "School", words: ["PENCIL", "RULER", "TEACHER", "LIBRARY", "HOMEWORK", "CLASSROOM", "NOTEBOOK", "BACKPACK", "CRAYON", "ERASER", "DESK", "BELL"] },
+  { id: "space", label: "Space", words: ["ROCKET", "PLANET", "SATURN", "METEOR", "GALAXY", "ORBIT", "COMET", "NEBULA", "ASTEROID", "ASTRONAUT", "MOON", "STAR"] },
+  { id: "ocean", label: "Ocean", words: ["WHALE", "SHARK", "CORAL", "OCTOPUS", "SEAHORSE", "DOLPHIN", "JELLYFISH", "STARFISH", "TURTLE", "PLANKTON", "ANCHOR", "SHELL"] },
+  { id: "halloween", label: "Halloween", words: ["PUMPKIN", "GHOST", "WITCH", "SPIDER", "CANDY", "SKELETON", "VAMPIRE", "OCTOBER", "COSTUME", "BAT", "MUMMY", "CAULDRON"] },
+  { id: "christmas", label: "Christmas", words: ["SANTA", "REINDEER", "SNOWMAN", "STOCKING", "PRESENT", "MISTLETOE", "GINGERBREAD", "ORNAMENT", "HOLLY", "CAROL", "SLEIGH", "ELF"] },
+  { id: "summer", label: "Summer", words: ["SUNSHINE", "BEACH", "POPSICLE", "SANDCASTLE", "SEASHELL", "VACATION", "SUMMER", "POOL", "OCEAN", "PICNIC", "CAMPING", "SUNSCREEN"] },
+  { id: "sports", label: "Sports", words: ["SOCCER", "TENNIS", "BASEBALL", "BASKETBALL", "SWIMMING", "RUNNING", "CYCLING", "HOCKEY", "VOLLEYBALL", "SKATING", "BOXING", "GOLF"] },
+  { id: "weather", label: "Weather", words: ["RAINBOW", "THUNDER", "LIGHTNING", "SNOWFLAKE", "CLOUD", "SUNSHINE", "UMBRELLA", "BREEZE", "STORM", "FOG", "HAIL", "WIND"] },
+  { id: "feelings", label: "Feelings", words: ["HAPPY", "EXCITED", "CALM", "BRAVE", "CURIOUS", "GRATEFUL", "KIND", "PROUD", "FRIENDLY", "PATIENT", "HONEST", "CHEERFUL"] },
+]);
+
+/** The most words one puzzle carries, so a long list still fits a printable grid. */
+export const WORD_SEARCH_LIMIT = 24;
+/** The longest single word the grid will accept, so one long entry cannot blow out the square. */
+export const WORD_SEARCH_WORD_MAX = 20;
+/** The safe printer border, the title band and the word list band on a puzzle sheet. */
+export const WORD_SEARCH_MARGIN_CM = 1.27;
+export const WORD_SEARCH_TITLE_CM = 1.6;
+export const WORD_SEARCH_LIST_CM = 2.4;
+/** How many rows of eight the word list is folded into before the sheet grows a second column. */
+export const WORD_SEARCH_LIST_COLUMNS = 3;
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -368,6 +433,7 @@ const PROFILES = Object.freeze([
   { id: "coloring", name: "Photo to Coloring Page Maker", product: "Coloring page", hasHardware: false, hasBase: false, exportSvg: false, sizes: ["letter", "a4"], sizeLabels: ["US Letter (8.5 x 11 in)", "A4 (21 x 29.7 cm)"] },
   { id: "gift-tag", name: "Gift Tag Maker", product: "Printable gift tag", hasHardware: false, hasBase: false, exportSvg: false, sizes: GIFT_TAG_SIZES.map((size) => size.widthCm), sizeLabels: GIFT_TAG_SIZES.map((size) => size.label) },
   { id: "name-tracing", name: "Name Tracing Worksheet Maker", product: "Name tracing worksheet", hasHardware: false, hasBase: false, exportSvg: false, sizes: NAME_TRACING_PAPERS.map((paper) => paper.widthCm), sizeLabels: NAME_TRACING_PAPERS.map((paper) => paper.label) },
+  { id: "word-search", name: "Word Search Maker", product: "Printable word search puzzle", hasHardware: false, hasBase: false, exportSvg: false, sizes: WORD_SEARCH_PAPERS.map((paper) => paper.widthCm), sizeLabels: WORD_SEARCH_PAPERS.map((paper) => paper.label) },
 ]);
 
 export const PRINT_DPI = 300;
@@ -2195,4 +2261,197 @@ export function maskInkRatio(mask) {
   let ink = 0;
   for (let i = 0; i < mask.length; i++) ink += mask[i] ? 1 : 0;
   return ink / mask.length;
+}
+
+/**
+ * A printable word search puzzle. These helpers are deliberately small and pure: the browser
+ * app and the Node test suite both build the same grid from the same seed, so what a visitor
+ * sees on screen is exactly what the 300 DPI download contains.
+ */
+export function wordSearchPaper(value) {
+  const raw = String(value == null ? "" : value).toLowerCase();
+  const cm = Number(value);
+  return WORD_SEARCH_PAPERS.find((paper) => paper.id === raw
+    || (Number.isFinite(cm) && cm > 0 && Math.abs(paper.widthCm - cm) < 0.02)) || WORD_SEARCH_PAPERS[0];
+}
+
+export function wordSearchGrid(value) {
+  const id = String(value == null ? "" : value);
+  return WORD_SEARCH_GRIDS.find((grid) => grid.id === id) || WORD_SEARCH_GRIDS[0];
+}
+
+export function wordSearchLevel(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return WORD_SEARCH_LEVELS.find((level) => level.id === id) || WORD_SEARCH_LEVELS[0];
+}
+
+export function wordSearchTheme(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return WORD_SEARCH_THEMES.find((theme) => theme.id === id) || null;
+}
+
+export function wordSearchCase(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return WORD_SEARCH_CASES.find((item) => item.id === id) || WORD_SEARCH_CASES[0];
+}
+
+/** Print a whole word in the case the sheet was set in. */
+export function wordSearchWord(text, caseValue) {
+  const c = wordSearchCase(caseValue);
+  const word = String(text == null ? "" : text);
+  return c.id === "lower" ? word.toLowerCase() : word.toUpperCase();
+}
+
+/**
+ * Turn whatever the visitor pasted into a clean list: one word per line, a comma separated run,
+ * or a mix of the two. Anything that is not a letter is dropped, duplicates folded away, and
+ * the list trimmed to what a grid can actually hold.
+ */
+export function wordSearchList(value, limit = WORD_SEARCH_LIMIT) {
+  const raw = String(value == null ? "" : value);
+  const seen = new Set();
+  const out = [];
+  const cap = Math.max(1, Math.min(WORD_SEARCH_LIMIT, Math.floor(Number(limit)) || WORD_SEARCH_LIMIT));
+  for (const chunk of raw.split(/[\n,;]+/)) {
+    const word = chunk.replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, WORD_SEARCH_WORD_MAX);
+    if (word.length < 2 || seen.has(word)) continue;
+    seen.add(word);
+    out.push(word);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+/**
+ * How many cells a list needs: the longest word plus a little breathing room, then enough area
+ * that the words can cross each other instead of filling the grid edge to edge.
+ */
+export function wordSearchAutoCells(words) {
+  const list = Array.isArray(words) ? words : [];
+  const longest = list.reduce((max, word) => Math.max(max, String(word).length), 0);
+  const byWord = longest + 1;
+  const byCount = Math.ceil(Math.sqrt(list.length * 8)) + 3;
+  return Math.max(10, Math.min(20, Math.max(byWord, byCount)));
+}
+
+/** A small repeatable generator, so the same seed always rebuilds the same grid. */
+function wordSearchRandom(seed) {
+  let a = (Number(seed) >>> 0) || 0x9e3779b9;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Lay the words into a square grid. Longer words go down first because a long word has the
+ * fewest places it can sit, then each word is tried at random spots and locked in as soon as
+ * it fits over whatever is already there. Every letter it crosses has to match.
+ */
+export function wordSearchBuild(words, options) {
+  const opts = options || {};
+  const list = (Array.isArray(words) ? words : [])
+    .map((word) => String(word).toUpperCase().replace(/[^A-Z]/g, "").slice(0, WORD_SEARCH_WORD_MAX))
+    .filter((word) => word.length >= 2)
+    .slice(0, WORD_SEARCH_LIMIT);
+  const cells = Math.max(6, Math.min(24, Math.floor(Number(opts.cells)) || wordSearchAutoCells(list)));
+  const level = wordSearchLevel(opts.level);
+  const random = wordSearchRandom(opts.seed == null ? 1 : opts.seed);
+  const grid = Array.from({ length: cells }, () => new Array(cells).fill(""));
+  const placements = [];
+  const dropped = [];
+  const ordered = list.slice().sort((a, b) => b.length - a.length);
+  ordered.forEach((word) => {
+    const letters = word.split("");
+    let found = null;
+    for (let attempt = 0; attempt < 1600 && !found; attempt++) {
+      const dir = level.dirs[Math.floor(random() * level.dirs.length)];
+      if (!dir) continue;
+      const dx = dir[0];
+      const dy = dir[1];
+      const colSpan = (letters.length - 1) * Math.abs(dx);
+      const rowSpan = (letters.length - 1) * Math.abs(dy);
+      if (colSpan >= cells || rowSpan >= cells) break;
+      const colBase = Math.floor(random() * (cells - colSpan));
+      const rowBase = Math.floor(random() * (cells - rowSpan));
+      const col0 = dx < 0 ? colBase + colSpan : colBase;
+      const row0 = dy < 0 ? rowBase + rowSpan : rowBase;
+      let ok = true;
+      for (let i = 0; i < letters.length && ok; i++) {
+        const r = row0 + dy * i;
+        const c = col0 + dx * i;
+        if (r < 0 || c < 0 || r >= cells || c >= cells) { ok = false; break; }
+        const existing = grid[r][c];
+        if (existing && existing !== letters[i]) ok = false;
+      }
+      if (ok) found = { word, row: row0, col: col0, dx, dy, length: letters.length };
+    }
+    if (!found) { dropped.push(word); return; }
+    placements.push(found);
+    for (let i = 0; i < letters.length; i++) {
+      grid[found.row + found.dy * i][found.col + found.dx * i] = letters[i];
+    }
+  });
+  // Fill every blank square with a random letter, so the puzzle cannot be read off the gaps.
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const filled = grid.map((row) => row.map((cell) => cell || alphabet[Math.floor(random() * 26)]));
+  return Object.freeze({
+    cells,
+    grid: Object.freeze(filled.map((row) => Object.freeze(row))),
+    placements: Object.freeze(placements.map((item) => Object.freeze(item))),
+    placed: placements.length,
+    dropped: Object.freeze(dropped),
+    level,
+  });
+}
+
+/** The grid squares a word covers, keyed the way the answer overlay looks them up. */
+export function wordSearchPath(placement) {
+  const item = placement || {};
+  const out = [];
+  const length = Math.max(0, Math.floor(Number(item.length)) || 0);
+  for (let i = 0; i < length; i++) {
+    out.push([(Number(item.row) || 0) + (Number(item.dy) || 0) * i, (Number(item.col) || 0) + (Number(item.dx) || 0) * i]);
+  }
+  return out;
+}
+
+/**
+ * The puzzle page: paper, a title band, the biggest square grid the margins allow and the word
+ * list underneath. Reading the cell size from one place keeps the preview and the print in step.
+ */
+export function wordSearchSheet(options) {
+  const opts = options || {};
+  const paper = wordSearchPaper(opts.paper);
+  const cells = Math.max(6, Math.min(24, Math.floor(Number(opts.cells)) || 10));
+  const marginCm = WORD_SEARCH_MARGIN_CM;
+  const titleCm = opts.title === false ? 0 : WORD_SEARCH_TITLE_CM;
+  const listCm = opts.list === false ? 0 : WORD_SEARCH_LIST_CM;
+  const usableW = Math.max(4, paper.widthCm - marginCm * 2);
+  const usableH = Math.max(4, paper.heightCm - marginCm * 2 - titleCm - listCm);
+  const gridCm = Math.max(4, Math.min(usableW, usableH));
+  return Object.freeze({
+    paper,
+    cells,
+    marginCm,
+    titleCm,
+    listCm,
+    usableW,
+    usableH,
+    gridCm,
+    cellCm: gridCm / cells,
+    gridX: (paper.widthCm - gridCm) / 2,
+    gridY: marginCm + titleCm,
+  });
+}
+
+/** Number of word list columns the sheet uses, so a long list stays inside the paper. */
+export function wordSearchListColumns(words, max = WORD_SEARCH_LIST_COLUMNS) {
+  const count = (Array.isArray(words) ? words : []).length;
+  const columns = Math.max(1, Math.floor(Number(max)) || WORD_SEARCH_LIST_COLUMNS);
+  if (count <= 8) return 1;
+  if (count <= 16) return Math.min(2, columns);
+  return columns;
 }

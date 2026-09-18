@@ -66,6 +66,19 @@ import {
   NAME_TRACING_ROW_MIN,
   NAME_TRACING_ROW_MAX,
   NAME_TRACING_BLANK_MAX,
+  wordSearchPaper,
+  wordSearchGrid,
+  wordSearchLevel,
+  wordSearchTheme,
+  wordSearchCase,
+  wordSearchWord,
+  wordSearchList,
+  wordSearchAutoCells,
+  wordSearchBuild,
+  wordSearchPath,
+  wordSearchSheet,
+  wordSearchListColumns,
+  WORD_SEARCH_THEMES,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -194,6 +207,15 @@ const tracePager = document.querySelector("#tracePager");
 const tracePagePrev = document.querySelector("#tracePagePrev");
 const tracePageNext = document.querySelector("#tracePageNext");
 const tracePageLabel = document.querySelector("#tracePageLabel");
+const wsTitle = document.querySelector("#wsTitle");
+const wsWords = document.querySelector("#wsWords");
+const wsTheme = document.querySelector("#wsTheme");
+const wsSize = document.querySelector("#wsSize");
+const wsSizeLabel = document.querySelector("#wsSizeLabel");
+const wsLevel = document.querySelector("#wsLevel");
+const wsCase = document.querySelector("#wsCase");
+const wsAnswers = document.querySelector("#wsAnswers");
+const wsShuffle = document.querySelector("#wsShuffle");
 const coloringStyleSelect = document.querySelector("#coloringStyle");
 const coloringDetailSelect = document.querySelector("#coloringDetail");
 const coloringWeightSelect = document.querySelector("#coloringWeight");
@@ -226,9 +248,18 @@ let liftedCanvas = null;
 let rawSource = { width: 0, height: 0 };
 let scene = null;
 let raf = 0;
+// A word search is rebuilt from the same seed until the visitor shuffles it, so the grid only
+// changes when they ask it to.
+let wsSeed = 1;
 
 /** The font every worksheet row is set in. Trebuchet is the clearest of the five loaded faces for a child to trace. */
 const NAME_TRACING_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
+
+/** The puzzle grid is plain type, so it uses the same neutral sans face and print-safe inks. */
+const WORD_SEARCH_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
+const WORD_SEARCH_INK = "#1f2429";
+const WORD_SEARCH_RULE = "#d3d8dd";
+const WORD_SEARCH_ANSWER = "rgba(244, 197, 79, 0.55)";
 
 boot();
 
@@ -368,6 +399,28 @@ function boot() {
     tracePageNext?.addEventListener("click", () => { tracePage += 1; render(); });
     // A worksheet is typed rather than uploaded, so a blank page stands in for the artwork and
     // the shared preview and download plumbing works before a single name is entered.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
+  if (profile.id === "word-search") {
+    // The theme list is a shared recipe rather than a hand-written set of options, so the two stay
+    // in step. A puzzle is typed, so a blank canvas stands in for the artwork slot.
+    if (wsTheme) {
+      wsTheme.innerHTML = '<option value="">Choose a theme...</option>'
+        + WORD_SEARCH_THEMES.map((theme) => '<option value="' + theme.id + '">' + theme.label + "</option>").join("");
+    }
+    wsTitle?.addEventListener("input", schedule);
+    wsWords?.addEventListener("input", () => { wsSeed = 1; schedule(); });
+    wsTheme?.addEventListener("change", applyWordSearchTheme);
+    wsSize?.addEventListener("change", schedule);
+    wsLevel?.addEventListener("change", schedule);
+    wsCase?.addEventListener("change", schedule);
+    wsAnswers?.addEventListener("change", schedule);
+    wsShuffle?.addEventListener("click", () => { wsSeed = (wsSeed % 4294967295) + 1; schedule(); });
     image = document.createElement("canvas");
     image.width = WORK_LONG_SIDE;
     image.height = WORK_LONG_SIDE;
@@ -800,6 +853,15 @@ function extractContours() {
   if (!rawContours.length) note("This image is fully transparent, so there is nothing to trace. Try a PNG with visible artwork.");
 }
 
+/** A ready-made theme fills the word box; the visitor can then edit the list however they like. */
+function applyWordSearchTheme() {
+  const theme = wordSearchTheme(wsTheme?.value);
+  if (!theme) return;
+  if (wsWords) wsWords.value = theme.words.join("\n");
+  wsSeed = 1;
+  schedule();
+}
+
 // ------------------------------------------------------------------ layout + render
 
 function layout() {
@@ -861,6 +923,21 @@ function layout() {
     const x = (CANVAS - w) / 2;
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: paper.heightCm, dpi: workDpi(WORK_LONG_SIDE, paper.heightCm), paper, sheet };
+  }
+  if (profile.id === "word-search") {
+    // The sheet is the product, so the paper decides the box and the grid recipe decides where
+    // every cell falls at both preview and print resolution.
+    const paper = wordSearchPaper(sizeSelect.value);
+    const words = wordSearchList(wsWords?.value);
+    const grid = wordSearchGrid(wsSize?.value);
+    const cells = grid.id === "auto" ? wordSearchAutoCells(words) : grid.cells;
+    const sheet = wordSearchSheet({ paper, cells });
+    const scale = WORK_LONG_SIDE / paper.heightCm;
+    const w = Math.round(paper.widthCm * scale);
+    const h = Math.round(paper.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: paper.heightCm, dpi: workDpi(WORK_LONG_SIDE, paper.heightCm), paper, sheet, cells, grid };
   }
   if (profile.id === "coloring") {
     // The sheet is the product, so the paper decides the box and the photo simply fits inside
@@ -1194,6 +1271,24 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawNameTracing(ctx, scene, true);
+  } else if (profile.id === "word-search") {
+    // The puzzle is rebuilt from the same word list, level and seed the layout sized, so a shuffle
+    // only changes where the words sit and never the sheet they print on.
+    const words = wordSearchList(wsWords?.value);
+    scene = {
+      kind: "word-search",
+      paper: L.paper,
+      sheet: L.sheet,
+      build: wordSearchBuild(words, { cells: L.cells, level: wsLevel?.value, seed: wsSeed }),
+      words,
+      title: (wsTitle?.value || "").trim().replace(/\s+/g, " ").slice(0, 60),
+      caseId: wordSearchCase(wsCase?.value).id,
+      answers: !!wsAnswers?.checked,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawWordSearch(ctx, scene, true);
   } else if (profile.id === "coloring") {
     scene = {
       kind: "coloring",
@@ -1467,6 +1562,31 @@ function readout(L) {
     dimensions.textContent = body;
     return;
   }
+
+  if (profile.id === "word-search") {
+    // The sheet is the product, so the readout leads with the paper and the finished grid, then
+    // says how many of the typed words the generator could actually hide.
+    const paper = scene.paper;
+    const build = scene.build;
+    const gridLabel = build.cells + " x " + build.cells;
+    const levelName = build.level.label.split(" - ")[0].toLowerCase();
+    const dropped = build.dropped.length;
+    sizeLabel.textContent = paper.short;
+    if (wsSizeLabel) wsSizeLabel.textContent = L.grid && L.grid.id === "auto" ? "Auto - " + gridLabel : gridLabel;
+    dimensions.textContent = paper.short + " " + gridLabel + " word search at " + PRINT_DPI + " DPI ("
+      + physicalPixels(paper.widthCm, PRINT_DPI) + " x " + physicalPixels(paper.heightCm, PRINT_DPI)
+      + " px), set in " + (scene.caseId === "lower" ? "lowercase" : "uppercase")
+      + " on " + levelName + " difficulty with " + (build.placed === 1 ? "1 word" : build.placed + " words") + " hidden"
+      + (dropped
+        ? ", and " + dropped + " word" + (dropped === 1 ? "" : "s") + " that did not fit on a grid this small"
+        : "")
+      + (scene.answers
+        ? ". The answer key is highlighted under the letters."
+        : ". Switch the answer key on to print the highlighted solution.")
+      + " Print at 100 percent with no page scaling. No watermark, no sign-up, and nothing you type leaves your device.";
+    return;
+  }
+
   if (profile.id === "place-card") {
     // The sheet is the product, so the readout leads with the paper and then says what is on it.
     const grid = scene.grid;
@@ -3693,6 +3813,126 @@ function drawNameTracing(c, s, guides) {
   c.restore();
 }
 
+/**
+ * The whole puzzle sheet: paper, the title band, the square of letters, the highlighted answer
+ * overlay and the word list underneath. Every measurement is read from the shared sheet recipe in
+ * centimetres, so the live preview and the 300 DPI download land the same grid in the same place.
+ */
+function drawWordSearch(c, s, guides) {
+  const r = s.rect;
+  const sheet = s.sheet;
+  const paper = s.paper || sheet.paper;
+  const pxPerCm = r.w / paper.widthCm;
+  const build = s.build;
+  const cells = build ? build.cells : sheet.cells;
+  const gridPx = sheet.gridCm * pxPerCm;
+  const cellPx = gridPx / Math.max(1, cells);
+  const gx = r.x + sheet.gridX * pxPerCm;
+  const gy = r.y + sheet.gridY * pxPerCm;
+  const margin = sheet.marginCm * pxPerCm;
+
+  c.save();
+  // The sheet itself, with a hairline edge so the paper reads against the page behind it.
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  c.strokeStyle = "#dcd7cc";
+  c.lineWidth = Math.max(1, pxPerCm * 0.02);
+  c.strokeRect(r.x + c.lineWidth / 2, r.y + c.lineWidth / 2, r.w - c.lineWidth, r.h - c.lineWidth);
+
+  // The title band, or the default name when the visitor has not typed one.
+  if (sheet.titleCm > 0) {
+    const titlePx = Math.min(sheet.titleCm * pxPerCm * 0.62, pxPerCm * 1.15);
+    c.fillStyle = WORD_SEARCH_INK;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.font = "700 " + Math.max(8, titlePx) + "px " + WORD_SEARCH_FONT;
+    c.fillText((s.title || "").trim() || "Word search", r.x + r.w / 2, r.y + sheet.marginCm * pxPerCm + (sheet.titleCm * pxPerCm) / 2, sheet.usableW * pxPerCm);
+  }
+
+  // Faint cell rules, so the squares the words hide in stay readable on a printed sheet.
+  c.strokeStyle = WORD_SEARCH_RULE;
+  c.lineWidth = Math.max(0.5, cellPx * 0.035);
+  c.beginPath();
+  for (let i = 0; i <= cells; i += 1) {
+    const x = gx + i * cellPx;
+    const y = gy + i * cellPx;
+    c.moveTo(x, gy);
+    c.lineTo(x, gy + gridPx);
+    c.moveTo(gx, y);
+    c.lineTo(gx + gridPx, y);
+  }
+  c.stroke();
+  if (guides) {
+    // The preview gets one crisp edge so the grid reads as a finished square on screen.
+    c.strokeStyle = "#9aa2ab";
+    c.lineWidth = Math.max(0.8, cellPx * 0.06);
+    c.strokeRect(gx, gy, gridPx, gridPx);
+  }
+
+  // The answer overlay sits under the letters, as a soft band along each hidden word.
+  if (s.answers && build) {
+    c.strokeStyle = WORD_SEARCH_ANSWER;
+    c.lineCap = "round";
+    c.lineJoin = "round";
+    c.lineWidth = cellPx * 0.78;
+    build.placements.forEach((placement) => {
+      const path = wordSearchPath(placement);
+      if (!path.length) return;
+      c.beginPath();
+      path.forEach(([row, col], index) => {
+        const cx = gx + col * cellPx + cellPx / 2;
+        const cy = gy + row * cellPx + cellPx / 2;
+        if (index === 0) c.moveTo(cx, cy);
+        else c.lineTo(cx, cy);
+      });
+      c.stroke();
+    });
+  }
+
+  // The letters of the puzzle, in whichever case the sheet was set in.
+  c.fillStyle = WORD_SEARCH_INK;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.font = "600 " + Math.max(4, cellPx * 0.6) + "px " + WORD_SEARCH_FONT;
+  if (build) {
+    for (let row = 0; row < cells; row += 1) {
+      for (let col = 0; col < cells; col += 1) {
+        const letter = build.grid[row][col];
+        if (!letter) continue;
+        c.fillText(wordSearchWord(letter, s.caseId), gx + col * cellPx + cellPx / 2, gy + row * cellPx + cellPx / 2 + cellPx * 0.02, cellPx * 0.92);
+      }
+    }
+  }
+
+  // The word list under the grid, folded into as many columns as the list needs.
+  const list = Array.isArray(s.words) ? s.words : [];
+  if (sheet.listCm > 0 && list.length) {
+    const columns = wordSearchListColumns(list);
+    const perColumn = Math.ceil(list.length / columns);
+    const colW = (sheet.usableW * pxPerCm) / columns;
+    const listTop = gy + gridPx + pxPerCm * 0.45;
+    const rowH = Math.min((sheet.listCm * pxPerCm) / perColumn, cellPx * 2.2);
+    const fontPx = Math.max(4, Math.min(rowH * 0.68, cellPx * 1.05));
+    c.font = "600 " + fontPx + "px " + WORD_SEARCH_FONT;
+    c.textAlign = "left";
+    c.textBaseline = "middle";
+    c.fillStyle = WORD_SEARCH_INK;
+    list.forEach((word, index) => {
+      const column = Math.floor(index / perColumn);
+      const row = index % perColumn;
+      c.fillText(wordSearchWord(word, s.caseId), r.x + margin + column * colW, listTop + (row + 0.5) * rowH, colW * 0.94);
+    });
+  }
+
+  // The same small footer line on screen and in the print, so the free sheet always credits back.
+  c.fillStyle = "#8a9098";
+  c.font = "500 " + Math.max(4, pxPerCm * 0.26) + "px " + WORD_SEARCH_FONT;
+  c.textAlign = "center";
+  c.textBaseline = "alphabetic";
+  c.fillText("Word search puzzle - free at Tiny County Makers", r.x + r.w / 2, r.y + r.h - margin * 0.38);
+  c.restore();
+}
+
 function sceneBox() {
   if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
@@ -3718,7 +3958,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -3775,6 +4015,7 @@ function renderScene(scale) {
   else if (scene.kind === "cupcake") drawCupcake(c, scene, false);
   else if (scene.kind === "gift-tag") drawGiftTag(c, scene, false);
   else if (scene.kind === "name-tracing") drawNameTracing(c, scene, false);
+  else if (scene.kind === "word-search") drawWordSearch(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -3800,7 +4041,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -3828,6 +4069,8 @@ function exportName(extension) {
     ? "coloring-page-" + scene.page.id + "-" + scene.page.orientation
     : scene.kind === "name-tracing" && scene.paper
     ? "name-tracing-" + (scene.text ? scene.text.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() : "worksheet") + "-" + scene.paper.id + "-sheet-" + (scene.page + 1)
+    : scene.kind === "word-search" && scene.paper
+    ? "word-search-" + (scene.title ? scene.title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 40) : "puzzle") + "-" + scene.paper.id + "-" + scene.build.cells + "x" + scene.build.cells
     : scene.kind === "gift-tag" && scene.tag
     ? "gift-tag-" + scene.tag.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
     : scene.kind === "cupcake" && scene.topper
@@ -4484,6 +4727,17 @@ async function loadSample() {
     // names the way a parent or teacher would, then leaves the first sheet on screen.
     if (traceName && !traceName.value.trim()) traceName.value = "Amelia\nNoah\nSophie";
     tracePage = 0;
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "word-search") {
+    // A puzzle is typed rather than uploaded, so the sample fills the box with a short animal list
+    // and leaves a finished puzzle on screen.
+    if (wsWords && !wsWords.value.trim()) wsWords.value = "ELEPHANT\nGIRAFFE\nPENGUIN\nDOLPHIN\nRABBIT\nTIGER";
+    if (wsTitle && !wsTitle.value.trim()) wsTitle.value = "Sample word search";
+    wsSeed = 1;
     adoptSource("sample");
     render();
     track("sample_loaded", { product: profile.id });

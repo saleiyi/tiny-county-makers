@@ -134,6 +134,20 @@ import {
   nameTracingNames,
   nameTracingSlots,
   nameTracingSheet,
+  wordSearchPaper,
+  wordSearchGrid,
+  wordSearchLevel,
+  wordSearchTheme,
+  wordSearchCase,
+  wordSearchWord,
+  wordSearchList,
+  wordSearchAutoCells,
+  wordSearchBuild,
+  wordSearchPath,
+  wordSearchSheet,
+  wordSearchListColumns,
+  WORD_SEARCH_THEMES,
+  WORD_SEARCH_LIMIT,
   COLORING_PAPERS,
   COLORING_MARGIN_CM,
   COLORING_STYLES,
@@ -162,8 +176,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-four distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing"]);
+test("the shared engine exposes the twenty-five distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "word-search"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -1320,4 +1334,160 @@ test("name tracing sheets lay the ruled block out inside the printable border", 
   assert.equal(fallback.practiceRows, 5);
   assert.equal(fallback.blankRows, 1);
   assert.equal(fallback.headerRows, 1);
+});
+
+test("the word search tool is profile 25 and keeps both paper sizes", () => {
+  const profile = getProductProfile("word-search");
+  assert.equal(profile.name, "Word Search Maker");
+  assert.equal(profile.product, "Printable word search puzzle");
+  assert.equal(profile.hasHardware, false);
+  assert.equal(profile.exportSvg, false, "the puzzle is a print, so it ships no cut path");
+  assert.deepEqual(profile.sizes, [21.59, 21]);
+  assert.equal(wordSearchPaper(21).id, "a4");
+  assert.equal(wordSearchPaper(21.59).id, "letter");
+  assert.equal(wordSearchPaper("letter").id, "letter");
+  assert.equal(wordSearchPaper("999").id, "letter", "an unknown paper falls back to US Letter");
+  assert.equal(wordSearchPaper(undefined).id, "letter");
+});
+
+test("word search lookups fall back instead of throwing", () => {
+  assert.equal(wordSearchGrid("auto").cells, 0, "auto asks the engine to size the grid");
+  assert.equal(wordSearchGrid("15").cells, 15);
+  assert.equal(wordSearchGrid("nope").id, "auto", "an unknown grid falls back to auto");
+  assert.equal(wordSearchGrid(undefined).id, "auto");
+
+  assert.equal(wordSearchLevel("easy").dirs.length, 2, "easy is across and down only");
+  assert.equal(wordSearchLevel("medium").dirs.length, 3);
+  assert.equal(wordSearchLevel("hard").dirs.length, 8);
+  assert.equal(wordSearchLevel("HARD").id, "hard");
+  assert.equal(wordSearchLevel("nope").id, "easy", "an unknown level falls back to the beginner set");
+
+  assert.equal(wordSearchCase("UPPER").id, "upper");
+  assert.equal(wordSearchCase("lower").id, "lower");
+  assert.equal(wordSearchCase("nope").id, "upper", "uppercase is the classroom default");
+  assert.equal(wordSearchCase(undefined).id, "upper");
+
+  assert.equal(wordSearchWord("tiger", "lower"), "tiger");
+  assert.equal(wordSearchWord("tiger", "upper"), "TIGER");
+  assert.equal(wordSearchWord("tiger"), "TIGER", "uppercase is the default");
+  assert.equal(wordSearchWord(undefined), "");
+
+  assert.equal(WORD_SEARCH_THEMES.length, 12);
+  for (const theme of WORD_SEARCH_THEMES) {
+    assert.equal(theme.words.length, 12, theme.id + " should carry twelve ready-made words");
+    for (const word of theme.words) {
+      assert.match(word, /^[A-Z]{2,20}$/, theme.id + " word " + word + " should be plain uppercase letters");
+    }
+  }
+  assert.equal(wordSearchTheme("ANIMALS").id, "animals");
+  assert.equal(wordSearchTheme("nope"), null, "an unknown theme is simply no theme");
+  assert.equal(wordSearchTheme(undefined), null);
+});
+
+test("the word list is cleaned into something a grid can hold", () => {
+  assert.deepEqual(wordSearchList("apple\nBanana, cherry\napple\nTOO-LONG-WORD!!"), ["APPLE", "BANANA", "CHERRY", "TOOLONGWORD"]);
+  assert.deepEqual(wordSearchList("a, bb, c, dddd"), ["BB", "DDDD"], "one letter words are dropped");
+  assert.deepEqual(wordSearchList("cat; dog\ncat"), ["CAT", "DOG"], "duplicates fold away");
+  assert.deepEqual(wordSearchList(""), []);
+  assert.deepEqual(wordSearchList(undefined), []);
+  assert.equal(wordSearchList("x".repeat(40))[0].length, 20, "a long word is capped so the square survives");
+  const uniqueWords = Array.from({ length: 40 }, (value, index) => String.fromCharCode(97 + (index % 26)) + String.fromCharCode(97 + Math.floor(index / 26)) + "zz");
+  assert.equal(wordSearchList(uniqueWords.join("\n")).length, WORD_SEARCH_LIMIT, "the list is trimmed to the printable limit");
+  assert.equal(wordSearchList("cat\ndog", 1).length, 1, "a smaller cap is honoured");
+});
+
+test("the grid sizes itself to the word list", () => {
+  assert.equal(wordSearchAutoCells([]), 10, "an empty list still gets a usable square");
+  assert.equal(wordSearchAutoCells(["CAT"]), 10);
+  assert.ok(wordSearchAutoCells(["ELEPHANT"]) >= 10);
+  assert.ok(wordSearchAutoCells(["A".repeat(20)]) >= 20, "the longest word still has to fit");
+  assert.ok(wordSearchAutoCells(Array.from({ length: 24 }, (value, index) => "word" + index)) <= 20);
+  assert.equal(wordSearchAutoCells(undefined), 10);
+});
+
+test("every word the builder places can be read back out of the grid", () => {
+  const words = WORD_SEARCH_THEMES.find((theme) => theme.id === "animals").words;
+  for (let seed = 1; seed <= 40; seed += 1) {
+    for (const level of ["easy", "medium", "hard"]) {
+      const build = wordSearchBuild(words, { cells: 15, level, seed });
+      assert.equal(build.cells, 15);
+      assert.equal(build.grid.length, 15);
+      assert.equal(build.level.id, level);
+      for (const placement of build.placements) {
+        const path = wordSearchPath(placement);
+        assert.equal(path.length, placement.word.length);
+        const read = path.map(([row, col]) => build.grid[row][col]).join("");
+        assert.equal(read, placement.word, "seed " + seed + " " + level + " lost " + placement.word);
+      }
+      assert.equal(build.placed + build.dropped.length, words.length, "every word is either placed or reported");
+      assert.ok(build.placed >= words.length - 1, "a 15 x 15 grid seats a twelve word list");
+    }
+  }
+});
+
+test("the same seed always rebuilds the same puzzle, and a new seed moves the words", () => {
+  const words = ["ELEPHANT", "GIRAFFE", "PENGUIN", "DOLPHIN", "RABBIT", "TIGER"];
+  const a = wordSearchBuild(words, { cells: 12, level: "easy", seed: 7 });
+  const b = wordSearchBuild(words, { cells: 12, level: "easy", seed: 7 });
+  const c = wordSearchBuild(words, { cells: 12, level: "easy", seed: 8 });
+  assert.deepEqual(a.grid, b.grid, "the same seed has to rebuild the same grid");
+  assert.notDeepEqual(a.grid, c.grid, "shuffling has to actually move the letters");
+  assert.equal(a.placed, words.length, "a 12 x 12 grid seats six animal words");
+  assert.deepEqual(a.dropped, []);
+});
+
+test("words that cannot fit are reported instead of silently vanishing", () => {
+  const words = ["ELEPHANT", "HIPPOPOTAMUS", "BUTTERFLY", "CROCODILE"];
+  const build = wordSearchBuild(words, { cells: 6, level: "hard", seed: 3 });
+  assert.equal(build.cells, 6);
+  assert.ok(build.dropped.includes("HIPPOPOTAMUS"), "a six cell square cannot hide an eleven letter word");
+  assert.equal(build.placed + build.dropped.length, words.length);
+  assert.deepEqual(wordSearchBuild([], { cells: 10, seed: 1 }).placements, []);
+  assert.equal(wordSearchBuild(["CAT"], { cells: 10, seed: 1 }).placements.length, 1);
+  assert.equal(wordSearchBuild(["CAT"], { cells: 1, seed: 1 }).cells, 6, "a grid is never smaller than six cells");
+  assert.equal(wordSearchBuild(["CAT"], { cells: 99, seed: 1 }).cells, 24, "a grid is never larger than twenty-four cells");
+});
+
+test("word search paths walk a placement in the direction it was seated", () => {
+  assert.deepEqual(wordSearchPath({ row: 1, col: 2, dx: 0, dy: 1, length: 3 }), [[1, 2], [2, 2], [3, 2]]);
+  assert.deepEqual(wordSearchPath({ row: 4, col: 4, dx: -1, dy: -1, length: 2 }), [[4, 4], [3, 3]]);
+  assert.deepEqual(wordSearchPath({ row: 0, col: 0, dx: 1, dy: 0, length: 1 }), [[0, 0]]);
+  assert.deepEqual(wordSearchPath(null), []);
+  assert.deepEqual(wordSearchPath(undefined), []);
+});
+
+test("the puzzle sheet keeps the grid inside the printable border", () => {
+  const letter = wordSearchSheet({ paper: "letter", cells: 12 });
+  assert.equal(letter.paper.id, "letter");
+  assert.equal(letter.cells, 12);
+  assert.ok(Math.abs(letter.usableW - 19.05) < 1e-9, "US Letter keeps a 1.27 cm border each side");
+  assert.ok(Math.abs(letter.gridCm - 19.05) < 1e-9, "the grid is the square the sheet allows");
+  assert.ok(Math.abs(letter.cellCm - 1.5875) < 1e-9);
+  assert.ok(Math.abs(letter.gridX - 1.27) < 1e-9, "the grid is centred across the paper");
+  assert.ok(Math.abs(letter.gridY - 2.87) < 1e-9, "the title band sits above the grid");
+  assert.ok(letter.gridY + letter.gridCm + letter.listCm <= letter.paper.heightCm - letter.marginCm + 1e-9, "the list stays above the bottom border");
+
+  const a4 = wordSearchSheet({ paper: 21, cells: 18 });
+  assert.equal(a4.paper.id, "a4");
+  assert.equal(a4.cells, 18);
+  assert.ok(Math.abs(a4.gridCm - 18.46) < 1e-9, "A4 is narrower, so the width decides the square");
+
+  const huge = wordSearchSheet({ paper: "letter", cells: 99 });
+  assert.equal(huge.cells, 24, "the cell count is clamped to the printable ceiling");
+  const tiny = wordSearchSheet({ cells: 1 });
+  assert.equal(tiny.cells, 6, "the cell count is clamped to a usable floor");
+  assert.equal(wordSearchSheet().paper.id, "letter", "no paper choice prints US Letter");
+  assert.equal(wordSearchSheet({ title: false }).titleCm, 0, "the title band is optional");
+  assert.equal(wordSearchSheet({ list: false }).listCm, 0, "the word list band is optional");
+});
+
+test("a short word list stays in one column and a long one folds", () => {
+  assert.equal(wordSearchListColumns(["A", "B", "C"]), 1);
+  assert.equal(wordSearchListColumns(Array.from({ length: 8 }, (value, index) => "w" + index)), 1);
+  assert.equal(wordSearchListColumns(Array.from({ length: 9 }, (value, index) => "w" + index)), 2);
+  assert.equal(wordSearchListColumns(Array.from({ length: 16 }, (value, index) => "w" + index)), 2);
+  assert.equal(wordSearchListColumns(Array.from({ length: 17 }, (value, index) => "w" + index)), 3);
+  assert.equal(wordSearchListColumns(Array.from({ length: 24 }, (value, index) => "w" + index)), 3);
+  assert.equal(wordSearchListColumns([], 4), 1, "an empty list still needs a column");
+  assert.equal(wordSearchListColumns(Array.from({ length: 24 }, (value, index) => "w" + index), 1), 1, "the column ceiling is honoured");
 });
