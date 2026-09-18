@@ -48,6 +48,12 @@ import {
   cupcakeSheet,
   cupcakePaperHex,
   cupcakeGrid,
+  giftTagSize,
+  giftTagShape,
+  giftTagSheet,
+  giftTagPaperHex,
+  giftTagGrid,
+  giftTagHole,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -99,6 +105,9 @@ const DEFAULT_PLACE_CARD_FONT = "'Playfair Display', Georgia, 'Times New Roman',
 const DEFAULT_POLAROID_FONT = "'Brush Script MT', 'Segoe Script', cursive";
 const DEFAULT_CUPCAKE_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
 const CUPCAKE_MAX_CHARS = 40;
+const DEFAULT_GIFT_TAG_FONT = "'Playfair Display', Georgia, 'Times New Roman', serif";
+const GIFT_TAG_MAX_CHARS = 32;
+const GIFT_TAG_FIELD_MAX = 22;
 const COLORING_INK = "#141414";
 
 const root = document.querySelector("[data-maker]");
@@ -155,6 +164,12 @@ const cupcakeText = document.querySelector("#cupcakeText");
 const cupcakeFontSelect = document.querySelector("#cupcakeFont");
 const cupcakePaper = document.querySelector("#cupcakePaper");
 const cupcakeSheetSelect = document.querySelector("#cupcakeSheet");
+const giftTagText = document.querySelector("#giftText");
+const giftTagTo = document.querySelector("#giftTo");
+const giftTagFrom = document.querySelector("#giftFrom");
+const giftTagFontSelect = document.querySelector("#giftFont");
+const giftTagPaper = document.querySelector("#giftPaper");
+const giftTagSheetSelect = document.querySelector("#giftSheet");
 const coloringStyleSelect = document.querySelector("#coloringStyle");
 const coloringDetailSelect = document.querySelector("#coloringDetail");
 const coloringWeightSelect = document.querySelector("#coloringWeight");
@@ -174,6 +189,8 @@ let placeCardPage = 0;
 let polaroidPhoto = null;
 // A cupcake topper can be printed blank, so the upload lives beside the placeholder artwork.
 let cupcakePhoto = null;
+// A gift tag can be printed blank or filled with a photo, so the upload lives beside the slot.
+let giftTagPhoto = null;
 // A coloring page does not need artwork of its own: the sheet alone is a usable download, so the
 // uploaded photo is kept beside the blank placeholder the shared export path expects.
 let coloringPhoto = null;
@@ -293,6 +310,22 @@ function boot() {
     render();
     document.fonts?.ready?.then?.(() => schedule());
   }
+  if (profile.id === "gift-tag") {
+    giftTagText?.addEventListener("input", () => schedule());
+    giftTagTo?.addEventListener("input", () => schedule());
+    giftTagFrom?.addEventListener("input", () => schedule());
+    giftTagFontSelect?.addEventListener("change", schedule);
+    giftTagPaper?.addEventListener("input", schedule);
+    giftTagSheetSelect?.addEventListener("change", schedule);
+    // A tag is cut from card stock, so a blank placeholder stands in for the artwork and the
+    // shared preview and download plumbing works before a single photo is added.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
   if (profile.id === "coloring") {
     coloringStyleSelect?.addEventListener("change", schedule);
     coloringDetailSelect?.addEventListener("change", schedule);
@@ -316,6 +349,7 @@ function boot() {
   wireHexPresets(placeCardPaper, "#placePaperPresets", "data-paper", schedule);
   wireHexPresets(polaroidPaper, "#polaroidPaperPresets", "data-paper", schedule);
   wireHexPresets(cupcakePaper, "#cupcakePaperPresets", "data-paper", schedule);
+  wireHexPresets(giftTagPaper, "#giftPaperPresets", "data-paper", schedule);
   smoothingInput?.addEventListener("input", schedule);
   engravingInput?.addEventListener("input", schedule);
   contactInput?.addEventListener("input", schedule);
@@ -628,6 +662,7 @@ async function adoptImage(dataUrl) {
     image = null;
     if (profile.id === "table-number") tablePhoto = null;
     if (profile.id === "cupcake") cupcakePhoto = null;
+    if (profile.id === "gift-tag") giftTagPhoto = null;
     if (profile.id === "coloring") coloringPhoto = null;
     setDownloadsEnabled(false);
     note("We could not read that image. Please try another file.");
@@ -637,6 +672,8 @@ async function adoptImage(dataUrl) {
   if (profile.id === "polaroid") polaroidPhoto = image;
   // A cupcake topper can be printed blank, so the photo is kept beside the placeholder artwork.
   if (profile.id === "cupcake") cupcakePhoto = image;
+  // A gift tag can be printed blank, so the photo is kept beside the placeholder artwork.
+  if (profile.id === "gift-tag") giftTagPhoto = image;
   // A coloring page is drawn from the photo itself, so the upload is kept for the line-art pass.
   if (profile.id === "coloring") coloringPhoto = image;
   // A table number keeps its photo beside the typed number, so it is remembered here rather
@@ -743,6 +780,20 @@ function layout() {
     const x = (CANVAS - w) / 2;
     const y = (CANVAS - h) / 2 + 26;
     return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), topper, sheet };
+  }
+  if (profile.id === "gift-tag") {
+    // A tag is cut from card stock, so the tag decides the box and the sheet only decides how
+    // many of them are tiled onto one printable page.
+    const tag = giftTagSize(sizeSelect.value);
+    const sheet = giftTagSheet(giftTagSheetSelect?.value);
+    const spec = sheet || tag;
+    const longCm = Math.max(spec.widthCm, spec.heightCm);
+    const scale = WORK_LONG_SIDE / longCm;
+    const w = Math.round(spec.widthCm * scale);
+    const h = Math.round(spec.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: longCm, dpi: workDpi(WORK_LONG_SIDE, longCm), tag, sheet };
   }
   if (profile.id === "coloring") {
     // The sheet is the product, so the paper decides the box and the photo simply fits inside
@@ -1033,6 +1084,25 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawCupcake(ctx, scene, true);
+  } else if (profile.id === "gift-tag") {
+    scene = {
+      kind: "gift-tag",
+      tag: L.tag,
+      spec: L.tag,
+      sheet: L.sheet,
+      grid: L.sheet ? giftTagGrid(L.sheet.id, sizeSelect.value) : null,
+      shape: giftTagShape(shapeSelect?.value),
+      paper: giftTagPaperHex(giftTagPaper?.value),
+      text: (giftTagText?.value || "").trim().replace(/\s+/g, " ").slice(0, GIFT_TAG_MAX_CHARS),
+      to: (giftTagTo?.value || "").trim().replace(/\s+/g, " ").slice(0, GIFT_TAG_FIELD_MAX),
+      from: (giftTagFrom?.value || "").trim().replace(/\s+/g, " ").slice(0, GIFT_TAG_FIELD_MAX),
+      font: giftTagFontSelect?.value || DEFAULT_GIFT_TAG_FONT,
+      image: giftTagPhoto,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawGiftTag(ctx, scene, true);
   } else if (profile.id === "coloring") {
     scene = {
       kind: "coloring",
@@ -1202,7 +1272,7 @@ function buildStickerContours(L) {
 
 function readout(L) {
   sizeLabel.textContent = scene.spec
-    ? (profile.id === "table-number" || profile.id === "place-card" || profile.id === "polaroid" || profile.id === "cupcake") && scene.spec.short
+    ? (profile.id === "table-number" || profile.id === "place-card" || profile.id === "polaroid" || profile.id === "cupcake" || profile.id === "gift-tag") && scene.spec.short
       ? scene.spec.short
       : scene.spec.id.split("x").join(" x ") + " in"
     : L.longSideCm + " cm";
@@ -1322,6 +1392,41 @@ function readout(L) {
       + " in) - a print-ready PNG of the whole topper, card and cut line included."
       + (scene.image ? " Your photo is cover-fitted into the disc." : " Upload a photo to fill the disc, or print the blank card as a template.")
       + (scene.text ? " The message prints on a band across the foot." : "")
+      + " No watermark, and your photo never leaves your device.";
+    return;
+  }
+  if (profile.id === "gift-tag") {
+    // A tag is a small print, so the readout leads with the footprint and the batch count.
+    const tag = scene.tag;
+    const inches = (cm) => round2(cm / 2.54);
+    const shapeName = { tag: "classic", rounded: "rounded corner", scallop: "scalloped", square: "square" }[scene.shape] || "classic";
+    const extras = [];
+    if (scene.text) extras.push("the message");
+    if (scene.to || scene.from) extras.push("the To and From lines");
+    // The extras are mid-sentence fragments, so the sentence is assembled here and keeps its
+    // capital letter and its verb agreement no matter which lines the tag actually carries.
+    const extrasLine = extras.length
+      ? " " + extras.join(" and ").replace(/^./, (ch) => ch.toUpperCase()) + (extras.length > 1 ? " print" : " prints") + " on the card."
+      : "";
+    sizeLabel.textContent = tag.short;
+    if (scene.sheet) {
+      const grid = scene.grid;
+      dimensions.textContent = tag.short + " " + shapeName + " gift tags tiled " + grid.cols + " across and "
+        + grid.rows + " down on " + (scene.sheet.short === "A4" ? "an " : "a ") + scene.sheet.short + " sheet at "
+        + PRINT_DPI + " DPI (" + physicalPixels(scene.sheet.widthCm, PRINT_DPI) + " x "
+        + physicalPixels(scene.sheet.heightCm, PRINT_DPI) + " px) - " + grid.perSheet
+        + " tags a sheet, each with a punch guide where the eyelet goes and light cut lines to trim along."
+        + (scene.image ? " Your photo is cover-fitted into every tag." : " Upload a photo to fill the tags, or print blank cards to write on.")
+        + extrasLine
+        + " No watermark, and your photo never leaves your device.";
+      return;
+    }
+    dimensions.textContent = tag.short + " " + shapeName + " gift tag at " + PRINT_DPI + " DPI ("
+      + physicalPixels(tag.widthCm, PRINT_DPI) + " x " + physicalPixels(tag.heightCm, PRINT_DPI)
+      + " px, " + inches(tag.widthCm) + " x " + inches(tag.heightCm)
+      + " in) - a print-ready PNG with the punch guide and the cut line on it."
+      + (scene.image ? " Your photo is cover-fitted into the tag." : " Upload a photo to fill the tag, or print the blank card to write on.")
+      + extrasLine
       + " No watermark, and your photo never leaves your device.";
     return;
   }
@@ -2140,6 +2245,225 @@ function cupcakeShapePath(c, shape, x, y, w, h) {
   c.closePath();
 }
 
+/**
+ * A printed gift tag. The tag is cut from card stock, so the silhouette decides the shape, the
+ * card colour shows around the photo, and a punched eyelet at the top carries the string. A
+ * single tag and a whole tiled sheet share the same painter, so the preview and the download can
+ * never disagree about where the cut line or the punch falls.
+ */
+function drawGiftTag(c, s, guides) {
+  const r = s.rect;
+  if (s.sheet) {
+    // A print sheet of tags: the paper is blank stock and the tags are seated in a grid with a
+    // small gutter, so a trimmer pass down each gutter separates the whole run.
+    const grid = s.grid;
+    const pxPerCm = r.w / grid.sheet.widthCm;
+    const tagW = grid.tag.widthCm * pxPerCm;
+    const tagH = grid.tag.heightCm * pxPerCm;
+    const gutter = grid.gutterCm * pxPerCm;
+    const blockW = grid.cols * tagW + (grid.cols - 1) * gutter;
+    const blockH = grid.rows * tagH + (grid.rows - 1) * gutter;
+    const originX = r.x + (r.w - blockW) / 2;
+    const originY = r.y + (r.h - blockH) / 2;
+    c.save();
+    if (guides) {
+      c.shadowColor = "rgba(29,36,32,.22)";
+      c.shadowBlur = 28;
+      c.shadowOffsetY = 12;
+    }
+    c.fillStyle = "#ffffff";
+    c.fillRect(r.x, r.y, r.w, r.h);
+    c.restore();
+    c.save();
+    c.strokeStyle = "rgba(29,36,32,.18)";
+    c.lineWidth = Math.max(1, r.w * 0.0016);
+    c.setLineDash([Math.max(2, gutter * 0.34), Math.max(2, gutter * 0.3)]);
+    for (let col = 1; col < grid.cols; col += 1) {
+      const x = originX + col * tagW + (col - 0.5) * gutter;
+      c.beginPath();
+      c.moveTo(x, originY - gutter * 0.5);
+      c.lineTo(x, originY + blockH + gutter * 0.5);
+      c.stroke();
+    }
+    for (let row = 1; row < grid.rows; row += 1) {
+      const y = originY + row * tagH + (row - 0.5) * gutter;
+      c.beginPath();
+      c.moveTo(originX - gutter * 0.5, y);
+      c.lineTo(originX + blockW + gutter * 0.5, y);
+      c.stroke();
+    }
+    c.restore();
+    for (let row = 0; row < grid.rows; row += 1) {
+      for (let col = 0; col < grid.cols; col += 1) {
+        // A sheet of tags is punched and threaded after it is cut, so the string is only drawn
+        // on the single-tag preview where it explains what the hole is for.
+        drawGiftTagOne(c, originX + col * (tagW + gutter), originY + row * (tagH + gutter), tagW, tagH, s, guides, false);
+      }
+    }
+    return;
+  }
+  drawGiftTagOne(c, r.x, r.y, r.w, r.h, s, guides, guides);
+}
+
+/** One tag: the card silhouette, the photo, the message and To / From lines, the eyelet and the cut line. */
+function drawGiftTagOne(c, x, y, w, h, s, guides, withString) {
+  const ink = readableInk(s.paper);
+  const family = s.font || DEFAULT_GIFT_TAG_FONT;
+  const message = (s.text || "").trim();
+  const fields = [];
+  if (s.to) fields.push("To: " + s.to);
+  if (s.from) fields.push("From: " + s.from);
+  const hole = giftTagHole(w, h);
+  const unit = Math.min(w, h);
+  const cx = x + w / 2;
+  const hx = x + hole.cx;
+  const hy = y + hole.cy;
+  const padX = w * (s.shape === "scallop" ? 0.14 : 0.09);
+  const textW = Math.max(8, w - padX * 2);
+  const rows = [];
+  if (message) rows.push({ text: message, weight: 700, grow: 1.4 });
+  for (const line of fields) rows.push({ text: line, weight: 500, grow: 1 });
+  const totalGrow = rows.reduce((sum, row) => sum + row.grow, 0) || 1;
+  const zoneTop = y + Math.max(hole.cy + hole.r + unit * 0.05, unit * 0.3);
+  const zoneBottom = y + h - unit * 0.055;
+  const zoneH = Math.max(1, zoneBottom - zoneTop);
+
+  // Card stock: the silhouette is filled first so a blank tag still reads as a finished card.
+  c.save();
+  if (guides) {
+    c.shadowColor = "rgba(29,36,32,.26)";
+    c.shadowBlur = Math.max(6, w * 0.05);
+    c.shadowOffsetY = Math.max(2, h * 0.018);
+  }
+  giftTagShapePath(c, s.shape, x, y, w, h);
+  c.fillStyle = s.paper;
+  c.fill();
+  c.restore();
+
+  c.save();
+  giftTagShapePath(c, s.shape, x, y, w, h);
+  c.clip();
+  if (s.image) {
+    drawCover(c, s.image, x, y, w, h);
+  } else {
+    c.fillStyle = "rgba(29,36,32,.04)";
+    c.fillRect(x, y, w, h);
+  }
+  if (rows.length) {
+    // The band is the card showing through, so the words stay readable over any photo.
+    c.save();
+    c.fillStyle = s.paper;
+    c.globalAlpha = s.image ? 0.9 : 1;
+    c.fillRect(x, zoneTop - unit * 0.02, w, zoneH + unit * 0.02);
+    c.restore();
+    c.save();
+    c.fillStyle = ink;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    let cursor = zoneTop;
+    for (const row of rows) {
+      const rowH = zoneH * (row.grow / totalGrow);
+      const size = fitFont(c, row.text, textW, rowH * 0.62, family, row.weight);
+      c.font = row.weight + " " + size + "px " + family;
+      c.fillText(row.text, cx, cursor + rowH / 2, textW);
+      cursor += rowH;
+    }
+    c.restore();
+  }
+  c.restore();
+
+  // The eyelet. On screen it reads as a punched hole with depth; on the print it stays a light
+  // dashed circle so the punch guide never prints as a dark blob.
+  c.save();
+  if (guides) {
+    c.beginPath();
+    c.arc(hx, hy, hole.r, 0, Math.PI * 2);
+    c.fillStyle = "rgba(29,36,32,.7)";
+    c.fill();
+    c.beginPath();
+    c.arc(hx, hy + hole.r * 0.08, hole.r * 0.72, 0, Math.PI * 2);
+    c.fillStyle = "rgba(10,14,12,.94)";
+    c.fill();
+  } else {
+    c.beginPath();
+    c.arc(hx, hy, hole.r, 0, Math.PI * 2);
+    c.setLineDash([Math.max(1.5, hole.r * 0.55), Math.max(1.5, hole.r * 0.42)]);
+    c.strokeStyle = "rgba(29,36,32,.5)";
+    c.lineWidth = Math.max(0.8, hole.r * 0.24);
+    c.stroke();
+  }
+  c.restore();
+
+  if (withString) {
+    // A short cord loop above the eyelet, drawn only in the preview so nobody prints a cord.
+    c.save();
+    c.strokeStyle = "#b7895a";
+    c.lineWidth = Math.max(1.2, hole.r * 0.3);
+    c.lineCap = "round";
+    c.beginPath();
+    c.ellipse(hx, hy - hole.r * 1.05, hole.r * 0.98, hole.r * 1.3, 0, 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+  }
+
+  // A hairline keeps the silhouette reading as card stock; the dashed line is the cut line.
+  c.save();
+  c.strokeStyle = "rgba(29,36,32,.16)";
+  c.lineWidth = Math.max(0.8, unit * 0.004);
+  giftTagShapePath(c, s.shape, x, y, w, h);
+  c.stroke();
+  c.setLineDash([Math.max(2, unit * 0.05), Math.max(2, unit * 0.035)]);
+  c.strokeStyle = "rgba(29,36,32,.32)";
+  c.lineWidth = Math.max(0.9, unit * 0.005);
+  giftTagShapePath(c, s.shape, x, y, w, h);
+  c.stroke();
+  c.restore();
+}
+
+/** Builds one of the four tag silhouettes inside the given box. */
+function giftTagShapePath(c, shape, x, y, w, h) {
+  const unit = Math.min(w, h);
+  if (shape === "square") {
+    c.beginPath();
+    c.rect(x, y, w, h);
+    return;
+  }
+  if (shape === "rounded") {
+    roundRect(c, x, y, w, h, unit * 0.12);
+    return;
+  }
+  if (shape === "scallop") {
+    // Shallow lobes sampled around an ellipse, so the edge reads as scalloped without changing
+    // the size the tag is cut to.
+    c.beginPath();
+    const lobes = 20;
+    const steps = lobes * 10;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    for (let i = 0; i <= steps; i += 1) {
+      const t = (i / steps) * Math.PI * 2 - Math.PI / 2;
+      const bump = 1 + 0.035 * Math.cos(lobes * t);
+      const px = cx + Math.cos(t) * (w / 2) * 0.965 * bump;
+      const py = cy + Math.sin(t) * (h / 2) * 0.965 * bump;
+      if (i) c.lineTo(px, py);
+      else c.moveTo(px, py);
+    }
+    c.closePath();
+    return;
+  }
+  // The classic gift tag: chamfered shoulders under a narrow top edge, then straight sides down
+  // to a flat foot, which is the shape a shop-bought paper tag is die-cut to.
+  const topEdge = w * 0.42;
+  const shoulder = y + Math.min(w * 0.55, h * 0.2);
+  c.beginPath();
+  c.moveTo(x + (w - topEdge) / 2, y);
+  c.lineTo(x + (w + topEdge) / 2, y);
+  c.lineTo(x + w, shoulder);
+  c.lineTo(x + w, y + h);
+  c.lineTo(x, y + h);
+  c.lineTo(x, shoulder);
+  c.closePath();
+}
 /**
  * A printed photo booth strip. The paper, the frame gutters and the caption band all move with
  * the product size, so the same painter draws a single 2 x 6 in strip and the 4 x 6 in sheet
@@ -3123,7 +3447,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -3178,6 +3502,7 @@ function renderScene(scale) {
   else if (scene.kind === "place-card") drawPlaceCardSheet(c, scene, false);
   else if (scene.kind === "polaroid") drawPolaroid(c, scene, false);
   else if (scene.kind === "cupcake") drawCupcake(c, scene, false);
+  else if (scene.kind === "gift-tag") drawGiftTag(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -3203,7 +3528,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -3229,6 +3554,8 @@ function exportScale() {
 function exportName(extension) {
   const stem = scene.kind === "coloring" && scene.page
     ? "coloring-page-" + scene.page.id + "-" + scene.page.orientation
+    : scene.kind === "gift-tag" && scene.tag
+    ? "gift-tag-" + scene.tag.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
     : scene.kind === "cupcake" && scene.topper
     ? "cupcake-topper-" + scene.topper.id + (scene.sheet ? "-" + scene.sheet.id + "-sheet" : "")
     : scene.kind === "polaroid" && scene.frame
@@ -3649,7 +3976,7 @@ function exportTopperSvg() {
 // ------------------------------------------------------------------ sample artwork
 
 function sampleArtwork() {
-  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw" || profile.id === "polaroid" || profile.id === "cupcake" || profile.id === "coloring") return photoSampleArtwork();
+  if (profile.id === "photo-keychain" || profile.id === "block" || profile.id === "luggage-tag" || profile.id === "pet-tag" || profile.id === "bookmark" || profile.id === "coaster" || profile.id === "jigsaw" || profile.id === "polaroid" || profile.id === "cupcake" || profile.id === "gift-tag" || profile.id === "coloring") return photoSampleArtwork();
   if (profile.id === "table-number") return photoSampleArtwork();
   if (profile.id === "sticker-outline") return stickerOutlineSampleArtwork();
   if (profile.id === "ornament") return ornamentSampleArtwork();
@@ -3875,6 +4202,19 @@ async function loadSample() {
     placeCardPage = 0;
     adoptSource("sample");
     render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "gift-tag") {
+    // A finished tag is the best demo, so the sample fills the card and leaves a message and a
+    // To / From pair the way a real visitor would fill them.
+    note("Loading a sample photo so you can try the tool...");
+    if (giftTagText && !giftTagText.value.trim()) giftTagText.value = "Merry Christmas";
+    if (giftTagTo && !giftTagTo.value.trim()) giftTagTo.value = "Sophie";
+    if (giftTagFrom && !giftTagFrom.value.trim()) giftTagFrom.value = "The Harpers";
+    const ok = await adoptImage(sampleArtwork().toDataURL("image/png"));
+    if (!ok) return note("The sample could not load. Please upload a photo instead.");
+    adoptSource("sample");
     track("sample_loaded", { product: profile.id });
     return;
   }

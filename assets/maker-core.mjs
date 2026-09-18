@@ -247,6 +247,39 @@ export const CUPCAKE_PAPERS = Object.freeze([
 export const CUPCAKE_MARGIN_CM = 0.8;
 export const CUPCAKE_GUTTER_CM = 0.25;
 
+/**
+ * Printed gift tags. These are the three footprints craft shops sell and people search for,
+ * held in centimetres next to the inch name so the printer maths and the dropdown agree.
+ */
+export const GIFT_TAG_SIZES = Object.freeze([
+  { id: "2x3", short: "2 x 3 in", label: "2 x 3 in tag (5.1 x 7.6 cm)", widthCm: 5.08, heightCm: 7.62 },
+  { id: "2-5x3-5", short: "2.5 x 3.5 in", label: "2.5 x 3.5 in tag (6.4 x 8.9 cm)", widthCm: 6.35, heightCm: 8.89 },
+  { id: "3x4", short: "3 x 4 in", label: "3 x 4 in tag (7.6 x 10.2 cm)", widthCm: 7.62, heightCm: 10.16 },
+]);
+
+/** Every silhouette the gift tag tool can cut, in the order the UI offers them. */
+export const GIFT_TAG_SHAPES = Object.freeze(["tag", "rounded", "scallop", "square"]);
+
+/** The paper a whole run of gift tags is tiled onto for printing. */
+export const GIFT_TAG_SHEETS = Object.freeze([
+  { id: "letter", widthCm: 21.59, heightCm: 27.94, short: "US Letter", label: "US Letter sheet" },
+  { id: "a4", widthCm: 21, heightCm: 29.7, short: "A4", label: "A4 sheet" },
+]);
+
+/** Card colours sold for gift tags, in the order the tool lists them. */
+export const GIFT_TAG_PAPERS = Object.freeze([
+  { id: "white", label: "white", hex: "#ffffff" },
+  { id: "ivory", label: "ivory", hex: "#f7f1e4" },
+  { id: "blush", label: "blush", hex: "#f3dede" },
+  { id: "sage", label: "sage", hex: "#dce5d8" },
+  { id: "kraft", label: "kraft", hex: "#c9a978" },
+  { id: "black", label: "black", hex: "#14181a" },
+]);
+
+/** The safe printer border and the gap between tags on a printable sheet. */
+export const GIFT_TAG_MARGIN_CM = 0.8;
+export const GIFT_TAG_GUTTER_CM = 0.25;
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -270,6 +303,7 @@ const PROFILES = Object.freeze([
   { id: "polaroid", name: "Polaroid Frame Maker", product: "Polaroid photo frame", hasHardware: false, hasBase: false, exportSvg: false, sizes: POLAROID_FRAMES.map((frame) => frame.widthCm), sizeLabels: POLAROID_FRAMES.map((frame) => frame.label) },
   { id: "place-card", name: "Place Card Maker", product: "Printable place card", hasHardware: false, hasBase: false, exportSvg: false, sizes: PLACE_CARD_SHEETS.map((sheet) => sheet.widthCm), sizeLabels: PLACE_CARD_SHEETS.map((sheet) => sheet.label) },
   { id: "coloring", name: "Photo to Coloring Page Maker", product: "Coloring page", hasHardware: false, hasBase: false, exportSvg: false, sizes: ["letter", "a4"], sizeLabels: ["US Letter (8.5 x 11 in)", "A4 (21 x 29.7 cm)"] },
+  { id: "gift-tag", name: "Gift Tag Maker", product: "Printable gift tag", hasHardware: false, hasBase: false, exportSvg: false, sizes: GIFT_TAG_SIZES.map((size) => size.widthCm), sizeLabels: GIFT_TAG_SIZES.map((size) => size.label) },
 ]);
 
 export const PRINT_DPI = 300;
@@ -454,6 +488,57 @@ export function cupcakeGrid(sheetValue, topperValue) {
   const cols = Math.max(1, Math.floor((usableW + CUPCAKE_GUTTER_CM) / (topper.widthCm + CUPCAKE_GUTTER_CM)));
   const rows = Math.max(1, Math.floor((usableH + CUPCAKE_GUTTER_CM) / (topper.heightCm + CUPCAKE_GUTTER_CM)));
   return Object.freeze({ sheet, topper, cols, rows, perSheet: cols * rows, marginCm: CUPCAKE_MARGIN_CM, gutterCm: CUPCAKE_GUTTER_CM });
+}
+
+/** The tag footprint, looked up by the centimetre value the size picker stores. */
+export function giftTagSize(value) {
+  const cm = Number(value);
+  return GIFT_TAG_SIZES.find((size) => Math.abs(size.widthCm - cm) < 0.02) || GIFT_TAG_SIZES[0];
+}
+
+/** The craft-knife silhouette, falling back to the classic tag profile. */
+export function giftTagShape(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return GIFT_TAG_SHAPES.includes(raw) ? raw : GIFT_TAG_SHAPES[0];
+}
+
+/** The printable sheet a run of tags is tiled onto, or null for one standalone tag. */
+export function giftTagSheet(value) {
+  const raw = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+  return GIFT_TAG_SHEETS.find((sheet) => sheet.id === raw) || null;
+}
+
+/** A usable card colour for the tag itself, falling back to clean white. */
+export function giftTagPaperHex(value) {
+  return readHexColour(value, GIFT_TAG_PAPERS, "#ffffff");
+}
+
+/**
+ * How many tags fit on one sheet. The same function drives the on-screen sheet and the
+ * download, so the guide lines and the printer output cannot drift apart.
+ */
+export function giftTagGrid(sheetValue, tagValue) {
+  const sheet = giftTagSheet(sheetValue) || GIFT_TAG_SHEETS[0];
+  const tag = giftTagSize(tagValue);
+  const usableW = Math.max(tag.widthCm, sheet.widthCm - GIFT_TAG_MARGIN_CM * 2);
+  const usableH = Math.max(tag.heightCm, sheet.heightCm - GIFT_TAG_MARGIN_CM * 2);
+  const cols = Math.max(1, Math.floor((usableW + GIFT_TAG_GUTTER_CM) / (tag.widthCm + GIFT_TAG_GUTTER_CM)));
+  const rows = Math.max(1, Math.floor((usableH + GIFT_TAG_GUTTER_CM) / (tag.heightCm + GIFT_TAG_GUTTER_CM)));
+  return Object.freeze({ sheet, tag, cols, rows, perSheet: cols * rows, marginCm: GIFT_TAG_MARGIN_CM, gutterCm: GIFT_TAG_GUTTER_CM });
+}
+
+/**
+ * The eyelet every gift tag hangs from: the centre it is punched at and its radius, measured in
+ * a local box that starts at the tag's top-left corner. A tag is taller than it is wide, so the
+ * hole is seated near the top edge and never drifts into the message once the size changes.
+ */
+export function giftTagHole(width, height) {
+  const w = Number(width), h = Number(height);
+  if (!(w > 0 && h > 0)) throw new Error("Gift tag width and height must be positive.");
+  const unit = Math.min(w, h);
+  const r = Math.max(3, unit * 0.065);
+  const cy = Math.max(r + unit * 0.045, unit * 0.135);
+  return Object.freeze({ cx: w / 2, cy, r: Math.round(r * 100) / 100 });
 }
 
 /** The desk name plate sizes, looked up by the long side the size picker stores. */

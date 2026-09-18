@@ -105,6 +105,16 @@ import {
   cupcakeSheet,
   cupcakePaperHex,
   cupcakeGrid,
+  GIFT_TAG_SIZES,
+  GIFT_TAG_SHAPES,
+  GIFT_TAG_SHEETS,
+  GIFT_TAG_PAPERS,
+  giftTagSize,
+  giftTagShape,
+  giftTagSheet,
+  giftTagPaperHex,
+  giftTagGrid,
+  giftTagHole,
   COLORING_PAPERS,
   COLORING_MARGIN_CM,
   COLORING_STYLES,
@@ -133,8 +143,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-two distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring"]);
+test("the shared engine exposes the twenty-three distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -1106,4 +1116,72 @@ test("invertMask, maskInkRatio and line weight describe the printed line", () =>
   assert.equal(lineRadiusPx(1.4), 8);
   assert.equal(lineRadiusPx(0), 0);
   assert.equal(lineWeightPx(25.4, 150), 150, "the export DPI scales the printed line");
+});
+
+test("the gift tag profile carries the three printed sizes with matching labels", () => {
+  const profile = getProductProfile("gift-tag");
+  assert.equal(profile.name, "Gift Tag Maker");
+  assert.equal(profile.product, "Printable gift tag");
+  assert.equal(profile.exportSvg, false);
+  assert.equal(profile.hasHardware, false);
+  assert.equal(profile.hasBase, false);
+  assert.equal(profile.sizes.length, 3);
+  assert.deepEqual(profile.sizeLabels, [
+    "2 x 3 in tag (5.1 x 7.6 cm)",
+    "2.5 x 3.5 in tag (6.4 x 8.9 cm)",
+    "3 x 4 in tag (7.6 x 10.2 cm)",
+  ]);
+});
+
+test("gift tag sizes, shapes and card colours resolve with safe fallbacks", () => {
+  assert.equal(GIFT_TAG_SIZES.length, 3);
+  assert.equal(giftTagSize(5.08).id, "2x3");
+  assert.equal(giftTagSize("6.35").id, "2-5x3-5");
+  assert.equal(giftTagSize(7.62).id, "3x4");
+  assert.equal(giftTagSize("999").id, "2x3", "an unknown size should fall back to the smallest tag");
+  assert.equal(giftTagSize(undefined).id, "2x3");
+  assert.deepEqual([...GIFT_TAG_SHAPES], ["tag", "rounded", "scallop", "square"]);
+  assert.equal(giftTagShape("SCALLOP"), "scallop");
+  assert.equal(giftTagShape("square"), "square");
+  assert.equal(giftTagShape("zzz"), "tag", "an unknown silhouette falls back to the classic tag");
+  assert.equal(giftTagShape(undefined), "tag");
+  assert.equal(GIFT_TAG_PAPERS.length, 6);
+  assert.equal(giftTagPaperHex("#ABC"), "#aabbcc");
+  assert.equal(giftTagPaperHex("kraft"), "#c9a978");
+  assert.equal(giftTagPaperHex("no-such-paper"), "#ffffff");
+  assert.equal(giftTagPaperHex(undefined), "#ffffff");
+});
+
+test("gift tag sheet grids tile a batch of tags with a printable margin", () => {
+  assert.equal(GIFT_TAG_SHEETS.length, 2);
+  assert.equal(giftTagSheet("letter").widthCm, 21.59);
+  assert.equal(giftTagSheet("A4").id, "a4");
+  assert.equal(giftTagSheet("single"), null, "a single tag is not a sheet");
+  assert.equal(giftTagSheet(undefined), null);
+  assert.equal(giftTagSheet("nonsense"), null);
+  const small = giftTagGrid("letter", 5.08);
+  assert.equal(small.cols, 3);
+  assert.equal(small.rows, 3);
+  assert.equal(small.perSheet, 9);
+  assert.equal(giftTagGrid("a4", 5.08).perSheet, 9, "both papers take the same small tags");
+  assert.equal(giftTagGrid("letter", 6.35).perSheet, 6);
+  assert.equal(giftTagGrid("a4", 6.35).perSheet, 6);
+  assert.equal(giftTagGrid("letter", 7.62).perSheet, 4);
+  assert.equal(giftTagGrid("a4", 7.62).perSheet, 4);
+  assert.equal(giftTagGrid("letter", 5.08).gutterCm, 0.25, "tags leave a gutter so a trimmer can pass between them");
+  assert.equal(giftTagGrid("letter", 5.08).marginCm, 0.8, "the grid stays clear of the unprintable border");
+});
+
+test("gift tag punch holes stay on the card and clear of the message", () => {
+  const small = giftTagHole(5.08, 7.62);
+  assert.equal(small.cx, 2.54, "the hole is centred across the tag");
+  assert.equal(small.r, 3, "the punch never shrinks below a real hole punch");
+  assert.ok(small.cy > small.r, "the hole never breaks the top edge");
+  assert.ok(small.cy + small.r < 7.62, "the hole never falls off the bottom of the tag");
+  const big = giftTagHole(7.62, 10.16);
+  assert.equal(big.cx, 3.81);
+  assert.ok(big.cy > small.cy, "a wider tag seats the hole a little lower");
+  assert.ok(big.cy + big.r < 10.16);
+  assert.throws(() => giftTagHole(0, 7.62), /positive/);
+  assert.throws(() => giftTagHole(5.08, -1), /positive/);
 });
