@@ -30,12 +30,13 @@ const TOOL_PAGES = [
   { file: "coloring-page-maker.html", maker: "coloring", title: "Photo to Coloring Page Maker" },
   { file: "gift-tag-maker.html", maker: "gift-tag", title: "Gift Tag Maker" },
   { file: "name-tracing-worksheet-maker.html", maker: "name-tracing", title: "Name Tracing Worksheet Maker" },
+  { file: "bingo-card-maker.html", maker: "bingo", title: "Bingo Card Maker" },
   { file: "word-search-maker.html", maker: "word-search", title: "Word Search Maker" },
 ];
 
 const SHARED_IDS = ["photo", "size", "sizeLabel", "pngDownload", "preview", "dimensions", "productName"];
 // The place card tool is typed from a guest list, so it ships no upload control of its own.
-const NO_UPLOAD_MAKERS = new Set(["place-card", "name-tracing", "word-search"]);
+const NO_UPLOAD_MAKERS = new Set(["place-card", "name-tracing", "bingo", "word-search"]);
 
 // The name tool types instead of uploading, so it must keep carrying both text controls.
 test("the name keychain control contract stays wired up", () => {
@@ -187,6 +188,7 @@ test("the sitemap lists every published page with the current lastmod", () => {
     "coloring-page-maker.html",
     "gift-tag-maker.html",
     "name-tracing-worksheet-maker.html",
+    "bingo-card-maker.html",
     "word-search-maker.html",
   ];
   for (const entry of paths) {
@@ -241,7 +243,7 @@ test("the keychain FAQ and how-to markup match what visitors can read", () => {
 
 test("the homepage advertises the other free tools with real descriptions", () => {
   const html = read("index.html");
-  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "bookmark-maker.html", "acrylic-coaster-maker.html", "desk-name-plate-maker.html", "photo-jigsaw-puzzle-maker.html", "sticker-outline-maker.html", "photo-strip-maker.html", "table-number-maker.html", "polaroid-frame-maker.html", "place-card-maker.html", "cupcake-topper-maker.html", "coloring-page-maker.html", "gift-tag-maker.html", "name-tracing-worksheet-maker.html", "word-search-maker.html"]) {
+  for (const tool of ["pet-keychain-maker.html", "photo-keychain-maker.html", "name-keychain-maker.html", "ornament-maker.html", "acrylic-standee-maker.html", "sticker-cutline-generator.html", "fridge-magnet-maker.html", "acrylic-photo-block-maker.html", "luggage-tag-maker.html", "pet-tag-maker.html", "cake-topper-maker.html", "bookmark-maker.html", "acrylic-coaster-maker.html", "desk-name-plate-maker.html", "photo-jigsaw-puzzle-maker.html", "sticker-outline-maker.html", "photo-strip-maker.html", "table-number-maker.html", "polaroid-frame-maker.html", "place-card-maker.html", "cupcake-topper-maker.html", "coloring-page-maker.html", "gift-tag-maker.html", "name-tracing-worksheet-maker.html", "bingo-card-maker.html", "word-search-maker.html"]) {
     assert.ok(html.includes(`href="./${tool}"`), `index.html does not link ${tool}`);
   }
   assert.match(html, /<section class="tools-band" id="more-tools">/, "the related-tools band disappeared");

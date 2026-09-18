@@ -79,6 +79,26 @@ import {
   wordSearchSheet,
   wordSearchListColumns,
   WORD_SEARCH_THEMES,
+  bingoPaper,
+  bingoGrid,
+  bingoLayout,
+  bingoMode,
+  bingoTheme,
+  bingoCase,
+  bingoEntry,
+  bingoCardCount,
+  bingoWords,
+  bingoNeeded,
+  bingoFreeCell,
+  bingoNumberGrid,
+  bingoWordGrid,
+  bingoCardSet,
+  bingoSheet,
+  bingoPageCount,
+  bingoCallList,
+  bingoCallColumns,
+  BINGO_COLUMNS,
+  BINGO_THEMES,
   readableInk,
   jigsawGrid,
   polylineToPathD,
@@ -216,6 +236,22 @@ const wsLevel = document.querySelector("#wsLevel");
 const wsCase = document.querySelector("#wsCase");
 const wsAnswers = document.querySelector("#wsAnswers");
 const wsShuffle = document.querySelector("#wsShuffle");
+const bcTitle = document.querySelector("#bingoTitle");
+const bcMode = document.querySelector("#bingoMode");
+const bcWords = document.querySelector("#bingoWords");
+const bcTheme = document.querySelector("#bingoTheme");
+const bcGrid = document.querySelector("#bingoGrid");
+const bcLayout = document.querySelector("#bingoLayout");
+const bcCount = document.querySelector("#bingoCount");
+const bcFree = document.querySelector("#bingoFree");
+const bcCase = document.querySelector("#bingoCase");
+const bcCallList = document.querySelector("#bingoCallList");
+const bcShuffle = document.querySelector("#bingoShuffle");
+const bcSizeLabel = document.querySelector("#bingoSizeLabel");
+const bcPager = document.querySelector("#bingoPager");
+const bcPagePrev = document.querySelector("#bingoPagePrev");
+const bcPageNext = document.querySelector("#bingoPageNext");
+const bcPageLabel = document.querySelector("#bingoPageLabel");
 const coloringStyleSelect = document.querySelector("#coloringStyle");
 const coloringDetailSelect = document.querySelector("#coloringDetail");
 const coloringWeightSelect = document.querySelector("#coloringWeight");
@@ -251,6 +287,10 @@ let raf = 0;
 // A word search is rebuilt from the same seed until the visitor shuffles it, so the grid only
 // changes when they ask it to.
 let wsSeed = 1;
+// A bingo set is rebuilt from the same seed until the visitor shuffles it, and a long run pages
+// across several sheets, so the seed and the sheet in view are kept together.
+let bingoSeed = 1;
+let bingoPage = 0;
 
 /** The font every worksheet row is set in. Trebuchet is the clearest of the five loaded faces for a child to trace. */
 const NAME_TRACING_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
@@ -260,6 +300,13 @@ const WORD_SEARCH_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
 const WORD_SEARCH_INK = "#1f2429";
 const WORD_SEARCH_RULE = "#d3d8dd";
 const WORD_SEARCH_ANSWER = "rgba(244, 197, 79, 0.55)";
+
+/** A bingo card is high-contrast print, so the head band is solid ink and the free square a soft gold. */
+const BINGO_FONT = "'Trebuchet MS', 'Segoe UI', sans-serif";
+const BINGO_INK = "#1f2429";
+const BINGO_RULE = "#c9cfd6";
+const BINGO_HEAD_FILL = "#1f2429";
+const BINGO_FREE_FILL = "#f4c54f";
 
 boot();
 
@@ -399,6 +446,33 @@ function boot() {
     tracePageNext?.addEventListener("click", () => { tracePage += 1; render(); });
     // A worksheet is typed rather than uploaded, so a blank page stands in for the artwork and
     // the shared preview and download plumbing works before a single name is entered.
+    image = document.createElement("canvas");
+    image.width = WORK_LONG_SIDE;
+    image.height = WORK_LONG_SIDE;
+    setDownloadsEnabled(true);
+    render();
+    document.fonts?.ready?.then?.(() => schedule());
+  }
+  if (profile.id === "bingo") {
+    // The theme list is a shared recipe rather than a hand-written set of options, so the two stay
+    // in step. A card is drawn from numbers or typed words, so a blank canvas stands in.
+    if (bcTheme) {
+      bcTheme.innerHTML = '<option value="">Choose a theme...</option>'
+        + BINGO_THEMES.map((theme) => '<option value="' + theme.id + '">' + theme.label + "</option>").join("");
+    }
+    bcTitle?.addEventListener("input", schedule);
+    bcMode?.addEventListener("change", schedule);
+    bcWords?.addEventListener("input", () => { bingoSeed = 1; bingoPage = 0; schedule(); });
+    bcTheme?.addEventListener("change", applyBingoTheme);
+    bcGrid?.addEventListener("change", () => { bingoPage = 0; schedule(); });
+    bcLayout?.addEventListener("change", () => { bingoPage = 0; schedule(); });
+    bcCount?.addEventListener("input", () => { bingoPage = 0; schedule(); });
+    bcFree?.addEventListener("change", schedule);
+    bcCase?.addEventListener("change", schedule);
+    bcCallList?.addEventListener("change", () => { bingoPage = 0; schedule(); });
+    bcShuffle?.addEventListener("click", () => { bingoSeed = (bingoSeed % 4294967295) + 1; bingoPage = 0; schedule(); });
+    bcPagePrev?.addEventListener("click", () => { bingoPage -= 1; render(); });
+    bcPageNext?.addEventListener("click", () => { bingoPage += 1; render(); });
     image = document.createElement("canvas");
     image.width = WORK_LONG_SIDE;
     image.height = WORK_LONG_SIDE;
@@ -862,6 +936,17 @@ function applyWordSearchTheme() {
   schedule();
 }
 
+/** A ready-made theme fills the word box and switches the card to word mode, ready to print. */
+function applyBingoTheme() {
+  const theme = bingoTheme(bcTheme?.value);
+  if (!theme) return;
+  if (bcWords) bcWords.value = theme.words.join("\n");
+  if (bcMode) bcMode.value = "words";
+  bingoSeed = 1;
+  bingoPage = 0;
+  schedule();
+}
+
 // ------------------------------------------------------------------ layout + render
 
 function layout() {
@@ -917,6 +1002,18 @@ function layout() {
       blankRows: traceBlanks?.value,
       guide: traceGuide?.checked !== false,
     });
+    const scale = WORK_LONG_SIDE / paper.heightCm;
+    const w = Math.round(paper.widthCm * scale);
+    const h = Math.round(paper.heightCm * scale);
+    const x = (CANVAS - w) / 2;
+    const y = (CANVAS - h) / 2 + 26;
+    return { x, y, w, h, longSideCm: paper.heightCm, dpi: workDpi(WORK_LONG_SIDE, paper.heightCm), paper, sheet };
+  }
+  if (profile.id === "bingo") {
+    // The sheet is the product, so the paper decides the box and the card layout decides where
+    // every card falls at both preview and print resolution.
+    const paper = bingoPaper(sizeSelect.value);
+    const sheet = bingoSheet({ paper, layout: bcLayout?.value });
     const scale = WORK_LONG_SIDE / paper.heightCm;
     const w = Math.round(paper.widthCm * scale);
     const h = Math.round(paper.heightCm * scale);
@@ -1271,6 +1368,53 @@ function render() {
       longSideCm: L.longSideCm,
     };
     drawNameTracing(ctx, scene, true);
+  } else if (profile.id === "bingo") {
+    // The set is rebuilt from the same list, grid and seed the layout sized, so a shuffle only
+    // changes which entries land where and never the paper the cards print on.
+    const modeId = bingoMode(bcMode?.value).id;
+    const words = bingoWords(bcWords?.value);
+    const count = bingoCardCount(bcCount?.value);
+    const grid = bingoGrid(bcGrid?.value);
+    // A free square only fits the middle of an odd-numbered card, so the option steps aside on a
+    // grid that has no centre cell instead of sitting there doing nothing.
+    const freeAllowed = grid.cells % 2 === 1;
+    if (bcFree) {
+      bcFree.disabled = !freeAllowed;
+      const freeRow = bcFree.closest("label");
+      if (freeRow) freeRow.style.display = freeAllowed ? "" : "none";
+    }
+    const free = !!bcFree?.checked;
+    const cards = bingoCardSet({ cells: grid.id, mode: modeId, count, free, words, seed: bingoSeed });
+    const callListOn = !!bcCallList?.checked;
+    const callList = bingoCallList({ mode: modeId, words, seed: bingoSeed });
+    const perSheet = L.sheet.layout.cols * L.sheet.layout.rows;
+    const cardSheets = Math.max(1, Math.ceil(cards.length / perSheet));
+    const pages = bingoPageCount({ layout: L.sheet.layout.id, count, callList: callListOn });
+    if (bingoPage > pages - 1) bingoPage = pages - 1;
+    if (bingoPage < 0) bingoPage = 0;
+    scene = {
+      kind: "bingo",
+      paper: L.paper,
+      sheet: L.sheet,
+      cards,
+      words,
+      modeId,
+      count,
+      cells: grid.cells,
+      perSheet,
+      cardSheets,
+      callList,
+      callListOn,
+      page: bingoPage,
+      pages,
+      title: (bcTitle?.value || "").trim().replace(/\s+/g, " ").slice(0, 40),
+      caseId: bingoCase(bcCase?.value).id,
+      free,
+      rect: { x: L.x, y: L.y, w: L.w, h: L.h },
+      dpi: L.dpi,
+      longSideCm: L.longSideCm,
+    };
+    drawBingo(ctx, scene, true);
   } else if (profile.id === "word-search") {
     // The puzzle is rebuilt from the same word list, level and seed the layout sized, so a shuffle
     // only changes where the words sit and never the sheet they print on.
@@ -1583,6 +1727,37 @@ function readout(L) {
       + (scene.answers
         ? ". The answer key is highlighted under the letters."
         : ". Switch the answer key on to print the highlighted solution.")
+      + " Print at 100 percent with no page scaling. No watermark, no sign-up, and nothing you type leaves your device.";
+    return;
+  }
+
+  if (profile.id === "bingo") {
+    // The sheet is the product, so the readout leads with the paper and the run, then says how
+    // many entries each card still needs when the typed list is short.
+    const paper = scene.paper;
+    const sheet = scene.sheet;
+    const needed = bingoNeeded(scene.cells, scene.free);
+    sizeLabel.textContent = paper.short;
+    if (bcSizeLabel) bcSizeLabel.textContent = round2(sheet.cardW) + " x " + round2(sheet.cardH) + " cm cards";
+    if (bcPager) bcPager.hidden = scene.pages <= 1;
+    if (bcPageLabel) bcPageLabel.textContent = "Sheet " + (scene.page + 1) + " of " + scene.pages;
+    if (bcPagePrev) bcPagePrev.disabled = scene.page <= 0;
+    if (bcPageNext) bcPageNext.disabled = scene.page >= scene.pages - 1;
+    const listNote = scene.modeId === "words"
+      ? (scene.words.length >= needed
+        ? " Every card is filled from your " + scene.words.length + " entries."
+        : " Your " + scene.words.length + " entr" + (scene.words.length === 1 ? "y" : "ies") + " fill part of each card; add "
+          + (needed - scene.words.length) + " more to complete it.")
+      : " Each card draws its own numbers from the classic B I N G O ranges.";
+    dimensions.textContent = paper.short + " sheet at " + PRINT_DPI + " DPI ("
+      + physicalPixels(paper.widthCm, PRINT_DPI) + " x " + physicalPixels(paper.heightCm, PRINT_DPI)
+      + " px) - " + scene.perSheet + (scene.perSheet === 1 ? " card" : " cards") + " a sheet, "
+      + scene.cards.length + (scene.cards.length === 1 ? " card" : " cards") + " in the set on "
+      + scene.cardSheets + (scene.cardSheets === 1 ? " sheet" : " sheets")
+      + (scene.callListOn ? ", plus a caller's page" : "") + ". "
+      + scene.cells + " x " + scene.cells + " cards"
+      + (scene.free && scene.cells % 2 === 1 ? " with a free centre square" : "")
+      + ", set in " + (scene.caseId === "lower" ? "lowercase" : "uppercase") + "." + listNote
       + " Print at 100 percent with no page scaling. No watermark, no sign-up, and nothing you type leaves your device.";
     return;
   }
@@ -3933,6 +4108,190 @@ function drawWordSearch(c, s, guides) {
   c.restore();
 }
 
+/** The bingo sheet: one to four cards on a page, plus the caller's list when it is switched on. */
+function drawBingo(c, s, guides) {
+  const r = s.rect;
+  const sheet = s.sheet;
+  const paper = s.paper || sheet.paper;
+  const pxPerCm = r.w / paper.widthCm;
+  const perSheet = Math.max(1, sheet.layout.cols * sheet.layout.rows);
+
+  c.save();
+  // The sheet itself, with a hairline edge so the paper reads against the page behind it.
+  c.fillStyle = "#ffffff";
+  c.fillRect(r.x, r.y, r.w, r.h);
+  c.strokeStyle = "#dcd7cc";
+  c.lineWidth = Math.max(1, pxPerCm * 0.02);
+  c.strokeRect(r.x + c.lineWidth / 2, r.y + c.lineWidth / 2, r.w - c.lineWidth, r.h - c.lineWidth);
+
+  const cards = Array.isArray(s.cards) ? s.cards : [];
+  if (s.page < s.cardSheets) {
+    for (let slot = 0; slot < perSheet; slot += 1) {
+      const number = s.page * perSheet + slot;
+      const card = cards[number];
+      const box = sheet.cards[slot];
+      if (!card || !box) continue;
+      drawBingoCard(c, s, card, {
+        x: r.x + box.x * pxPerCm,
+        y: r.y + box.y * pxPerCm,
+        w: box.w * pxPerCm,
+        h: box.h * pxPerCm,
+      }, pxPerCm, number + 1, guides, cards.length);
+    }
+  } else if (s.callListOn) {
+    drawBingoCallList(c, s, r, pxPerCm);
+  }
+
+  // The same small footer line on screen and in the print, so the free sheet always credits back.
+  c.fillStyle = "#8a9098";
+  c.font = "500 " + Math.max(4, pxPerCm * 0.26) + "px " + BINGO_FONT;
+  c.textAlign = "center";
+  c.textBaseline = "alphabetic";
+  c.fillText("Bingo cards - free at Tiny County Makers", r.x + r.w / 2, r.y + r.h - sheet.marginCm * pxPerCm * 0.4);
+  c.restore();
+}
+
+/** One card inside its slot: a title band, the square grid and a small card number. */
+function drawBingoCard(c, s, grid, box, pxPerCm, number, guides, total) {
+  const cells = Math.max(1, grid.length);
+  const headerPx = s.sheet.headerCm * pxPerCm;
+  const footerPx = s.sheet.footerCm * pxPerCm;
+  const gridPx = s.sheet.gridCm * pxPerCm;
+  const cellPx = gridPx / cells;
+  const gridX = box.x + (box.w - gridPx) / 2;
+  const gridY = box.y + headerPx + Math.max(0, (box.h - headerPx - footerPx - gridPx) * 0.5);
+  const free = bingoFreeCell(cells, s.free);
+
+  c.save();
+  // The card stock, so each card reads as a separate thing once the sheet is cut up.
+  c.fillStyle = "#ffffff";
+  c.fillRect(box.x, box.y, box.w, box.h);
+  c.strokeStyle = BINGO_RULE;
+  c.lineWidth = Math.max(1, pxPerCm * 0.035);
+  c.strokeRect(box.x + c.lineWidth / 2, box.y + c.lineWidth / 2, box.w - c.lineWidth, box.h - c.lineWidth);
+  if (guides) {
+    // A dashed cut line on screen only, so the visitor can see where the scissors go.
+    c.save();
+    c.setLineDash([Math.max(3, pxPerCm * 0.12), Math.max(2, pxPerCm * 0.09)]);
+    c.strokeStyle = "#c9cfd6";
+    c.lineWidth = Math.max(0.8, pxPerCm * 0.02);
+    c.strokeRect(box.x - pxPerCm * 0.08, box.y - pxPerCm * 0.08, box.w + pxPerCm * 0.16, box.h + pxPerCm * 0.16);
+    c.restore();
+  }
+
+  // The title band, which carries either the visitor's title or the classic B/I/N/G/O heads.
+  c.fillStyle = BINGO_HEAD_FILL;
+  c.fillRect(box.x, box.y, box.w, headerPx);
+  c.fillStyle = "#ffffff";
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  const title = (s.title || "").trim();
+  if (title) {
+    c.font = "700 " + Math.max(6, Math.min(headerPx * 0.5, box.w * 0.1)) + "px " + BINGO_FONT;
+    c.fillText(title, box.x + box.w / 2, box.y + headerPx * 0.54, box.w * 0.92);
+  } else if (s.modeId === "numbers" && cells === 5) {
+    c.font = "800 " + Math.max(6, headerPx * 0.62) + "px " + BINGO_FONT;
+    for (let col = 0; col < cells; col += 1) {
+      c.fillText(BINGO_COLUMNS[col], gridX + col * cellPx + cellPx / 2, box.y + headerPx * 0.54);
+    }
+  } else {
+    c.font = "800 " + Math.max(6, headerPx * 0.56) + "px " + BINGO_FONT;
+    c.fillText("BINGO", box.x + box.w / 2, box.y + headerPx * 0.54, box.w * 0.9);
+  }
+
+  // The square grid the players mark off.
+  c.strokeStyle = BINGO_RULE;
+  c.lineWidth = Math.max(0.6, cellPx * 0.03);
+  c.beginPath();
+  for (let i = 0; i <= cells; i += 1) {
+    const gx = gridX + i * cellPx;
+    const gy = gridY + i * cellPx;
+    c.moveTo(gx, gridY);
+    c.lineTo(gx, gridY + gridPx);
+    c.moveTo(gridX, gy);
+    c.lineTo(gridX + gridPx, gy);
+  }
+  c.stroke();
+  c.strokeStyle = "#7b838c";
+  c.lineWidth = Math.max(0.8, cellPx * 0.045);
+  c.strokeRect(gridX, gridY, gridPx, gridPx);
+
+  // The entries, with the free square filled so it reads before a single word is marked.
+  for (let row = 0; row < cells; row += 1) {
+    for (let col = 0; col < cells; col += 1) {
+      const text = grid[row][col];
+      if (!text) continue;
+      const cx = gridX + col * cellPx + cellPx / 2;
+      const cy = gridY + row * cellPx + cellPx / 2;
+      c.fillStyle = BINGO_INK;
+      if (free && free.row === row && free.col === col) {
+        const pad = Math.max(0.6, cellPx * 0.03);
+        c.fillStyle = BINGO_FREE_FILL;
+        c.fillRect(gridX + col * cellPx + pad, gridY + row * cellPx + pad, cellPx - pad * 2, cellPx - pad * 2);
+        c.fillStyle = BINGO_INK;
+      }
+      const label = bingoEntry(text, s.caseId);
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.font = "700 " + bingoFitFont(c, label, cellPx) + "px " + BINGO_FONT;
+      c.fillText(label, cx, cy + cellPx * 0.02, cellPx * 0.92);
+    }
+  }
+
+  // The card number, which is how a caller and a player agree on which card is which.
+  c.fillStyle = "#8a9098";
+  c.font = "500 " + Math.max(4, Math.min(footerPx * 0.62, box.w * 0.055)) + "px " + BINGO_FONT;
+  c.textAlign = "center";
+  c.textBaseline = "alphabetic";
+  c.fillText("Card " + number + " of " + total, box.x + box.w / 2, box.y + box.h - footerPx * 0.28);
+  c.restore();
+}
+
+/** Shrink a long entry until it fits the square it was dealt, so a word card stays readable. */
+function bingoFitFont(c, text, cellPx) {
+  let fontPx = Math.max(4, cellPx * 0.42);
+  const max = cellPx * 0.9;
+  c.font = "700 " + fontPx + "px " + BINGO_FONT;
+  while (fontPx > 3 && c.measureText(text).width > max) {
+    fontPx -= Math.max(0.4, fontPx * 0.06);
+    c.font = "700 " + fontPx + "px " + BINGO_FONT;
+  }
+  return fontPx;
+}
+
+/** The caller's page: the shuffled 1 to 75 numbers, or the word list, in as many columns as fit. */
+function drawBingoCallList(c, s, r, pxPerCm) {
+  const list = Array.isArray(s.callList) ? s.callList : [];
+  const columns = bingoCallColumns(list.length);
+  const rows = Math.max(1, Math.ceil(list.length / columns));
+  const top = r.y + pxPerCm * 2.3;
+  const usableH = Math.max(pxPerCm, r.h - (top - r.y) - pxPerCm * 1.5);
+  const usableW = Math.max(pxPerCm, r.w - pxPerCm * 2.4);
+  const colW = usableW / columns;
+  const rowH = Math.min(usableH / rows, pxPerCm * 0.95);
+  const fontPx = Math.max(4, Math.min(rowH * 0.6, colW * 0.4));
+
+  c.save();
+  c.fillStyle = BINGO_INK;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.font = "800 " + Math.max(8, pxPerCm * 0.85) + "px " + BINGO_FONT;
+  c.fillText(s.modeId === "numbers" ? "Bingo caller list" : "Bingo word list", r.x + r.w / 2, r.y + pxPerCm * 1.25, r.w - pxPerCm * 2);
+
+  c.font = "600 " + fontPx + "px " + BINGO_FONT;
+  list.forEach((entry, index) => {
+    const column = Math.floor(index / rows);
+    const row = index % rows;
+    const x = r.x + pxPerCm * 1.2 + column * colW + colW / 2;
+    const y = top + (row + 0.5) * rowH;
+    const raw = String(entry);
+    const label = s.modeId === "numbers" && /^[0-9]+$/.test(raw)
+      ? BINGO_COLUMNS[Math.min(BINGO_COLUMNS.length - 1, Math.floor((Number(raw) - 1) / 15))] + " " + raw
+      : bingoEntry(raw, s.caseId);
+    c.fillText(label, x, y, colW * 0.92);
+  });
+  c.restore();
+}
 function sceneBox() {
   if (scene.kind === "sticker" || scene.kind === "sticker-outline") {
     const b = boundsOfContours(scene.outline) || boundsOfContours(scene.base);
@@ -3958,7 +4317,7 @@ function sceneBox() {
     const pad = 2;
     return { x: b.minX - pad, y: b.minY - pad, width: b.width + pad * 2, height: b.height + pad * 2 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo") {
     // The silhouette fills its box exactly, so the export canvas is the finished piece.
     const r = scene.rect;
     return { x: r.x, y: r.y, width: r.w, height: r.h };
@@ -4016,6 +4375,7 @@ function renderScene(scale) {
   else if (scene.kind === "gift-tag") drawGiftTag(c, scene, false);
   else if (scene.kind === "name-tracing") drawNameTracing(c, scene, false);
   else if (scene.kind === "word-search") drawWordSearch(c, scene, false);
+  else if (scene.kind === "bingo") drawBingo(c, scene, false);
   else drawStandee(c, scene);
   return { canvas: out, box };
 }
@@ -4041,7 +4401,7 @@ function pieceBox() {
     const b = boundsOfContours(scene.outline);
     return b ? { width: b.width, height: b.height, x: b.minX, y: b.minY } : { width: WORK_LONG_SIDE, height: WORK_LONG_SIDE, x: 0, y: 0 };
   }
-  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search") {
+  if (scene.kind === "coaster" || scene.kind === "name-plate" || scene.kind === "jigsaw" || scene.kind === "ornament" || scene.kind === "luggage-tag" || scene.kind === "bookmark" || scene.kind === "photo-strip" || scene.kind === "table-number" || scene.kind === "place-card" || scene.kind === "polaroid" || scene.kind === "cupcake" || scene.kind === "coloring" || scene.kind === "gift-tag" || scene.kind === "name-tracing" || scene.kind === "word-search" || scene.kind === "bingo") {
     const r = scene.rect;
     return { width: r.w, height: r.h, x: r.x, y: r.y };
   }
@@ -4069,6 +4429,8 @@ function exportName(extension) {
     ? "coloring-page-" + scene.page.id + "-" + scene.page.orientation
     : scene.kind === "name-tracing" && scene.paper
     ? "name-tracing-" + (scene.text ? scene.text.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() : "worksheet") + "-" + scene.paper.id + "-sheet-" + (scene.page + 1)
+    : scene.kind === "bingo" && scene.paper
+    ? "bingo-" + scene.paper.id + "-" + scene.cards.length + "-cards-sheet-" + (scene.page + 1)
     : scene.kind === "word-search" && scene.paper
     ? "word-search-" + (scene.title ? scene.title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 40) : "puzzle") + "-" + scene.paper.id + "-" + scene.build.cells + "x" + scene.build.cells
     : scene.kind === "gift-tag" && scene.tag
@@ -4727,6 +5089,21 @@ async function loadSample() {
     // names the way a parent or teacher would, then leaves the first sheet on screen.
     if (traceName && !traceName.value.trim()) traceName.value = "Amelia\nNoah\nSophie";
     tracePage = 0;
+    adoptSource("sample");
+    render();
+    track("sample_loaded", { product: profile.id });
+    return;
+  }
+  if (profile.id === "bingo") {
+    // A card set is drawn rather than uploaded, so the sample fills the box with a short themed
+    // list, switches to word mode and leaves a finished set of cards on screen.
+    const theme = bingoTheme("animals");
+    if (bcWords && !bcWords.value.trim() && theme) bcWords.value = theme.words.join("\n");
+    if (bcTitle && !bcTitle.value.trim()) bcTitle.value = "Animal bingo";
+    if (bcMode) bcMode.value = "words";
+    if (bcCount) bcCount.value = "4";
+    bingoSeed = 1;
+    bingoPage = 0;
     adoptSource("sample");
     render();
     track("sample_loaded", { product: profile.id });

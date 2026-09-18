@@ -148,6 +148,32 @@ import {
   wordSearchListColumns,
   WORD_SEARCH_THEMES,
   WORD_SEARCH_LIMIT,
+  seededRandom,
+  BINGO_THEMES,
+  BINGO_COLUMNS,
+  BINGO_NUMBER_CEILING,
+  BINGO_MAX_CARDS,
+  BINGO_WORD_MAX,
+  BINGO_WORD_LIMIT,
+  BINGO_CARD_ASPECT,
+  bingoPaper,
+  bingoGrid,
+  bingoLayout,
+  bingoMode,
+  bingoCase,
+  bingoTheme,
+  bingoEntry,
+  bingoCardCount,
+  bingoWords,
+  bingoNeeded,
+  bingoFreeCell,
+  bingoNumberGrid,
+  bingoWordGrid,
+  bingoCardSet,
+  bingoSheet,
+  bingoPageCount,
+  bingoCallList,
+  bingoCallColumns,
   COLORING_PAPERS,
   COLORING_MARGIN_CM,
   COLORING_STYLES,
@@ -176,8 +202,8 @@ import {
 } from "../assets/maker-core.mjs";
 import fs from "node:fs";
 
-test("the shared engine exposes the twenty-five distinct maker profiles", () => {
-  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "word-search"]);
+test("the shared engine exposes the twenty-six distinct maker profiles", () => {
+  assert.deepEqual(listProductProfiles().map((profile) => profile.id), ["keychain", "standee", "sticker", "magnet", "photo-keychain", "name-keychain", "ornament", "block", "luggage-tag", "pet-tag", "cake-topper", "cupcake", "bookmark", "coaster", "name-plate", "jigsaw", "sticker-outline", "photo-strip", "table-number", "polaroid", "place-card", "coloring", "gift-tag", "name-tracing", "bingo", "word-search"]);
   assert.equal(getProductProfile("standee").hasBase, true);
   assert.equal(getProductProfile("sticker").exportSvg, true);
   assert.equal(getProductProfile("photo-keychain").hasHardware, true);
@@ -1490,4 +1516,164 @@ test("a short word list stays in one column and a long one folds", () => {
   assert.equal(wordSearchListColumns(Array.from({ length: 24 }, (value, index) => "w" + index)), 3);
   assert.equal(wordSearchListColumns([], 4), 1, "an empty list still needs a column");
   assert.equal(wordSearchListColumns(Array.from({ length: 24 }, (value, index) => "w" + index), 1), 1, "the column ceiling is honoured");
+});
+
+
+test("the bingo maker exposes its papers, grids, layouts, modes and themes", () => {
+  assert.equal(bingoPaper("a4").id, "a4");
+  assert.equal(bingoPaper(21.59).id, "letter", "the paper is matched by its width too");
+  assert.equal(bingoPaper("nonsense").id, "letter", "an unknown paper falls back to US Letter");
+  assert.equal(bingoGrid("4").cells, 4);
+  assert.equal(bingoGrid("nonsense").cells, 5, "the classic card is the default grid");
+  assert.equal(bingoLayout("4").cols, 2);
+  assert.equal(bingoLayout("4").rows, 2);
+  assert.equal(bingoLayout("nonsense").id, "1", "one card a sheet is the safe default");
+  assert.equal(bingoMode("words").id, "words");
+  assert.equal(bingoMode("").id, "numbers");
+  assert.equal(bingoCase("lower").id, "lower");
+  assert.equal(bingoCase("").id, "upper");
+  assert.equal(bingoTheme("animals").label, "Animals");
+  assert.equal(bingoTheme("nope"), null, "an unknown theme is not a theme");
+  assert.equal(bingoEntry("cat", "lower"), "cat");
+  assert.equal(bingoEntry("cat", "upper"), "CAT");
+  assert.equal(bingoEntry("42", "lower"), "42", "a drawn number is never re-cased");
+  assert.equal(bingoEntry("FREE", "lower"), "FREE");
+
+  assert.ok(BINGO_THEMES.length >= 10, "the card maker ships a full shelf of themes");
+  for (const theme of BINGO_THEMES) {
+    assert.ok(theme.words.length >= 25, theme.id + " needs enough words to fill a 5 x 5 card");
+    assert.equal(new Set(theme.words).size, theme.words.length, theme.id + " repeats a word");
+    for (const word of theme.words) assert.equal(word, word.toUpperCase(), theme.id + " mixes letter case");
+  }
+});
+
+test("a bingo word list is cleaned, folded, trimmed and capped", () => {
+  assert.deepEqual(bingoWords("cat\nDog, cat; bird"), ["CAT", "DOG", "BIRD"]);
+  assert.deepEqual(bingoWords("   "), []);
+  assert.deepEqual(bingoWords("elephant!!"), ["ELEPHANT"], "punctuation is dropped");
+  assert.equal(bingoWords("a-b c")[0], "ABC", "a stray hyphen is folded into one entry");
+  assert.equal(bingoWords("supercalifragilisticexpialidocious")[0].length, BINGO_WORD_MAX, "a long entry is trimmed so the grid stays readable");
+  assert.equal(bingoWords(Array.from({ length: 60 }, (value, index) => "w" + index).join("\n")).length, BINGO_WORD_LIMIT);
+  assert.equal(bingoWords("a\nb", 1).length, 1, "the caller can ask for a shorter cap");
+});
+
+test("a card knows how many entries it needs and where the free square sits", () => {
+  assert.equal(bingoNeeded(5, false), 25);
+  assert.equal(bingoNeeded(5, true), 24);
+  assert.equal(bingoNeeded(4, true), 16, "an even card never gives a square away");
+  assert.equal(bingoNeeded(3, true), 8);
+  assert.deepEqual(bingoFreeCell(5, true), { row: 2, col: 2 });
+  assert.deepEqual(bingoFreeCell(3, true), { row: 1, col: 1 });
+  assert.equal(bingoFreeCell(4, true), null);
+  assert.equal(bingoFreeCell(5, false), null);
+  assert.equal(bingoCardCount(0), 1, "a set always holds at least one card");
+  assert.equal(bingoCardCount("nonsense"), 1);
+});
+
+test("a classic number card draws every column from its own B I N G O range", () => {
+  const grid = bingoNumberGrid(5, 7, true);
+  assert.equal(grid.length, 5);
+  for (const row of grid) assert.equal(row.length, 5);
+  for (let col = 0; col < BINGO_COLUMNS.length; col += 1) {
+    const low = col * 15 + 1;
+    const high = low + 14;
+    const drawn = [];
+    for (let row = 0; row < 5; row += 1) {
+      if (row === 2 && col === 2) continue;
+      const value = Number(grid[row][col]);
+      assert.ok(value >= low && value <= high, BINGO_COLUMNS[col] + " holds " + value + ", outside " + low + " to " + high);
+      drawn.push(value);
+    }
+    assert.deepEqual(drawn, drawn.slice().sort((a, b) => a - b), "a column reads upwards like a printed card");
+    assert.equal(new Set(drawn).size, drawn.length, "a column never repeats a number");
+  }
+  assert.equal(grid[2][2], "FREE");
+  assert.equal(bingoNumberGrid(5, 7, false)[2][2] !== "FREE", true, "the free square can be switched off");
+  const whole = bingoNumberGrid(5, 7, true).flat().filter((entry) => entry !== "FREE");
+  assert.equal(new Set(whole).size, 24, "no number appears twice on one card");
+
+  const small = bingoNumberGrid(3, 7, true);
+  assert.equal(small.length, 3);
+  assert.equal(small[1][1], "FREE");
+  for (const entry of small.flat().filter((value) => value !== "FREE")) {
+    const value = Number(entry);
+    assert.ok(value >= 1 && value <= BINGO_NUMBER_CEILING, "a small card still draws from the 1 to 75 pool");
+  }
+});
+
+test("a bingo set builds one unique deterministic card per player", () => {
+  const set = bingoCardSet({ cells: 5, mode: "numbers", count: 24, free: true, seed: 42 });
+  assert.equal(set.length, 24);
+  const signatures = set.map((card) => card.map((row) => row.join(",")).join("/"));
+  assert.equal(new Set(signatures).size, 24, "no two players should hold the same card");
+  assert.deepEqual(bingoCardSet({ cells: 5, mode: "numbers", count: 24, free: true, seed: 42 }), set, "the same seed rebuilds the same set");
+  assert.notDeepEqual(bingoCardSet({ cells: 5, mode: "numbers", count: 24, free: true, seed: 43 }), set, "a new seed shuffles the set");
+  assert.equal(bingoCardSet({ cells: 5, mode: "numbers", count: 99, free: true, seed: 1 }).length, BINGO_MAX_CARDS, "a set stops at a class of thirty");
+
+  const wordSet = bingoCardSet({ cells: 3, mode: "words", count: 6, free: true, words: BINGO_THEMES[0].words, seed: 3 });
+  assert.equal(wordSet.length, 6);
+  for (const card of wordSet) {
+    assert.equal(card.flat().filter((entry) => entry === "FREE").length, 1, "a card carries one free square");
+  }
+});
+
+test("the bingo sheet keeps every card inside the printable border", () => {
+  for (const layout of ["1", "2", "4"]) {
+    for (const paper of ["letter", "a4"]) {
+      const sheet = bingoSheet({ paper, layout });
+      assert.equal(sheet.paper.id, paper);
+      for (const card of sheet.cards) {
+        assert.ok(card.x >= sheet.marginCm - 1e-9, "a card starts inside the left border");
+        assert.ok(card.y >= sheet.marginCm - 1e-9, "a card starts inside the top border");
+        assert.ok(card.x + card.w <= sheet.paper.widthCm - sheet.marginCm + 1e-9, "a card stays inside the right border");
+        assert.ok(card.y + card.h <= sheet.paper.heightCm - sheet.marginCm + 1e-9, "a card stays inside the bottom border");
+        assert.ok(Math.abs(card.w / card.h - BINGO_CARD_ASPECT) < 1e-9, "every card keeps the printed proportion");
+      }
+    }
+  }
+  assert.equal(bingoSheet({ layout: "4" }).cards.length, 4, "a four up sheet really holds four cards");
+  assert.equal(bingoSheet({ layout: "2" }).cards.length, 2);
+  assert.equal(bingoSheet({ layout: "nonsense" }).cards.length, 1, "an unknown layout falls back to one card");
+  assert.equal(bingoSheet().paper.id, "letter", "no paper choice prints US Letter");
+});
+
+test("the print run knows its page count and the caller gets a full list", () => {
+  assert.equal(bingoPageCount({ layout: "1", count: 6 }), 6);
+  assert.equal(bingoPageCount({ layout: "4", count: 6 }), 2);
+  assert.equal(bingoPageCount({ layout: "4", count: 8 }), 2);
+  assert.equal(bingoPageCount({ layout: "2", count: 8 }), 4);
+  assert.equal(bingoPageCount({ layout: "4", count: 8, callList: true }), 3, "the caller sheet is a page of its own");
+
+  const calls = bingoCallList({ mode: "numbers", seed: 11 });
+  assert.equal(calls.length, BINGO_NUMBER_CEILING);
+  assert.equal(new Set(calls).size, BINGO_NUMBER_CEILING, "a caller never reads the same number twice");
+  assert.deepEqual(calls.slice().sort((a, b) => a - b), Array.from({ length: BINGO_NUMBER_CEILING }, (value, index) => index + 1));
+  assert.deepEqual(bingoCallList({ mode: "words", words: ["CAT", "DOG"] }), ["CAT", "DOG"]);
+  assert.deepEqual(bingoCallList({ mode: "words" }), []);
+
+  assert.equal(bingoCallColumns(24), 3);
+  assert.equal(bingoCallColumns(36), 4);
+  assert.equal(bingoCallColumns(BINGO_NUMBER_CEILING), 6);
+  assert.equal(bingoCallColumns(0), 3);
+});
+
+test("the shared shuffle stream is reproducible and a word card uses the whole list", () => {
+  const first = seededRandom(21);
+  const again = seededRandom(21);
+  const run = [first(), first(), first()];
+  assert.deepEqual(run, [again(), again(), again()], "the same seed replays the same shuffle");
+  for (const value of run) assert.ok(value >= 0 && value < 1, "the stream stays inside the unit interval");
+
+  const words = BINGO_THEMES.find((theme) => theme.id === "animals").words;
+  const grid = bingoWordGrid(words, 3, 5, true);
+  assert.equal(grid.length, 3);
+  assert.equal(grid[1][1], "FREE");
+  const filled = grid.flat().filter((entry) => entry !== "FREE" && entry);
+  assert.equal(filled.length, 8, "the free square leaves eight squares to fill");
+  assert.equal(new Set(filled).size, 8, "a card never repeats an entry");
+  for (const entry of filled) assert.ok(words.includes(entry), "the entry comes from the caller's list");
+  assert.deepEqual(bingoWordGrid(words, 3, 5, true), grid, "the same seed rebuilds the same board");
+
+  const short = bingoWordGrid(["CAT"], 3, 5, true);
+  assert.equal(short.flat().filter((entry) => entry === "").length, 7, "a short list leaves the rest of the card empty");
 });

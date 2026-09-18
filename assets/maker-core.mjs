@@ -408,6 +408,73 @@ export const WORD_SEARCH_LIST_CM = 2.4;
 /** How many rows of eight the word list is folded into before the sheet grows a second column. */
 export const WORD_SEARCH_LIST_COLUMNS = 3;
 
+/**
+ * A printable bingo set. A game is printed rather than uploaded, so the paper, the card grid and
+ * the sheet layout are the whole recipe, and the same numbers drive the live preview and the
+ * 300 DPI download. Cards are laid out in centimetres so the print matches the screen.
+ */
+export const BINGO_PAPERS = Object.freeze([
+  { id: "letter", widthCm: 21.59, heightCm: 27.94, short: "US Letter", label: "US Letter (8.5 x 11 in)" },
+  { id: "a4", widthCm: 21, heightCm: 29.7, short: "A4", label: "A4 (21 x 29.7 cm)" },
+]);
+
+/** Card grids. Five square is the classic B/I/N/G/O board; the smaller squares suit younger players. */
+export const BINGO_GRIDS = Object.freeze([
+  { id: "5", cells: 5, label: "5 x 5 classic card" },
+  { id: "4", cells: 4, label: "4 x 4 quick card" },
+  { id: "3", cells: 3, label: "3 x 3 first card" },
+]);
+
+/** How many cards land on one printed sheet. */
+export const BINGO_LAYOUTS = Object.freeze([
+  { id: "1", cols: 1, rows: 1, label: "1 large card" },
+  { id: "2", cols: 1, rows: 2, label: "2 cards per sheet" },
+  { id: "4", cols: 2, rows: 2, label: "4 cards per sheet" },
+]);
+
+/** A card is either a shuffled 1 to 75 number board or a board built from the visitor's own list. */
+export const BINGO_MODES = Object.freeze([
+  { id: "numbers", label: "Numbers 1 to 75 (classic)" },
+  { id: "words", label: "My own words" },
+]);
+
+/** The B/I/N/G/O headings the classic board is drawn from. Each letter owns fifteen numbers. */
+export const BINGO_COLUMNS = Object.freeze(["B", "I", "N", "G", "O"]);
+export const BINGO_NUMBER_CEILING = 75;
+
+/** The two letter cases a word board is set in. Uppercase is the classic card. */
+export const BINGO_CASES = Object.freeze([
+  { id: "upper", label: "UPPERCASE" },
+  { id: "lower", label: "lowercase" },
+]);
+
+/** Ready-made word lists, so a party host can print a whole set without typing a word. */
+export const BINGO_THEMES = Object.freeze([
+  { id: "sight-words", label: "Sight words", words: ["THE", "AND", "YOU", "THAT", "WAS", "FOR", "ARE", "WITH", "HIS", "THEY", "HAVE", "FROM", "ONE", "HAD", "WHAT", "WHEN", "YOUR", "SAID", "THERE", "EACH", "WHICH", "SHE", "HOW", "THEIR", "OUT", "ABOUT"] },
+  { id: "animals", label: "Animals", words: ["ELEPHANT", "GIRAFFE", "PENGUIN", "DOLPHIN", "RABBIT", "TIGER", "MONKEY", "TURTLE", "ZEBRA", "PANDA", "KOALA", "OTTER", "LION", "HORSE", "SHEEP", "GOOSE", "MOUSE", "WHALE", "SHARK", "CAMEL", "DONKEY", "BEAVER", "BADGER", "FERRET", "IGUANA", "PARROT"] },
+  { id: "baby-shower", label: "Baby shower", words: ["BABY", "RATTLE", "BIB", "BOTTLE", "DIAPER", "STROLLER", "BLANKET", "PACIFIER", "CRIB", "ONESIE", "BOOTIES", "LULLABY", "NURSERY", "TEDDY", "CUDDLE", "GIGGLE", "GRANDMA", "GRANDPA", "AUNTIE", "UNCLE", "COUSIN", "SPRINKLE", "SHOWER", "NEWBORN", "FAMILY", "BASSINET"] },
+  { id: "halloween", label: "Halloween", words: ["PUMPKIN", "GHOST", "WITCH", "SPIDER", "CANDY", "SKELETON", "VAMPIRE", "OCTOBER", "COSTUME", "BAT", "MUMMY", "CAULDRON", "HAUNTED", "GOBLIN", "ZOMBIE", "WEREWOLF", "COBWEB", "POTION", "LANTERN", "SCARECROW", "TRICK", "TREAT", "MASK", "BROOMSTICK", "GRAVEYARD", "SPOOKY"] },
+  { id: "christmas", label: "Christmas", words: ["SANTA", "REINDEER", "SNOWMAN", "STOCKING", "PRESENT", "MISTLETOE", "GINGERBREAD", "ORNAMENT", "HOLLY", "CAROL", "SLEIGH", "ELF", "CANDLE", "WREATH", "CHIMNEY", "TINSEL", "NUTCRACKER", "FIREPLACE", "JINGLE", "COCOA", "ANGEL", "STAR", "RIBBON", "SNOWY", "BELLS", "FROST"] },
+  { id: "summer", label: "Summer", words: ["SUNSHINE", "BEACH", "POPSICLE", "SANDCASTLE", "SEASHELL", "VACATION", "POOL", "OCEAN", "PICNIC", "CAMPING", "SUNSCREEN", "ICECREAM", "LEMONADE", "SPRINKLER", "WATERMELON", "FLIPFLOPS", "SWIMSUIT", "SEASIDE", "HAMMOCK", "BARBECUE", "FIREFLY", "STARFISH", "SANDALS", "SUNGLASSES", "ROADTRIP", "GARDEN"] },
+  { id: "food", label: "Food", words: ["PIZZA", "PASTA", "BURGER", "SALAD", "TACOS", "SUSHI", "PANCAKE", "WAFFLE", "MUFFIN", "COOKIE", "BROWNIE", "POPCORN", "CHEESE", "TOMATO", "CARROT", "POTATO", "BANANA", "ORANGE", "GRAPES", "CHERRY", "HONEY", "BUTTER", "NOODLE", "DUMPLING", "LASAGNA", "SMOOTHIE"] },
+  { id: "sports", label: "Sports", words: ["SOCCER", "TENNIS", "BASEBALL", "BASKETBALL", "SWIMMING", "RUNNING", "CYCLING", "HOCKEY", "VOLLEYBALL", "SKATING", "BOXING", "GOLF", "RUGBY", "CRICKET", "SURFING", "SKIING", "ARCHERY", "FENCING", "ROWING", "BADMINTON", "NETBALL", "BOWLING", "DARTS", "KARATE", "JUDO", "SOFTBALL"] },
+  { id: "travel", label: "Travel", words: ["PASSPORT", "LUGGAGE", "AIRPORT", "AIRPLANE", "HOTEL", "SUITCASE", "BOARDING", "TICKET", "JOURNEY", "HOLIDAY", "TOURIST", "POSTCARD", "CAMERA", "COMPASS", "MAP", "MUSEUM", "CASTLE", "ISLAND", "HARBOUR", "RAILWAY", "TAXI", "VISA", "CUSTOMS", "RESORT", "SIGHTSEE", "BACKPACK"] },
+  { id: "space", label: "Space", words: ["ROCKET", "PLANET", "SATURN", "METEOR", "GALAXY", "ORBIT", "COMET", "NEBULA", "ASTEROID", "ASTRONAUT", "MOON", "STAR", "MARS", "VENUS", "JUPITER", "MERCURY", "NEPTUNE", "URANUS", "PLUTO", "SATELLITE", "TELESCOPE", "GRAVITY", "ECLIPSE", "COSMOS", "SHUTTLE", "LAUNCH"] },
+]);
+
+/** The most cards one set carries, so a class of thirty each get their own sheet. */
+export const BINGO_MAX_CARDS = 30;
+/** A card cell holds a short entry; anything longer is trimmed so the grid stays readable. */
+export const BINGO_WORD_MAX = 16;
+export const BINGO_WORD_LIMIT = 36;
+/** The safe printer border, the gap between two cards and the widest a card is ever printed. */
+export const BINGO_MARGIN_CM = 1.0;
+export const BINGO_GAP_CM = 0.5;
+export const BINGO_CARD_MAX_CM = 16;
+/** Card shape as width divided by height, which is the tall rectangle a printed card uses. */
+export const BINGO_CARD_ASPECT = 0.78;
+
+
 const PROFILES = Object.freeze([
   { id: "keychain", name: "Pet Keychain Maker", product: "Acrylic keychain", hasHardware: true, hasBase: false, exportSvg: false, sizes: [4, 5, 6] },
   { id: "standee", name: "Acrylic Standee Maker", product: "Acrylic standee", hasHardware: false, hasBase: true, exportSvg: false, sizes: [8, 10, 15] },
@@ -433,6 +500,7 @@ const PROFILES = Object.freeze([
   { id: "coloring", name: "Photo to Coloring Page Maker", product: "Coloring page", hasHardware: false, hasBase: false, exportSvg: false, sizes: ["letter", "a4"], sizeLabels: ["US Letter (8.5 x 11 in)", "A4 (21 x 29.7 cm)"] },
   { id: "gift-tag", name: "Gift Tag Maker", product: "Printable gift tag", hasHardware: false, hasBase: false, exportSvg: false, sizes: GIFT_TAG_SIZES.map((size) => size.widthCm), sizeLabels: GIFT_TAG_SIZES.map((size) => size.label) },
   { id: "name-tracing", name: "Name Tracing Worksheet Maker", product: "Name tracing worksheet", hasHardware: false, hasBase: false, exportSvg: false, sizes: NAME_TRACING_PAPERS.map((paper) => paper.widthCm), sizeLabels: NAME_TRACING_PAPERS.map((paper) => paper.label) },
+  { id: "bingo", name: "Bingo Card Maker", product: "Printable bingo cards", hasHardware: false, hasBase: false, exportSvg: false, sizes: BINGO_PAPERS.map((paper) => paper.widthCm), sizeLabels: BINGO_PAPERS.map((paper) => paper.label) },
   { id: "word-search", name: "Word Search Maker", product: "Printable word search puzzle", hasHardware: false, hasBase: false, exportSvg: false, sizes: WORD_SEARCH_PAPERS.map((paper) => paper.widthCm), sizeLabels: WORD_SEARCH_PAPERS.map((paper) => paper.label) },
 ]);
 
@@ -2334,8 +2402,12 @@ export function wordSearchAutoCells(words) {
   return Math.max(10, Math.min(20, Math.max(byWord, byCount)));
 }
 
-/** A small repeatable generator, so the same seed always rebuilds the same grid. */
-function wordSearchRandom(seed) {
+/**
+ * A small repeatable generator. Every tool that shuffles something - a word grid, a bingo card, a
+ * number draw - shares this one stream, so a seed always rebuilds the same artwork and a printed
+ * sheet can be reproduced later from the same settings.
+ */
+export function seededRandom(seed) {
   let a = (Number(seed) >>> 0) || 0x9e3779b9;
   return function () {
     a = (a + 0x6d2b79f5) | 0;
@@ -2343,6 +2415,11 @@ function wordSearchRandom(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** The word search keeps its own name for the shared stream, so every pinned seed builds the grid it always did. */
+function wordSearchRandom(seed) {
+  return seededRandom(seed);
 }
 
 /**
@@ -2453,5 +2530,270 @@ export function wordSearchListColumns(words, max = WORD_SEARCH_LIST_COLUMNS) {
   const columns = Math.max(1, Math.floor(Number(max)) || WORD_SEARCH_LIST_COLUMNS);
   if (count <= 8) return 1;
   if (count <= 16) return Math.min(2, columns);
+  return columns;
+}
+
+/**
+ * A printable bingo game. These helpers are pure and deterministic: the browser app and the Node
+ * test suite build the same cards from the same seed, so what a visitor previews is exactly what
+ * the 300 DPI download contains.
+ */
+export function bingoPaper(value) {
+  const raw = String(value == null ? "" : value).toLowerCase();
+  const cm = Number(value);
+  return BINGO_PAPERS.find((paper) => paper.id === raw
+    || (Number.isFinite(cm) && cm > 0 && Math.abs(paper.widthCm - cm) < 0.02)) || BINGO_PAPERS[0];
+}
+
+export function bingoGrid(value) {
+  const id = String(value == null ? "" : value);
+  return BINGO_GRIDS.find((grid) => grid.id === id) || BINGO_GRIDS[0];
+}
+
+export function bingoLayout(value) {
+  const id = String(value == null ? "" : value);
+  return BINGO_LAYOUTS.find((layout) => layout.id === id) || BINGO_LAYOUTS[0];
+}
+
+export function bingoMode(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return BINGO_MODES.find((mode) => mode.id === id) || BINGO_MODES[0];
+}
+
+export function bingoTheme(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return BINGO_THEMES.find((theme) => theme.id === id) || null;
+}
+
+export function bingoCase(value) {
+  const id = String(value == null ? "" : value).toLowerCase();
+  return BINGO_CASES.find((item) => item.id === id) || BINGO_CASES[0];
+}
+
+/** Print one entry in the case the card was set in. Numbers are left exactly as they were drawn. */
+export function bingoEntry(text, caseValue) {
+  const raw = String(text == null ? "" : text);
+  if (raw === "FREE" || /^[0-9]+$/.test(raw)) return raw;
+  return bingoCase(caseValue).id === "lower" ? raw.toLowerCase() : raw.toUpperCase();
+}
+
+/** One to thirty unique cards, which is what a class set needs and what one sheet can hold. */
+export function bingoCardCount(value) {
+  const count = Math.floor(Number(value));
+  if (!Number.isFinite(count) || count < 1) return 1;
+  return Math.min(BINGO_MAX_CARDS, count);
+}
+
+/**
+ * Clean a pasted list into bingo entries: one per line or a comma separated run, punctuation
+ * dropped, duplicates folded away and the list trimmed to what a card can hold.
+ */
+export function bingoWords(value, limit = BINGO_WORD_LIMIT) {
+  const raw = String(value == null ? "" : value);
+  const seen = new Set();
+  const out = [];
+  const cap = Math.max(1, Math.min(BINGO_WORD_LIMIT, Math.floor(Number(limit)) || BINGO_WORD_LIMIT));
+  for (const chunk of raw.split(/[\n,;]+/)) {
+    const word = chunk.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, BINGO_WORD_MAX);
+    if (!word || seen.has(word)) continue;
+    seen.add(word);
+    out.push(word);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+/** How many entries a card of this size needs once the free square is taken out. */
+export function bingoNeeded(cells, free) {
+  const size = Math.max(3, Math.min(5, Math.floor(Number(cells)) || 5));
+  return size * size - (free && size % 2 === 1 ? 1 : 0);
+}
+
+/** The free square sits in the middle of an odd card, which is why an even card never carries one. */
+export function bingoFreeCell(cells, free) {
+  const size = Math.max(3, Math.min(5, Math.floor(Number(cells)) || 5));
+  if (!free || size % 2 === 0) return null;
+  const mid = (size - 1) / 2;
+  return Object.freeze({ row: mid, col: mid });
+}
+
+/**
+ * A classic number board. The five column card draws every column from its own fifteen numbers
+ * the way a printed B/I/N/G/O card does, so the B column only ever holds 1 to 15 and the O column
+ * only ever holds 61 to 75. The smaller squares spread the same 1 to 75 range instead.
+ */
+export function bingoNumberGrid(cells, seed, free) {
+  const size = Math.max(3, Math.min(5, Math.floor(Number(cells)) || 5));
+  const random = seededRandom(seed);
+  const grid = Array.from({ length: size }, () => new Array(size).fill(""));
+  if (size === BINGO_COLUMNS.length) {
+    for (let col = 0; col < size; col += 1) {
+      const pool = [];
+      for (let i = 0; i < 15; i += 1) pool.push(col * 15 + i + 1);
+      for (let i = pool.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(random() * (i + 1));
+        const swap = pool[i]; pool[i] = pool[j]; pool[j] = swap;
+      }
+      // Sorting the five drawn numbers makes the column read upwards like a real card.
+      const drawn = pool.slice(0, size).sort((a, b) => a - b);
+      for (let row = 0; row < size; row += 1) grid[row][col] = String(drawn[row]);
+    }
+  } else {
+    const pool = [];
+    for (let i = 1; i <= BINGO_NUMBER_CEILING; i += 1) pool.push(i);
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(random() * (i + 1));
+      const swap = pool[i]; pool[i] = pool[j]; pool[j] = swap;
+    }
+    pool.slice(0, size * size).sort((a, b) => a - b).forEach((number, index) => {
+      grid[Math.floor(index / size)][index % size] = String(number);
+    });
+  }
+  const freeCell = bingoFreeCell(size, free);
+  if (freeCell) grid[freeCell.row][freeCell.col] = "FREE";
+  return grid;
+}
+
+/**
+ * A word board. The list is shuffled with the card's own seed and laid out row by row, so two
+ * cards in the same set never hide the words in the same places. A list that is too short leaves
+ * the last squares empty, and the readout tells the visitor how many more entries the card needs.
+ */
+export function bingoWordGrid(words, cells, seed, free) {
+  const size = Math.max(3, Math.min(5, Math.floor(Number(cells)) || 5));
+  const pool = (Array.isArray(words) ? words : []).map((word) => String(word));
+  const random = seededRandom(seed);
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    const swap = pool[i]; pool[i] = pool[j]; pool[j] = swap;
+  }
+  const freeCell = bingoFreeCell(size, free);
+  const grid = Array.from({ length: size }, () => new Array(size).fill(""));
+  let index = 0;
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      if (freeCell && freeCell.row === row && freeCell.col === col) {
+        grid[row][col] = "FREE";
+        continue;
+      }
+      grid[row][col] = index < pool.length ? pool[index] : "";
+      index += 1;
+    }
+  }
+  return grid;
+}
+
+/**
+ * The whole set. Every card draws its own seed, so no two cards in a print run hide the entries
+ * in the same order, and a card that comes out identical to one already built is rebuilt rather
+ * than handed to a second player.
+ */
+export function bingoCardSet(options) {
+  const opts = options || {};
+  const grid = bingoGrid(opts.cells);
+  const mode = bingoMode(opts.mode);
+  const count = bingoCardCount(opts.count);
+  const free = !!opts.free;
+  const words = mode.id === "words" ? (Array.isArray(opts.words) ? opts.words : []) : [];
+  const base = (Number(opts.seed) >>> 0) || 1;
+  const out = [];
+  const seen = new Set();
+  for (let index = 0; index < count; index += 1) {
+    let attempt = 0;
+    let card = null;
+    let signature = "";
+    do {
+      const seed = base + index * 7919 + attempt * 104729;
+      card = mode.id === "numbers"
+        ? bingoNumberGrid(grid.cells, seed, free)
+        : bingoWordGrid(words, grid.cells, seed, free);
+      signature = card.map((row) => row.join("|")).join("/");
+      attempt += 1;
+    } while (seen.has(signature) && attempt < 64);
+    seen.add(signature);
+    out.push(Object.freeze(card.map((row) => Object.freeze(row))));
+  }
+  return Object.freeze(out);
+}
+
+/**
+ * Where every card sits on the printed sheet. The cards keep the tall printed proportion, are
+ * capped so a single card never bleeds off the page, and are centred inside their own slot so the
+ * preview and the 300 DPI download place every card identically.
+ */
+export function bingoSheet(options) {
+  const opts = options || {};
+  const paper = bingoPaper(opts.paper);
+  const layout = bingoLayout(opts.layout);
+  const marginCm = BINGO_MARGIN_CM;
+  const gapCm = BINGO_GAP_CM;
+  const usableW = Math.max(4, paper.widthCm - marginCm * 2);
+  const usableH = Math.max(4, paper.heightCm - marginCm * 2);
+  const slotW = (usableW - gapCm * (layout.cols - 1)) / layout.cols;
+  const slotH = (usableH - gapCm * (layout.rows - 1)) / layout.rows;
+  const cardW = Math.min(BINGO_CARD_MAX_CM, slotW, slotH * BINGO_CARD_ASPECT);
+  const cardH = cardW / BINGO_CARD_ASPECT;
+  const cards = [];
+  for (let row = 0; row < layout.rows; row += 1) {
+    for (let col = 0; col < layout.cols; col += 1) {
+      cards.push(Object.freeze({
+        x: marginCm + col * (slotW + gapCm) + (slotW - cardW) / 2,
+        y: marginCm + row * (slotH + gapCm) + (slotH - cardH) / 2,
+        w: cardW,
+        h: cardH,
+      }));
+    }
+  }
+  return Object.freeze({
+    paper,
+    layout,
+    marginCm,
+    gapCm,
+    usableW,
+    usableH,
+    slotW,
+    slotH,
+    cardW,
+    cardH,
+    // The three bands inside one card: a title strip, a square grid and a small credit line.
+    headerCm: cardH * 0.14,
+    footerCm: cardH * 0.075,
+    gridCm: cardW * 0.9,
+    cards: Object.freeze(cards),
+  });
+}
+
+/** Sheets in the print run: one per group of cards, plus the caller's page when it is switched on. */
+export function bingoPageCount(options) {
+  const opts = options || {};
+  const layout = bingoLayout(opts.layout);
+  const perSheet = layout.cols * layout.rows;
+  return Math.ceil(bingoCardCount(opts.count) / perSheet) + (opts.callList ? 1 : 0);
+}
+
+/**
+ * The caller's list. A number game draws all seventy five in the order they should be called, so
+ * the caller works down one page instead of improvising. A word game simply hands back the list.
+ */
+export function bingoCallList(options) {
+  const opts = options || {};
+  const mode = bingoMode(opts.mode);
+  if (mode.id !== "numbers") return Object.freeze((Array.isArray(opts.words) ? opts.words : []).slice());
+  const random = seededRandom((Number(opts.seed) >>> 0) || 1);
+  const pool = [];
+  for (let i = 1; i <= BINGO_NUMBER_CEILING; i += 1) pool.push(i);
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    const swap = pool[i]; pool[i] = pool[j]; pool[j] = swap;
+  }
+  return Object.freeze(pool);
+}
+
+/** How many columns the caller's list folds into, so seventy five numbers still fit one page. */
+export function bingoCallColumns(total, max = 6) {
+  const count = Math.max(0, Math.floor(Number(total)) || 0);
+  const columns = Math.max(1, Math.floor(Number(max)) || 6);
+  if (count <= 30) return Math.min(3, columns);
+  if (count <= 48) return Math.min(4, columns);
   return columns;
 }
