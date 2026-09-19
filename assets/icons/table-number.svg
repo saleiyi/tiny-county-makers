@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="table number">
+<rect width="120" height="90" rx="12" fill="#FBF3E0"/>
+<path d="M34 30l26-14 26 14v12H34z" fill="#FFFFFF" stroke="#2F3B36" stroke-width="2.5"/>
+<path d="M34 42h52v22a4 4 0 0 1-4 4H38a4 4 0 0 1-4-4z" fill="#FDF6EE" stroke="#2F3B36" stroke-width="2.5"/>
+<text x="60" y="59" text-anchor="middle" font-family="Georgia,serif" font-size="20" fill="#C4653F">7</text>
+<path d="M28 74h64" stroke="#D9A441" stroke-width="3" stroke-linecap="round"/>
+</svg>

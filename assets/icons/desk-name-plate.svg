@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="desk name plate">
+<rect width="120" height="90" rx="12" fill="#EAF0F6"/>
+<path d="M30 40l18-14h50l-18 14z" fill="#FFFFFF" stroke="#2F3B36" stroke-width="2.5"/>
+<path d="M30 40h50v20l-18 14H30z" fill="#FDF6EE" stroke="#2F3B36" stroke-width="2.5"/>
+<path d="M80 40l18-14v20l-18 14z" fill="#8FB3A2" opacity=".6"/>
+<text x="52" y="56" text-anchor="middle" font-family="Georgia,serif" font-size="11" fill="#C4653F">Emma</text>
+</svg>

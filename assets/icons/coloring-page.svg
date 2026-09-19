@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="coloring page">
+<rect width="120" height="90" rx="12" fill="#FBF3E0"/>
+<rect x="30" y="12" width="60" height="66" rx="5" fill="#FFFFFF" stroke="#2F3B36" stroke-width="2.5"/>
+<circle cx="52" cy="36" r="8" fill="none" stroke="#2F3B36" stroke-width="2"/>
+<path d="M40 60c0-9 5-15 12-15s12 6 12 15" fill="none" stroke="#2F3B36" stroke-width="2"/>
+<circle cx="72" cy="40" r="6" fill="none" stroke="#2F3B36" stroke-width="2"/>
+<path d="M64 60c0-7 4-12 8-12s8 5 8 12" fill="none" stroke="#2F3B36" stroke-width="2"/>
+<path d="M34 24l8-8M38 30l10-10" stroke="#D9A441" stroke-width="3" stroke-linecap="round"/>
+</svg>

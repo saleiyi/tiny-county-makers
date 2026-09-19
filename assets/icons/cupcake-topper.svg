@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="cupcake topper">
+<rect width="120" height="90" rx="12" fill="#FBF3E0"/>
+<path d="M42 46h36l-6 26H48z" fill="#D9A441" opacity=".8"/>
+<path d="M40 46c0-11 9-19 20-19s20 8 20 19z" fill="#E3A0A8"/>
+<circle cx="52" cy="34" r="3" fill="#FFFFFF"/><circle cx="66" cy="30" r="3" fill="#FFFFFF"/>
+<path d="M60 20V8" stroke="#2F3B36" stroke-width="2.5"/>
+<path d="M60 8l10 4-10 4z" fill="#C4653F"/>
+</svg>

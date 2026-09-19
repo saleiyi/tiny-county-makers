@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="place card">
+<rect width="120" height="90" rx="12" fill="#FBF3E0"/>
+<path d="M40 30h40l8 46H32z" fill="#FFFFFF" stroke="#2F3B36" stroke-width="2.5"/>
+<text x="60" y="54" text-anchor="middle" font-family="Georgia,serif" font-size="13" fill="#2F3B36">Sophia</text>
+<path d="M46 62h28" stroke="#D8CBBE" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="44" cy="26" r="5" fill="#E3A0A8"/><circle cx="76" cy="26" r="5" fill="#8FB3A2"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="pet tag">
+<rect width="120" height="90" rx="12" fill="#EAF0F6"/>
+<path d="M60 20l9 7h14l5 13-8 10 3 14-13 6-10-7-10 7-13-6 3-14-8-10 5-13h14z" fill="#D9A441" opacity=".9"/>
+<circle cx="60" cy="48" r="5" fill="#FFFFFF"/>
+<circle cx="50" cy="42" r="3" fill="#FFFFFF"/><circle cx="70" cy="42" r="3" fill="#FFFFFF"/>
+<circle cx="45" cy="52" r="3" fill="#FFFFFF"/><circle cx="75" cy="52" r="3" fill="#FFFFFF"/>
+<path d="M60 12v8" stroke="#2F3B36" stroke-width="2.5"/>
+</svg>

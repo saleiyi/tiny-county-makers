@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="sticker cutline">
+<rect width="120" height="90" rx="12" fill="#EAF2EC"/>
+<path d="M60 14c14 0 20 9 20 20 0 12-8 22-20 22S40 46 40 34c0-11 6-20 20-20z" fill="#FFFFFF" stroke="#3E6B58" stroke-width="3"/>
+<path d="M60 8c18 0 26 12 26 26 0 16-10 28-26 28S34 50 34 34C34 20 42 8 60 8z" fill="none" stroke="#C4653F" stroke-width="2.5" stroke-dasharray="6 5"/>
+<circle cx="55" cy="33" r="6" fill="#E2917A"/>
+<path d="M45 48c0-6 4-11 10-11s10 5 10 11z" fill="#E2917A"/>
+<circle cx="70" cy="36" r="4" fill="#8FB3A2"/>
+</svg>

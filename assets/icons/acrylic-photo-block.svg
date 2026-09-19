@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="acrylic photo block">
+<rect width="120" height="90" rx="12" fill="#FBF0E6"/>
+<path d="M30 34l14-10h50l-14 10z" fill="#8FB3A2" opacity=".55"/>
+<rect x="30" y="34" width="50" height="40" rx="4" fill="#FFFFFF" stroke="#2F3B36" stroke-width="2.5"/>
+<path d="M80 34l14-10v40l-14 10z" fill="#D9A441" opacity=".55"/>
+<rect x="36" y="40" width="38" height="28" rx="3" fill="#FDF6EE"/>
+<circle cx="55" cy="55" r="9" fill="#E2917A"/>
+<circle cx="47" cy="60" r="5" fill="#8FB3A2"/>
+<circle cx="65" cy="62" r="6" fill="#C4653F"/>
+</svg>

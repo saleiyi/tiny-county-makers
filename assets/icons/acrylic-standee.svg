@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="acrylic standee">
+<rect width="120" height="90" rx="12" fill="#FBF0E6"/>
+<rect x="36" y="12" width="48" height="52" rx="7" fill="#FFFFFF" stroke="#2F3B36" stroke-width="3"/>
+<circle cx="53" cy="33" r="5.5" fill="#7FA5C7"/>
+<path d="M45 51c0-6 3-9 8-9s8 3 8 9z" fill="#7FA5C7"/>
+<circle cx="71" cy="36" r="4.5" fill="#E3A0A8"/>
+<path d="M64 51c0-5 3-8 7-8s7 3 7 8z" fill="#E3A0A8"/>
+<path d="M42 64h36l10 12H32z" fill="#D9A441" opacity=".8"/>
+<path d="M32 76h56" stroke="#2F3B36" stroke-width="2" stroke-linecap="round" opacity=".35"/>
+</svg>

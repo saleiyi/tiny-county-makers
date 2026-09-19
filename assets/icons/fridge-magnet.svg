@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="fridge magnet">
+<rect width="120" height="90" rx="12" fill="#FBF0E6"/>
+<rect x="34" y="17" width="52" height="52" rx="11" fill="#FFFFFF" stroke="#C4653F" stroke-width="3"/>
+<path d="M49 33l-6-7 3 10zM71 33l6-7-3 10z" fill="#E2917A"/>
+<circle cx="60" cy="46" r="14" fill="#E2917A"/>
+<circle cx="55" cy="44" r="2" fill="#2F3B36"/><circle cx="65" cy="44" r="2" fill="#2F3B36"/>
+<path d="M57 51h6l-3 4z" fill="#2F3B36"/>
+<path d="M42 78h36" stroke="#D8CBBE" stroke-width="4" stroke-linecap="round"/>
+</svg>

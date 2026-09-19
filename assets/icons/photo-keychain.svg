@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="photo keychain">
+<rect width="120" height="90" rx="12" fill="#FBF0E6"/>
+<circle cx="60" cy="17" r="6" fill="none" stroke="#2F3B36" stroke-width="3"/>
+<rect x="34" y="22" width="52" height="54" rx="13" fill="#FFFFFF" stroke="#C4653F" stroke-width="3"/>
+<circle cx="60" cy="29" r="3" fill="#C4653F"/>
+<circle cx="51" cy="47" r="6" fill="#C4653F"/>
+<path d="M42 66c0-6 4-11 9-11s9 5 9 11z" fill="#C4653F"/>
+<circle cx="71" cy="50" r="4.5" fill="#3E6B58"/>
+<path d="M64 66c0-5 3-9 7-9s7 4 7 9z" fill="#3E6B58"/>
+</svg>

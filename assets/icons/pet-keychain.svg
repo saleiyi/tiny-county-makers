@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="pet keychain">
+<rect width="120" height="90" rx="12" fill="#FBF0E6"/>
+<circle cx="60" cy="17" r="6" fill="none" stroke="#2F3B36" stroke-width="3"/>
+<rect x="38" y="24" width="44" height="46" rx="12" fill="#FFFFFF" stroke="#D9A441" stroke-width="3"/>
+<circle cx="60" cy="29" r="3" fill="#D9A441"/>
+<path d="M48 44l-5-7 2 10zM72 44l5-7-2 10z" fill="#E2917A"/>
+<circle cx="60" cy="52" r="13" fill="#E2917A"/>
+<circle cx="55" cy="50" r="2" fill="#2F3B36"/><circle cx="65" cy="50" r="2" fill="#2F3B36"/>
+<path d="M57 57h6l-3 4z" fill="#2F3B36"/>
+</svg>

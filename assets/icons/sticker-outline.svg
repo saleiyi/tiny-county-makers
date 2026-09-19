@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="120" height="90" role="img" aria-label="sticker outline">
+<rect width="120" height="90" rx="12" fill="#EAF2EC"/>
+<path d="M60 18c13 0 19 8 19 18 0 11-7 20-19 20S41 47 41 36c0-10 6-18 19-18z" fill="#E2917A" stroke="#FFFFFF" stroke-width="9" stroke-linejoin="round"/>
+<path d="M60 18c13 0 19 8 19 18 0 11-7 20-19 20S41 47 41 36c0-10 6-18 19-18z" fill="none" stroke="#3E6B58" stroke-width="2.5"/>
+<circle cx="60" cy="36" r="6" fill="#D9A441"/>
+</svg>
