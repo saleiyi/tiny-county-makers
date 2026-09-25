@@ -204,7 +204,7 @@ test("the sitemap lists every published page with the current lastmod", () => {
     assert.ok(txt.includes(entry), `sitemap.txt is missing ${entry}`);
   }
   assert.ok(!xml.includes("2026-09-16"), "sitemap.xml still carries the old lastmod");
-  assert.ok(xml.includes("<lastmod>2026-09-18</lastmod>"), "sitemap.xml should date this revision");
+  assert.ok(xml.includes("<lastmod>2026-09-19</lastmod>"), "sitemap.xml should date this revision");
 });
 
 test("internal links between the tools resolve to files that exist", () => {
